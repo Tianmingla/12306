@@ -6,16 +6,15 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.dto.response.TrainSearchResponseDTO;
-import com.lalal.modules.entity.SeatDO;
-import com.lalal.modules.entity.StationDO;
-import com.lalal.modules.entity.TrainRoutePairDO;
-import com.lalal.modules.entity.TrainStationDO;
+import com.lalal.modules.entity.*;
 import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.*;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
 import lombok.AllArgsConstructor;
 import org.apache.ibatis.cache.Cache;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -34,6 +33,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     TrainRoutePairMapper trainRoutePairMapper;
     SafeCacheTemplate safeCacheTemplate;
     TrainStationMapper trainStationMapper;
+    RedissonClient redissonClient;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
         //城市映射站台
@@ -197,24 +197,53 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 }
                 //判断这个区间是否再缓存存在
                 seatTypes.forEach((seatType)->{
-                    Object remainingTickets = safeCacheTemplate.get(CacheConstant.trainTicketRemainingKey(
+                    String maxIntervalKes=CacheConstant.trainTicketRemainingKey(
                             trainNum,
                             date,
                             stations.getFirst(),
                             stations.getLast(),
                             seatType
-                    ));
+                    );
+                    Object remainingTickets = safeCacheTemplate.get(maxIntervalKes);
                     if(remainingTickets==null){
-                        //TODO 创建该区键的余票
-                        List<String> remainingTicketsCacheKeys=new ArrayList<>(stations.size()-1);
-                        for(int k=0;k<stations.size()-1;k++){
-                            remainingTicketsCacheKeys.add(CacheConstant.trainTicketRemainingKey(
-                                    trainNum,
-                                    date,
-                                    stations.get(k),
-                                    stations.get(k+1),
-                                    seatType
-                            ));
+                        //临界区代码 和safeGet的是一样的 但为了性能考虑 这里用批量插入
+                        //锁就用整个区间最大的这个key来 毕竟初始化缓存一个线程做就可以了
+                        RLock lock=redissonClient.getLock("lock"+maxIntervalKes);
+                        try{
+                            boolean locked=lock.tryLock(2,10,TimeUnit.SECONDS);
+                            if(!locked){
+                                throw new RuntimeException("获取分布式锁超时");
+                            }
+                            remainingTickets = safeCacheTemplate.get(maxIntervalKes);
+                            if(remainingTickets==null){
+                                Map<String,Integer> map=new HashMap<>();
+                                for(int k=0;k<stations.size()-1;k++){
+                                    LambdaQueryWrapper wrapper=new LambdaQueryWrapper<SeatDO>()
+                                            .eq(SeatDO::getTrainId,segment.getTrainId())
+                                            .eq(SeatDO::getSeatType,seatType);
+                                    Long count=seatMapper.selectCount(wrapper);
+                                    LambdaQueryWrapper wrapper1=new LambdaQueryWrapper<TicketDO>()
+                                            .eq(TicketDO::getTrainId,segment.getTrainId())
+                                            .eq(TicketDO::getTravelDate,date)
+                                            .eq(TicketDO::getDepartureStation,stations.get(k))
+                                            .eq(TicketDO::getArrivalStation,stations.get(k+1));
+                                    Long saleTickets=ticketMapper.selectCount(wrapper1);
+                                    map.put(
+                                            CacheConstant.trainTicketRemainingKey(
+                                                trainNum,
+                                                date,
+                                                stations.get(k),
+                                                stations.get(k+1),
+                                                seatType
+                                            ),
+                                            (int) (count-saleTickets)
+                                    );
+                                }
+                            }
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }finally {
+                            lock.unlock();
                         }
 
                     }
@@ -230,12 +259,12 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             }
             );
             for(Map.Entry<Integer, List<Integer>> ticket:tickets.entrySet()){
-                int minVal = ticket.getValue().stream().min(Integer::compareTo).orElse(0);
+                int minVal = ticket.getValue()
+                        .stream()
+                        .min(Integer::compareTo)
+                        .orElse(0);
                 result.getRemainingTicketNumMap()
-                        .put(SeatType.getDescByCode(
-                                ticket.getKey()),
-                                minVal
-                        );
+                        .put(SeatType.getDescByCode(ticket.getKey()), minVal);
             }
         });
     }

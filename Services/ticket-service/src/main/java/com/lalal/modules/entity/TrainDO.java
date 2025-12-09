@@ -67,15 +67,6 @@ public class TrainDO extends BaseDO {
      */
     private String endStation;
 
-    /**
-     * 起始城市
-     */
-    private String startRegion;
-
-    /**
-     * 终点城市
-     */
-    private String endRegion;
 
     /**
      * 销售时间
