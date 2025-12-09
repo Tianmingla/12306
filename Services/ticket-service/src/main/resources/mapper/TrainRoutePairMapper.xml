@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.lalal.modules.mapper.TrainRoutePairMapper">
+
+    <select id="searchTrainsByStationList" resultType="com.lalal.modules.entity.TrainRoutePairDO">
+        SELECT
+            *
+        FROM ${tableName}
+        WHERE (
+        <foreach collection="start" item="s" separator=" OR ">
+            <foreach collection="end" item="e" open="(" close=")" separator=" OR ">
+                ( = #{s.c} AND to_station = #{e.code})
+            </foreach>
+        </foreach>
+        )
+    </select>
+
+</mapper>
