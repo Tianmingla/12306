@@ -57,34 +57,10 @@ public class TrainDO extends BaseDO {
      */
     private String trainBrand;
 
-    /**
-     * 起始站
-     */
-    private String startStation;
-
-    /**
-     * 终点站
-     */
-    private String endStation;
-
-
-    /**
-     * 销售时间
-     */
-    private Date saleTime;
 
     /**
      * 销售状态 0：可售 1：不可售 2：未知
      */
     private Integer saleStatus;
 
-    /**
-     * 出发时间
-     */
-    private Date departureTime;
-
-    /**
-     * 到达时间
-     */
-    private Date arrivalTime;
 }

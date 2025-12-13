@@ -11,6 +11,7 @@ import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.*;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
+import com.lalal.modules.utils.DateUtils;
 import lombok.AllArgsConstructor;
 import org.apache.ibatis.cache.Cache;
 import org.redisson.api.RLock;
@@ -19,14 +20,19 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
 
 @Service
 @AllArgsConstructor
 public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper, TrainRoutePairDO> implements TrainRoutePairService {
 
 
+    private final StationServiceImpl stationServiceImpl;
     StationService stationService;
     SeatMapper seatMapper;
     TicketMapper ticketMapper;
@@ -36,21 +42,9 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     RedissonClient redissonClient;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
-        //城市映射站台
-        //TODO 城市站台映射缓存优化
-        List<StationDO> startStation=stationService.lambdaQuery()
-                .eq(StationDO::getRegionName,from)
-                .list();
-        List<StationDO> endStation=stationService.lambdaQuery()
-                .eq(StationDO::getRegionName,to)
-                .list();
         // 1. mid不为空，查找 from->mid->to
         if (mid != null && !mid.isEmpty()) {
-            List<StationDO> midStation=stationService.lambdaQuery()
-                    .eq(StationDO::getRegionName,mid)
-                    .list();
-
-            List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to,startStation,midStation,endStation);
+            List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to);
             fillTrainSearchResult(result,date);
             return result;
         }
@@ -58,7 +52,12 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         String directKey = CacheConstant.trainRouteKey(from, to);
         List<TrainRoutePairDO> direct = safeCacheTemplate.safeGet(
                 directKey,
-                () -> trainRoutePairMapper.searchTrainsByStationList(startStation, endStation),
+                () ->{
+                    LambdaQueryWrapper<TrainRoutePairDO> wrapper=new LambdaQueryWrapper<TrainRoutePairDO>()
+                            .eq(TrainRoutePairDO::getStartRegion,from)
+                            .eq(TrainRoutePairDO::getEndRegion,to);
+                    return trainRoutePairMapper.selectList(wrapper);
+                },
                 3,
                 TimeUnit.DAYS
         );
@@ -88,7 +87,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
 
 
 
-        List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to,startStation,hotMidStations,endStation);
+        List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to);
 
         fillTrainSearchResult(result,date);
         return result;
@@ -96,24 +95,31 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     }
     private List<TrainSearchResponseDTO> handleMidMerge(String from,
                                                         String mid,
-                                                        String to,
-                                                        List<StationDO> startStation,
-                                                        List<StationDO> midStation,
-                                                        List<StationDO> endStation){
+                                                        String to){
         String routeKey= CacheConstant.trainRouteKey(from,mid);
         String midRouteKey = CacheConstant.trainRouteKey(mid, to);
 
         // 查询 from->mid
         List<TrainRoutePairDO> firstLeg=safeCacheTemplate.safeGet(
                 routeKey,
-                ()->trainRoutePairMapper.searchTrainsByStationList(startStation,midStation),
+                ()->{
+                    LambdaQueryWrapper<TrainRoutePairDO> wrapper=new LambdaQueryWrapper<TrainRoutePairDO>()
+                            .eq(TrainRoutePairDO::getStartRegion,from)
+                            .eq(TrainRoutePairDO::getEndRegion,mid);
+                    return trainRoutePairMapper.selectList(wrapper);
+                },
                 3,
                 TimeUnit.DAYS
         );
         // 查询 mid->to
         List<TrainRoutePairDO> secondLeg = safeCacheTemplate.safeGet(
                 midRouteKey,
-                ()->trainRoutePairMapper.searchTrainsByStationList(midStation,endStation),
+                ()->{
+                    LambdaQueryWrapper<TrainRoutePairDO> wrapper=new LambdaQueryWrapper<TrainRoutePairDO>()
+                            .eq(TrainRoutePairDO::getStartRegion,mid)
+                            .eq(TrainRoutePairDO::getEndRegion,to);
+                    return trainRoutePairMapper.selectList(wrapper);
+                },
                 3,
                 TimeUnit.DAYS
         );
@@ -135,6 +141,15 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     private void fillTrainSearchResult(List<TrainSearchResponseDTO> results,String date){
         // TODO:  填充余票和价格等信息
         results.forEach((result)->{
+            int transferCount = result.getSegments().size();
+            result.setTransferCount(transferCount);
+
+            Date firstDeparture = result.getSegments().get(0).getStartTime(); // 必须是 Date
+            result.setFirstDepartureTime(DateUtils.format(firstDeparture,"HH:mm"));
+            Date finalArrival = result.getSegments().get(transferCount - 1).getEndTime(); // 必须是 Date
+            result.setFinalArrivalTime(DateUtils.format(finalArrival,"HH:mm"));
+            result.setTotalDurationMinutes(DateUtils.diffMinutes(firstDeparture,finalArrival));
+
             Map<Integer,List<Integer>> tickets=new HashMap<>();
             //获取车次
             //获取区间
@@ -155,7 +170,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             return seatMapper.selectObjs(lambdaQueryWrapper)
                                     .stream()
                                     .map((e)->(Integer)e)
-                                    .toList();
+                                    .collect(Collectors.toCollection(ArrayList::new));
                         },
                         1,
                         TimeUnit.DAYS
@@ -171,7 +186,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             return trainStationMapper.selectObjs(wrapper)
                                     .stream()
                                     .map((obj)-> (String)obj)
-                                    .toList();
+                                    .collect(Collectors.toCollection(ArrayList::new));
                         },
                         1,
                         TimeUnit.DAYS
@@ -180,84 +195,45 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 String endStation=segment.getArrivalStation();
                 //获取区间
                 int i=stations.indexOf(startStation);
-                int j=stations.indexOf(endStation);
-                Map<Integer,List<String>> ticketRemainingCacheKeys=new HashMap<>();
-                for(;i<j;i++){
-                    for(int k=0;k<seatTypes.size();k++) {
-                        ticketRemainingCacheKeys
-                                .computeIfAbsent(seatTypes.get(k),key-> new ArrayList<String>())
-                                .add(CacheConstant.trainTicketRemainingKey(
-                                trainNum,
-                                date,
-                                stations.get(i),
-                                stations.get(i+1),
-                                seatTypes.get(k)
-                        ));
-                    }
-                }
+                int j=stations.indexOf(endStation)+1;
+                HashMap<Integer,List<Integer>> remainingTickets=new HashMap<>();
                 //判断这个区间是否再缓存存在
                 seatTypes.forEach((seatType)->{
                     String maxIntervalKes=CacheConstant.trainTicketRemainingKey(
                             trainNum,
                             date,
-                            stations.getFirst(),
-                            stations.getLast(),
                             seatType
                     );
-                    Object remainingTickets = safeCacheTemplate.get(maxIntervalKes);
-                    if(remainingTickets==null){
-                        //临界区代码 和safeGet的是一样的 但为了性能考虑 这里用批量插入
-                        //锁就用整个区间最大的这个key来 毕竟初始化缓存一个线程做就可以了
-                        RLock lock=redissonClient.getLock("lock"+maxIntervalKes);
-                        try{
-                            boolean locked=lock.tryLock(2,10,TimeUnit.SECONDS);
-                            if(!locked){
-                                throw new RuntimeException("获取分布式锁超时");
-                            }
-                            remainingTickets = safeCacheTemplate.get(maxIntervalKes);
-                            if(remainingTickets==null){
-                                Map<String,Integer> map=new HashMap<>();
+                    List<Integer> counts=safeCacheTemplate.safeGet(
+                            maxIntervalKes,
+                            ()->{
+                                List<Integer> res=new ArrayList<>();
                                 for(int k=0;k<stations.size()-1;k++){
                                     LambdaQueryWrapper wrapper=new LambdaQueryWrapper<SeatDO>()
                                             .eq(SeatDO::getTrainId,segment.getTrainId())
                                             .eq(SeatDO::getSeatType,seatType);
                                     Long count=seatMapper.selectCount(wrapper);
+                                    //TODO 数据库索引
                                     LambdaQueryWrapper wrapper1=new LambdaQueryWrapper<TicketDO>()
                                             .eq(TicketDO::getTrainId,segment.getTrainId())
                                             .eq(TicketDO::getTravelDate,date)
+                                            .eq(TicketDO::getSeatType,seatType)
                                             .eq(TicketDO::getDepartureStation,stations.get(k))
                                             .eq(TicketDO::getArrivalStation,stations.get(k+1));
                                     Long saleTickets=ticketMapper.selectCount(wrapper1);
-                                    map.put(
-                                            CacheConstant.trainTicketRemainingKey(
-                                                trainNum,
-                                                date,
-                                                stations.get(k),
-                                                stations.get(k+1),
-                                                seatType
-                                            ),
-                                            (int) (count-saleTickets)
-                                    );
+                                    res.add((int)(count-saleTickets));
                                 }
-                            }
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }finally {
-                            lock.unlock();
-                        }
+                                return res;
+                            },
+                            2,
+                            TimeUnit.DAYS
 
-                    }
+                    ).stream().skip(i).limit(j-i).toList();
+                    //TODO 多趟列车余票计算数据结构待定
+                    remainingTickets.put(seatType,counts);
+                    tickets.put(seatType,counts);
                 });
-                //获取余票数量
-                for(Map.Entry<Integer, List<String>> e:ticketRemainingCacheKeys.entrySet()){
-                    List<Integer> remainingTickets=safeCacheTemplate.mutiGet(e.getValue())
-                            .stream()
-                            .map((element)->(Integer)element)
-                            .toList();
-                    tickets.put(e.getKey(),remainingTickets);
-                }
-            }
-            );
+            });
             for(Map.Entry<Integer, List<Integer>> ticket:tickets.entrySet()){
                 int minVal = ticket.getValue()
                         .stream()

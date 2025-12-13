@@ -7,11 +7,11 @@
     <select id="searchTrainsByStationList" resultType="com.lalal.modules.entity.TrainRoutePairDO">
         SELECT
             *
-        FROM ${tableName}
+        FROM t_train_route_pair
         WHERE (
         <foreach collection="start" item="s" separator=" OR ">
             <foreach collection="end" item="e" open="(" close=")" separator=" OR ">
-                ( = #{s.c} AND to_station = #{e.code})
+                ( departure_station= #{s.name} AND arrival_station = #{e.name})
             </foreach>
         </foreach>
         )

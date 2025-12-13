@@ -80,4 +80,8 @@ public class TrainStationDO extends BaseDO {
      * 停留时间，单位分
      */
     private Integer stopoverTime;
+    /**
+     *  运行日期
+     */
+    private Date runDate;
 }

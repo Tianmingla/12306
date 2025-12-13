@@ -1,0 +1,6 @@
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: delFlag          # 全局逻辑删除字段名（对应实体属性名）
+      logic-not-delete-value: 0            # 未删除值
+      logic-delete-value: 1                # 已删除值

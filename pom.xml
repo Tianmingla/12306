@@ -26,6 +26,7 @@
         <jjwt.version>0.9.1</jjwt.version>
         <fastjson2.version>2.0.36</fastjson2.version>
         <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
+        <jdbc.version>8.0.19</jdbc.version>
         <dozer-core.version>6.5.2</dozer-core.version>
         <hutool-all.version>5.8.27</hutool-all.version>
         <redisson.version>3.21.3</redisson.version>
@@ -79,6 +80,12 @@
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-boot-starter</artifactId>
                 <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>mysql</groupId>
+                <artifactId>mysql-connector-java</artifactId>
+                <version>${jdbc.version}</version>
             </dependency>
 
             <dependency>
@@ -158,8 +165,21 @@
                 <artifactId>micrometer-registry-prometheus</artifactId>
                 <version>${micrometer-registry-prometheus.version}</version>
             </dependency>
+
         </dependencies>
     </dependencyManagement>
-
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
 

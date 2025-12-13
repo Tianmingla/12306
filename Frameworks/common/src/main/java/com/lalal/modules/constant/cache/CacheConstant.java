@@ -22,23 +22,21 @@ public class CacheConstant {
      *
      * @param trainNum      火车车次，不可为null或空
      * @param date         日期，格式 yyyy-MM-dd，不可为null或空
-     * @param fromStation  起始站（相邻区间的起点），不可为null或空
-     * @param toStation    终点站（相邻区间的终点），不可为null或空
      * @param seatType 座位类型
      * @return 缓存Key字符串
      */
-    public static String trainTicketRemainingKey(String trainNum, String date, String fromStation, String toStation,int seatType) {
+    public static String trainTicketRemainingKey(String trainNum, String date,int seatType) {
         Objects.requireNonNull(trainNum, "trainId must not be null");
         Objects.requireNonNull(date, "date must not be null");
-        Objects.requireNonNull(fromStation, "fromStation must not be null");
-        Objects.requireNonNull(toStation, "toStation must not be null");
+//        Objects.requireNonNull(fromStation, "fromStation must not be null");
+//        Objects.requireNonNull(toStation, "toStation must not be null");
 
-        if (trainNum.isEmpty() || date.isEmpty() || fromStation.isEmpty() || toStation.isEmpty()) {
+        if (trainNum.isEmpty() || date.isEmpty() ) {
             throw new IllegalArgumentException("Cache key parameters must not be empty");
         }
 
 
-        return String.format(TRAIN_TICKET_REMAINING_KEY_TEMPLATE, trainNum, date, fromStation, toStation,seatType);
+        return String.format(TRAIN_TICKET_REMAINING_KEY_TEMPLATE, trainNum, date, seatType);
     }
     /**
      * 构建火车余票详情缓存Key
@@ -110,7 +108,7 @@ public class CacheConstant {
 
     // 保留原始常量，便于查看或文档生成（但不推荐直接用于 format）
     public static final String REQUEST_ID_KEY_TEMPLATE = "REQUEST::%s";
-    public static final String TRAIN_TICKET_REMAINING_KEY_TEMPLATE = "TICKET::REMAINING::%s::%s::%s-%s::%d";
+    public static final String TRAIN_TICKET_REMAINING_KEY_TEMPLATE = "TICKET::REMAINING::%s::%s::%d";
     public static final String TRAIN_TICKET_DETAIL_KEY_TEMPLATE  = "TICKET::REMAINING::%s::%s::%s-%s::%s";
     public static final String TRAIN_ROUTE_KEY_TEMPLATE="TRAIN::ROUTE::%s::%s";
     public static final String TRAIN_SEAT_TYPE="TRAIN::SEAT_TYPE::%s";
