@@ -1,7 +1,11 @@
 package com.lalal.modules.constant.cache;
 
 import java.util.Objects;
-
+/**
+ * 本项目设计原则：
+ * 接口设计原则 用唯一code或其他容易人类识别做接口
+ * 缓存设计原则 用id做唯一缓存键
+ * */
 public class CacheConstant {
     private CacheConstant() {}
     /**
@@ -20,23 +24,23 @@ public class CacheConstant {
     /**
      * 构建火车余票缓存Key
      *
-     * @param trainNum      火车车次，不可为null或空
+     * @param trainId      火车车次id，不可为null或空
      * @param date         日期，格式 yyyy-MM-dd，不可为null或空
      * @param seatType 座位类型
      * @return 缓存Key字符串
      */
-    public static String trainTicketRemainingKey(String trainNum, String date,int seatType) {
-        Objects.requireNonNull(trainNum, "trainId must not be null");
+    public static String trainTicketRemainingKey(Long trainId, String date,int seatType) {
+        Objects.requireNonNull(trainId, "trainId must not be null");
         Objects.requireNonNull(date, "date must not be null");
 //        Objects.requireNonNull(fromStation, "fromStation must not be null");
 //        Objects.requireNonNull(toStation, "toStation must not be null");
 
-        if (trainNum.isEmpty() || date.isEmpty() ) {
+        if ( date.isEmpty() ) {
             throw new IllegalArgumentException("Cache key parameters must not be empty");
         }
 
 
-        return String.format(TRAIN_TICKET_REMAINING_KEY_TEMPLATE, trainNum, date, seatType);
+        return String.format(TRAIN_TICKET_REMAINING_KEY_TEMPLATE, trainId, date, seatType);
     }
     /**
      * 构建火车余票详情缓存Key
@@ -74,20 +78,29 @@ public class CacheConstant {
     /**
      * 构建火车座位类型缓存Key
      *
-     * @param trainNumber      车次
+     * @param trainId      车次id
      * @return 缓存Key字符串
      */
-    public static String trainSeatType(String trainNumber){
-        return String.format(TRAIN_SEAT_TYPE,trainNumber);
+    public static String trainSeatType(Long trainId){
+        return String.format(TRAIN_SEAT_TYPE,trainId);
     }
     /**
      * 构建火车站台顺序型缓存Key
      *
-     * @param trainNumber      车次
+     * @param trainId      车次id
      * @return 缓存Key字符串
      */
-    public static String trainStation(String trainNumber){
-        return String.format(TRAIN_STATION_KEY_TEMPLATE,trainNumber);
+    public static String trainStation(Long trainId){
+        return String.format(TRAIN_STATION_KEY_TEMPLATE,trainId);
+    }
+    /**
+     * 构建火车车次到详情映射的缓存Key
+     *
+     * @param trainNum     车次号
+     * @return 缓存Key字符串
+     */
+    public static String trainCodeToDetail(String trainNum){
+        return String.format(TRAIN_CODE_TO_DETAIL_TEMPLATE,trainNum);
     }
     /**
      * 通用缓存Key构建方法（谨慎使用，无参数校验）
@@ -113,4 +126,5 @@ public class CacheConstant {
     public static final String TRAIN_ROUTE_KEY_TEMPLATE="TRAIN::ROUTE::%s::%s";
     public static final String TRAIN_SEAT_TYPE="TRAIN::SEAT_TYPE::%s";
     public static final String TRAIN_STATION_KEY_TEMPLATE="TRAIN::STATION::%s";
+    public static final String  TRAIN_CODE_TO_DETAIL_TEMPLATE = "TRAIN::CODE::%s";
 }

@@ -128,14 +128,16 @@ public class SafeCacheTemplate {
 
         // 2. 存在缓存未命中，加分布式锁
         //非常重要 必须排序 保证全线程获取key顺序相同 否则死锁(虽然try不会 破环无限等待了但性能大大降低)
-        RLock[] locks = new RLock[nullKeysIndex.size()];
+
         List<String> nullKeys=nullKeysIndex.stream()
                 .map(i->{
                     return "lock"+keys.get(i);
                 })
                 .sorted()
+                .distinct() //去重 否则死锁！
                 .toList();
-        for (int idx = 0; idx < nullKeysIndex.size(); idx++) {
+        RLock[] locks = new RLock[nullKeys.size()];
+        for (int idx = 0; idx < nullKeys.size(); idx++) {
             locks[idx] = redissonClient.getLock(nullKeys.get(idx));
         }
         RLock mLock=redissonClient.getMultiLock(locks);

@@ -11,6 +11,7 @@ import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.*;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
+import com.lalal.modules.service.TrainStationService;
 import com.lalal.modules.utils.DateUtils;
 import lombok.AllArgsConstructor;
 import org.apache.ibatis.cache.Cache;
@@ -38,7 +39,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     TicketMapper ticketMapper;
     TrainRoutePairMapper trainRoutePairMapper;
     SafeCacheTemplate safeCacheTemplate;
-    TrainStationMapper trainStationMapper;
+    TrainStationService trainStationService;
     RedissonClient redissonClient;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
@@ -140,17 +141,17 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     }
 
     private void fillTrainSearchResult(List<TrainSearchResponseDTO> results,String date){
-        //TODO 这里可能重复车次 需要去重
-        List<TrainRoutePairDO> trainDOList = results.stream()
+        List<Long> trainDOList = results.stream()
                 .flatMap(e -> e.getSegments().stream())
+                .map(TrainRoutePairDO::getTrainId)
                 .toList();
 
         //获取所有火车的座位种类map
         List<String> seatTypeKeys=trainDOList.stream()
-                .map(t->CacheConstant.trainSeatType(t.getTrainNumber()))
+                .map(CacheConstant::trainSeatType)
                 .toList();
         List<Object[]> seatTypeArgs=trainDOList.stream()
-                .map(t-> new Object[]{t.getTrainId()})
+                .map(t-> new Object[]{t})
                 .toList();
         List<List<Integer>> seatTypeList=safeCacheTemplate.safeBatchGet(
                 seatTypeKeys,
@@ -181,55 +182,22 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         );
         Map<Long,List<Integer>> seatTypemap=new HashMap<>();
         for (int i=0;i<trainDOList.size();i++){
-            seatTypemap.put(trainDOList.get(i).getTrainId(),seatTypeList.get(i));
+            seatTypemap.put(trainDOList.get(i),seatTypeList.get(i));
         }
 
         //获取搜索结果中的所有列车的经过的站点map
-        List<String> stationsKeys=trainDOList.stream()
-                .map(t->CacheConstant.trainStation(t.getTrainNumber()))
-                .toList();
-        //性能考虑 直接用s
-//        List<Object[]> stationsArgs=trainDOList.stream()
-//                .map(t-> new Object[]{t.getTrainId()})
-//                .toList();
-        List<List<String>> stationsList=safeCacheTemplate.safeBatchGet(
-                stationsKeys,
-                (List<Object[]> args)->{
-                    List<Long> trainIds=args.stream()
-                            .map(arg->(Long)arg[0])
-                            .toList();
-                    Map<Long,Integer> indexmap=new HashMap<>();
-                    List<List<String>> result=new ArrayList<>(args.size());
-                    for(int i=0;i<trainIds.size();i++){
-                        indexmap.put(trainIds.get(i),i);
-                        result.add(new ArrayList<>());
-                    }
-                    LambdaQueryWrapper<TrainStationDO> lambdaQueryWrapper=new LambdaQueryWrapper<TrainStationDO>()
-                            .select(TrainStationDO::getStationName,TrainStationDO::getTrainId)
-                            .in(TrainStationDO::getTrainId,trainIds)
-                            .orderByAsc(TrainStationDO::getTrainId,TrainStationDO::getSequence);
-                    List<Map<String,Object>> objects=trainStationMapper.selectMaps(lambdaQueryWrapper);
-                    for (Map<String,Object> objectMap:objects){
-                        result.get(indexmap.get(objectMap.get("train_id"))).add((String)objectMap.get("station_name"));
-                    }
-                    return result;
-//
-                },
-                seatTypeArgs,
-                3,
-                TimeUnit.DAYS
-        );
+        List<List<String>> stationsList=trainStationService.getStationNamesByTrainIds(trainDOList);
         Map<Long,List<String>> stationsmap=new HashMap<>();
         for (int i=0;i<trainDOList.size();i++){
-            stationsmap.put(trainDOList.get(i).getTrainId(),stationsList.get(i));
+            stationsmap.put(trainDOList.get(i),stationsList.get(i));
         }
 
         //获取搜索结果中的所有列车+各列车的种类余票map
         List<String> remainingTicketKeys=trainDOList.stream()
                 .flatMap((t)->
-                    seatTypemap.get(t.getTrainId()).stream()
+                    seatTypemap.get(t).stream()
                             .map(s->CacheConstant.trainTicketRemainingKey(
-                                    t.getTrainNumber(),
+                                    t,
                                     date,
                                     s
                             ))
@@ -237,18 +205,18 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 .toList();
         List<Object[]> remainingTicketArgs=trainDOList.stream()
                 .flatMap((t)->
-                        seatTypemap.get(t.getTrainId())
+                        seatTypemap.get(t)
                                 .stream()
-                                .map(s->new Object[]{t.getTrainId(),s})
+                                .map(s->new Object[]{t,s})
                 )
                 .toList();
         Map<String,Integer> remainingTicketIndex=new HashMap<>();
         int recordIdx=0;
         for(int i=0;i<trainDOList.size();i++){
-            List<Integer> seatTypes=seatTypemap.get(trainDOList.get(i).getTrainId());
+            List<Integer> seatTypes=seatTypemap.get(trainDOList.get(i));
             for(int j=0;j<seatTypes.size();j++){
                 remainingTicketIndex.put(
-                        trainDOList.get(i).getTrainId()+"_"+seatTypes.get(j),
+                        trainDOList.get(i)+"_"+seatTypes.get(j),
                         recordIdx++
                 );
             }
