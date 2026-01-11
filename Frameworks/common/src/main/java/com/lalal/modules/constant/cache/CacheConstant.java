@@ -45,25 +45,14 @@ public class CacheConstant {
     /**
      * 构建火车余票详情缓存Key
      *
-     * @param trainNum      火车车次，不可为null或空
+     * @param trainId      火车id，不可为null或空
      * @param date         日期，格式 yyyy-MM-dd，不可为null或空
-     * @param fromStation  起始站（相邻区间的起点），不可为null或空
-     * @param toStation    终点站（相邻区间的终点），不可为null或空
+
      * @param  carriageNumber 车厢号
      * @return 缓存Key字符串
      */
-    public static String trainTicketDetailKey(String trainNum, String date, String fromStation, String toStation,String carriageNumber) {
-        Objects.requireNonNull(trainNum, "trainId must not be null");
-        Objects.requireNonNull(date, "date must not be null");
-        Objects.requireNonNull(fromStation, "fromStation must not be null");
-        Objects.requireNonNull(toStation, "toStation must not be null");
-
-        if (trainNum.isEmpty() || date.isEmpty() || fromStation.isEmpty() || toStation.isEmpty()) {
-            throw new IllegalArgumentException("Cache key parameters must not be empty");
-        }
-
-
-        return String.format(TRAIN_TICKET_DETAIL_KEY_TEMPLATE, trainNum, date, fromStation, toStation,carriageNumber);
+    public static String trainTicketDetailKey(Long trainId, String date,String carriageNumber) {
+        return String.format(TRAIN_TICKET_DETAIL_KEY_TEMPLATE, trainId, date, carriageNumber);
     }
     /**
      * 构建火车路线缓存Key
@@ -103,6 +92,13 @@ public class CacheConstant {
         return String.format(TRAIN_CODE_TO_DETAIL_TEMPLATE,trainNum);
     }
     /**
+     * 构建火车的车厢缓存key
+     * @param trainId 火车id
+     */
+    public static String trainCarriage(Long trainId){
+        return String.format(TRAIN_CARRIAGE_KEY_TEMPLATE,trainId);
+    }
+    /**
      * 通用缓存Key构建方法（谨慎使用，无参数校验）
      *
      * @param pattern 格式模板，如 "TICKET::REMAINING::%s::%s::%s-%s"
@@ -122,9 +118,10 @@ public class CacheConstant {
     // 保留原始常量，便于查看或文档生成（但不推荐直接用于 format）
     public static final String REQUEST_ID_KEY_TEMPLATE = "REQUEST::%s";
     public static final String TRAIN_TICKET_REMAINING_KEY_TEMPLATE = "TICKET::REMAINING::%s::%s::%d";
-    public static final String TRAIN_TICKET_DETAIL_KEY_TEMPLATE  = "TICKET::REMAINING::%s::%s::%s-%s::%s";
+    public static final String TRAIN_TICKET_DETAIL_KEY_TEMPLATE  = "TICKET::DETAIL::%s::%s::%s";
     public static final String TRAIN_ROUTE_KEY_TEMPLATE="TRAIN::ROUTE::%s::%s";
     public static final String TRAIN_SEAT_TYPE="TRAIN::SEAT_TYPE::%s";
     public static final String TRAIN_STATION_KEY_TEMPLATE="TRAIN::STATION::%s";
+    public static final String TRAIN_CARRIAGE_KEY_TEMPLATE="TRAIN::CARRIAGE::%s";
     public static final String  TRAIN_CODE_TO_DETAIL_TEMPLATE = "TRAIN::CODE::%s";
 }

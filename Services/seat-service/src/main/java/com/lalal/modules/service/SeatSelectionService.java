@@ -1,10 +1,9 @@
 package com.lalal.modules.service;
 
-import com.lalal.modules.dao.request.SeatSelectionRequestDTO;
-import com.lalal.modules.dao.response.TicketDTO;
-import org.springframework.stereotype.Service;
+import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
+import com.lalal.modules.dto.response.TicketDTO;
 
-@Service
+
 public interface SeatSelectionService {
 
     TicketDTO select(SeatSelectionRequestDTO seatSelectionRequest);

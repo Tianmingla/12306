@@ -1,5 +1,6 @@
-package com.lalal.modules.dao.request;
+package com.lalal.modules.dto.request;
 
+import com.lalal.modules.model.Passenger;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,14 +15,8 @@ public class SeatSelectionRequestDTO {
      * 购票账号
      */
     String account;
-    /**
-     * 身份证的索引 不暴露身份证号
-     */
-    List<Long> IDCardCodelist;
-    /**
-     * 座位种类
-     */
-    List<String> seatTypelist;
+
+    List<Passenger> passengers;
     /**
      * 车次
      */

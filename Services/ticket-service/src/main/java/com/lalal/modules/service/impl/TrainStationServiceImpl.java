@@ -2,9 +2,11 @@ package com.lalal.modules.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.entity.TrainDO;
+import com.lalal.modules.entity.TrainRoutePairDO;
 import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
@@ -35,6 +37,7 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
                             .eq(TrainDO::getTrainNumber,trainNum);
                     return trainMapper.selectOne(lambdaQueryWrapper);
                 },
+                new TypeReference<TrainDO>(){},
                 10,
                 TimeUnit.DAYS
         );
@@ -54,6 +57,7 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
                             //一定要用ArrayList toLIst不可变集合如果是空集序列化到redis类型擦除 反序列化报错
                             .collect(Collectors.toCollection(ArrayList::new));
                 },
+                new TypeReference<List<String>>(){},
                 10,
                 TimeUnit.DAYS
         );
@@ -91,6 +95,7 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
                     return result;
 //
                 },
+                new TypeReference<List<String>>(){},
                 stationsArgs,
                 3,
                 TimeUnit.DAYS

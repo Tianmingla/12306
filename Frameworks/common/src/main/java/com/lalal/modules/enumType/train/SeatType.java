@@ -15,9 +15,11 @@ public enum SeatType {
     private final int code;
     private final String desc;
     private static final Map<Integer, SeatType> CODE_MAP = new HashMap<>();
+    private static final Map<String, SeatType> DESC_MAP = new HashMap<>();
     static{
         for(SeatType seatType:values()){
             CODE_MAP.put(seatType.getCode(),seatType);
+            DESC_MAP.put(seatType.getDesc(),seatType);
         }
     }
     SeatType(int code, String desc) {
@@ -28,4 +30,8 @@ public enum SeatType {
     public int getCode() { return code; }
     public String getDesc() { return desc; }
     public static String getDescByCode(Integer code){return CODE_MAP.get(code).getDesc();}
+    public static SeatType findByCode(Integer code){return CODE_MAP.get(code);}
+    public static SeatType findByDesc(String desc) {
+        return DESC_MAP.get(desc);
+    }
 }

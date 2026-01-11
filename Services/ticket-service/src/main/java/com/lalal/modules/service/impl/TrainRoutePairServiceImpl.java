@@ -3,6 +3,7 @@ package com.lalal.modules.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.dto.response.TrainSearchResponseDTO;
@@ -59,6 +60,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .eq(TrainRoutePairDO::getEndRegion,to);
                     return trainRoutePairMapper.selectList(wrapper);
                 },
+                new TypeReference<List<TrainRoutePairDO>>(){},
                 3,
                 TimeUnit.DAYS
         );
@@ -109,6 +111,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .eq(TrainRoutePairDO::getEndRegion,mid);
                     return trainRoutePairMapper.selectList(wrapper);
                 },
+                new TypeReference<List<TrainRoutePairDO>>(){},
                 3,
                 TimeUnit.DAYS
         );
@@ -121,6 +124,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .eq(TrainRoutePairDO::getEndRegion,to);
                     return trainRoutePairMapper.selectList(wrapper);
                 },
+                new TypeReference<List<TrainRoutePairDO>>(){},
                 3,
                 TimeUnit.DAYS
         );
@@ -176,6 +180,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                     return result;
 //
                 },
+                new TypeReference<List<Integer>>(){},
                 seatTypeArgs,
                 3,
                 TimeUnit.DAYS
@@ -221,7 +226,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 );
             }
         }
-        List<List<Integer>> remainingTicketList=safeCacheTemplate.safeBatchGet(
+        List<List<Integer>> remainingTicketList=safeCacheTemplate.safeBatchLGet(
                 remainingTicketKeys,
                 (List<Object[]> args)->{
                     List<Long> trainIds=args.stream()
@@ -236,6 +241,8 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                         indexmap.put(trainIds.get(i)+"_"+seatTypes.get(i),i);
                         result.add(new ArrayList<>());
                     }
+                    //TODO 并不是任意匹配 但数据库不可能出现该火车id和其他座位类型的数据 因此只是性能浪费
+                    //等到不懒的时候推荐改成xml做（train_id,seat_type）in (...)
                     QueryWrapper wrapper=new QueryWrapper<SeatDO>()
                             .select("train_id","seat_type","count(*) as count")
                             .in("train_id",trainIds)
@@ -243,6 +250,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .groupBy("train_id","seat_type");
                     List<Map<String,Object>> objs=seatMapper.selectMaps(wrapper);
                     //TODO 数据库索引
+                    //这里有问题
                     QueryWrapper<TicketDO> wrapper1 = new QueryWrapper<>();
                     wrapper1.select("train_id","seat_type", "departure_station", "arrival_station", "COUNT(*) AS count")
                             .in("train_id", trainIds)
@@ -262,6 +270,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                         result.set(idx,list);
 
                     }
+
                     for(Map<String,Object> e:objs1) {
                         String key=e.get("train_id")+"_"+e.get("seat_type");
                         Integer idx=indexmap.get(key);
@@ -269,13 +278,18 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                         List<Integer> list=result.get(idx);
                         List<String> stationNameList=stationsmap.get(e.get("train_id"));
                         Integer i=stationNameList.indexOf(e.get("departure_station"));
+                        Integer j=stationNameList.indexOf(e.get("arrival_station"));
                         //太麻烦了 这就是java的包装 我又不能用普通数组 不然redis序列化又出问题
                         //如果去一步一步为了性能去重写java生态库 保证理论上的java上限 不如换语言
-                        //TODO ticket待定 还没确定买区间A-C是存A-B B-C还是只存A-C
-                        list.set(i,list.get(i)-((Long)e.get("count")).intValue());
+                        //ticket 确定买区间A-C是只存A-C而不是存A-B B-C还
+                        for(;i<=j;i++){
+                            list.set(i,list.get(i)-((Long)e.get("count")).intValue());
+                        }
+
                     }
                     return result;
                 },
+                new TypeReference<Integer>(){},
                 remainingTicketArgs,
                 3,
                 TimeUnit.DAYS
