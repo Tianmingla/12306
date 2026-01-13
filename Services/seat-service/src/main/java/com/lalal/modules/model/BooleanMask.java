@@ -11,8 +11,10 @@ import lombok.Getter;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
-@JsonSerialize(using = BooleanMaskSerializer.class)
-@JsonDeserialize(using = BooleanMaskDeserializer.class)
+
+//放弃json自定义序列化 因为不管如何控制 他都必须是字符串或json在redis会存在/"/"双引号 虽然可在lua规避 但终究不够好 我需要更加自由的序列化处理包装
+//@JsonSerialize(using = BooleanMaskSerializer.class)
+//@JsonDeserialize(using = BooleanMaskDeserializer.class)
 public class BooleanMask {
 
     private final BitSet bits;
@@ -24,11 +26,18 @@ public class BooleanMask {
         this.bits = new BitSet(size);
     }
 
-    // 用于从 Redis 字符串反序列化
+
     public BooleanMask(  int size,
                         BitSet bits) {
         this.size = size;
         this.bits = bits;
+    }
+    public BooleanMask(byte[] bytes) {
+        bits= BitSet.valueOf(bytes);
+        size= bits.size();
+    }
+    public byte[] getBytes(){
+        return bits.toByteArray();
     }
     /**
      * 合并操作 (OR)

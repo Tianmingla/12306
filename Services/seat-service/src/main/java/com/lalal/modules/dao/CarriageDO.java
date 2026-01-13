@@ -68,7 +68,7 @@ public class CarriageDO extends BaseDO {
         carriage.setCarNumber(carriageNumber);
         SeatType seatType=SeatType.findByCode(carriageType);
         carriage.setSeatType(seatType);
-        carriage.setIndex(Integer.parseInt(carriageNumber));
+        carriage.setIndex(Integer.parseInt(carriageNumber)-1);
         carriage.setLayout(CarriageUtils.getLayout(seatType));
         return carriage;
     }

@@ -3,6 +3,9 @@ package com.lalal.framework.cache;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lalal.framework.cache.RedisSerializer.DefaultValueRedisSerializer;
+import com.lalal.framework.cache.RedisSerializer.RawRedisSerializer;
+import com.lalal.framework.cache.RedisSerializer.ValueRedisSerializer;
 import lombok.AllArgsConstructor;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -17,50 +20,133 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-
+/**
+ * 作用点如下
+ * 做key锁管理 避免缓存雪崩 缓存击穿
+ * 完全自己控制序列化过程 抛弃redisTemplate自动序列化管理
+ * 原因如下
+ * 关闭@class类型信息 避免文件改动缓存失效 以及一些列安全问题+缓存瘦身
+ * 因为业务复杂度 需要手动处理序列化管理 redisTemplate设计的对称序列化 以及全局都公用一个序列化管理器 无法自由定义序列化
+ * 封装思路总结 就是函数回调+参数量增加 由于参数增加 故封装上下文
+ * TODO 拓展思路封装 加入观察者 当进行set/get某个具体键前/后 发出对应事件 用于其他系统交互(如日志) 加入拦截器 对set.get参数处理 如时间随机化 同一key前后缀
+ * 上下文总结场景
+ * 1.如现在 参数较多 业务逻辑复杂
+ * 2.某个接口函数/类 如游戏引擎给的worldContext 或java 重写jackson模块的自定义反序列化 给出的序列化上下文参数
+ *  总结就是这个开放接口/或者设计类关系调用的时候 涉及参数多+不确定
+ * 事件驱动思想总结
+ * 。。。。TODO
+ */
 @AllArgsConstructor
 public class SafeCacheTemplate {
     private RedisTemplate<String, Object> redisTemplate;
 
     private RedissonClient redissonClient;
 
-//    private RedisSerializer<Object> curValueSerializer;
+    private CacheContext curContext;  //也可以把参数都放到上下文中 但这里因为代码再中途的想法 一改要改挺多的 这里其实也有点状态机的意思
 
-//    private Map<RedisType,Function<List<String>,List<Object>>> getter;
-//    private Map<RedisType,RedisType> setter;
-//
-//    SafeCacheTemplate(RedisTemplate redisTemplate,RedissonClient redissonClient){
-//        this.redisTemplate=redisTemplate;
-//        this.redissonClient=redissonClient;
-//
-//
-//
-//    }
+    //操作上下文控制 TODO 将这几个序列化器固定 而不是每次去分配 浪费性能
+    public void clearContext(){
+        curContext.setValueSerializer(new DefaultValueRedisSerializer(curContext.getMapper()));
+        curContext.setRedisType(RedisType.VALUE);
+    }
+    public SafeCacheTemplate setDefaultValueSerializer(){
+        curContext.setValueSerializer(new DefaultValueRedisSerializer(curContext.getMapper()));
+        return this;
+    }
 
+    /**
+     * 函数接口配置自定义序列化器
+     * @param redisSerializer
+     * @return
+     */
+    public SafeCacheTemplate setCustomizedSerializer(ValueRedisSerializer redisSerializer){
+        curContext.setValueSerializer(redisSerializer);
+        return this;
+    }
+
+    public SafeCacheTemplate setRawValueSerializer(){
+        curContext.setValueSerializer(new RawRedisSerializer());
+        return this;
+    }
     // ============ 基础缓存操作（保持兼容）============
 
     public void set(String key, Object value, long timeout, TimeUnit unit) {
-        redisTemplate.opsForValue().set(key, value, timeout, unit);
+        redisTemplate.execute((RedisCallback<Object>) connection -> {
+            byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
+            connection.openPipeline();
+            //java 枚举类 维护一个递增独立值
+            //在switch中 连续递增的值编译器处理是o(1)的
+            switch (curContext.getRedisType()){
+                case VALUE:
+                    connection.setEx(keyBytes,unit.toSeconds(timeout),curContext.getValueSerializer().serialize(value));
+                    break;
+                case HASH:
+                    //TODO
+                    break;
+                case LIST:
+                    List<?> valueList=(List<?>) value;
+                    int size=valueList.size();
+                    byte[][] valueListBytes=new byte[size][];
+                    for(int i=0;i<size;i++){
+                        valueListBytes[i]= curContext.getValueSerializer().serialize(valueList.get(i));
+                    }
+                    connection.rPush(keyBytes,valueListBytes);
+                    connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
+                    break;
+            }
+            return connection.closePipeline();
+        });
     }
 
+    public void multiSet(List<String> keys, List<Object> values, long timeout, TimeUnit unit){
+        redisTemplate.execute((RedisCallback<Object>) connection -> {
+            connection.openPipeline();
+            //java 枚举类 维护一个递增独立值
+            //在switch中 连续递增的值编译器处理是o(1)的
+            switch (curContext.getRedisType()){
+                case VALUE:
+                    for(int i=0;i<keys.size();i++){
+                        byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
+                        connection.setEx(keyBytes,unit.toSeconds(timeout),curContext.getValueSerializer().serialize(values.get(i)));
+                    }
+                    break;
+                case HASH:
+                    //TODO
+                    break;
+                case LIST:
+                    for(int i=0;i<keys.size();i++){
+                        List<?> valueList=(List<?>) values.get(i);
+                        int size=valueList.size();
+                        byte[][] valueListBytes=new byte[size][];
+                        byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
+                        for(int j=0;j<size;j++){
+                            valueListBytes[j]= curContext.getValueSerializer().serialize(valueList.get(j));
+                        }
+                        connection.rPush(keyBytes,valueListBytes);
+                        connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
+                    }
+                    break;
+            }
+            return connection.closePipeline();
+        });
+    }
+
+    /**
+     *  set一个就可以 get这么多个？重复代码如此多？
+     *  解决办法 抛弃泛型 全部用object即可 但java要转回原来的类型白遍历一边
+     */
     public Object get(String key) {
         return redisTemplate.opsForValue().get(key);
     }
     public <T> T get(String key, TypeReference<T> typeReference) {
         return redisTemplate.execute((RedisCallback<T>) connection -> {
             byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
-            byte[] valueBytes = connection.get(keyBytes);
+            T result=null;
+            byte[] valueBytes=connection.get(keyBytes);
             if(valueBytes==null){
                 return null;
             }
-            T result=null;
-            ObjectMapper mapper=new ObjectMapper();
-            mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-            try {
-                result=mapper.readValue(valueBytes,typeReference);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            result=curContext.getValueSerializer().deserialize(valueBytes,typeReference);
             return result;
         });
     }
@@ -94,54 +180,49 @@ public class SafeCacheTemplate {
         });
 
         // 6. 手动反序列化（此时 rawResults 中每个非 null 元素是 byte[]）
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-
         List<T> results = new ArrayList<>(rawResults.size());
         for (Object obj : rawResults) {
             if (obj == null) {
                 results.add(null);
             } else {
-                try {
-                    T value = mapper.readValue((byte[]) obj, typeRef);
-                    results.add(value);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to deserialize Redis value", e);
-                }
+                T value = curContext.getValueSerializer().deserialize((byte[]) obj, typeRef);
+                results.add(value);
             }
         }
 
         return results;
     }
+    //TODO
     public List<Map<String,Object>> mutiHGet(List<String> keys){
-        if (keys == null || keys.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // 使用 pipeline 批量执行 HGETALL
-        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-            RedisSerializer<String> keySerializer = redisTemplate.getStringSerializer();
-            for (String key : keys) {
-                connection.hashCommands().hGetAll(keySerializer.serialize(key));
-            }
-            return null;
-        });
-
-        // 转换结果：每个 result 是一个 Map<byte[], byte[]>，需反序列化
-        return results.stream().map(item -> {
-            if (item == null || !(item instanceof Map)) {
-                return null;
-            }
-            @SuppressWarnings("unchecked")
-            Map<byte[], byte[]> rawMap = (Map<byte[], byte[]>) item;
-            Map<String, Object> deserialized = new HashMap<>();
-            for (Map.Entry<byte[], byte[]> entry : rawMap.entrySet()) {
-                String field = (String) redisTemplate.getKeySerializer().deserialize(entry.getKey());
-                Object value = redisTemplate.getValueSerializer().deserialize(entry.getValue());
-                deserialized.put(field, value);
-            }
-            return deserialized;
-        }).collect(Collectors.toList());
+//        if (keys == null || keys.isEmpty()) {
+//            return Collections.emptyList();
+//        }
+//
+//        // 使用 pipeline 批量执行 HGETALL
+//        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+//            RedisSerializer<String> keySerializer = redisTemplate.getStringSerializer();
+//            for (String key : keys) {
+//                connection.hashCommands().hGetAll(keySerializer.serialize(key));
+//            }
+//            return null;
+//        });
+//
+//        // 转换结果：每个 result 是一个 Map<byte[], byte[]>，需反序列化
+//        return results.stream().map(item -> {
+//            if (item == null || !(item instanceof Map)) {
+//                return null;
+//            }
+//            @SuppressWarnings("unchecked")
+//            Map<byte[], byte[]> rawMap = (Map<byte[], byte[]>) item;
+//            Map<String, Object> deserialized = new HashMap<>();
+//            for (Map.Entry<byte[], byte[]> entry : rawMap.entrySet()) {
+//                String field = (String) redisTemplate.getKeySerializer().deserialize(entry.getKey());
+//                Object value = redisTemplate.getValueSerializer().deserialize(entry.getValue());
+//                deserialized.put(field, value);
+//            }
+//            return deserialized;
+//        }).collect(Collectors.toList());
+        return null;
     }
     public <T> List<List<T>> multiLGet(List<String> keys){
         if (keys == null || keys.isEmpty()) {
@@ -171,21 +252,19 @@ public class SafeCacheTemplate {
         if (keys == null || keys.isEmpty()) {
             return Collections.emptyList();
         }
+        RedisSerializer<String> keySerializer = redisTemplate.getStringSerializer();
+        List<byte[]> keyBytesList=new ArrayList<>(keys.size());
+        for (String key : keys) {
+            keyBytesList.add(keySerializer.serialize(key));
 
+        }
         List<Object> raw = redisTemplate.execute((RedisCallback<List<Object>>)  connection -> {
             connection.openPipeline();
-
-            RedisSerializer<String> keySerializer = redisTemplate.getStringSerializer();
-            for (String key : keys) {
-                byte[] keyBytes = keySerializer.serialize(key);
+            for (byte[] keyBytes : keyBytesList) {
                 connection.lRange(keyBytes, 0, -1);
             }
-
             return connection.closePipeline();
         });
-
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
         List<List<T>> results = new ArrayList<>(raw.size());
 
@@ -200,12 +279,8 @@ public class SafeCacheTemplate {
                     if (bytes == null) {
                         innerList.add(null);
                     } else {
-                        try {
-                            T value = mapper.readValue(bytes, typeReference);
-                            innerList.add(value);
-                        } catch (IOException e) {
-                            throw new RuntimeException("Deserialize failed", e);
-                        }
+                        T value = curContext.getValueSerializer().deserialize(bytes, typeReference);
+                        innerList.add(value);
                     }
                 }
                 results.add(innerList);
@@ -236,6 +311,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> T safeGet(String key, Supplier<T> loader, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.VALUE);
         // 1. 先读缓存（无锁，高性能）
         T cached = (T)get(key);
         if (cached != null) {
@@ -293,6 +369,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> T safeGet(String key, Supplier<T> loader,TypeReference<T> typeReference, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.VALUE);
         // 1. 先读缓存（无锁，高性能）
         T cached = get(key,typeReference);
         if (cached != null) {
@@ -352,6 +429,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> List<T> safeBatchGet(List<String> keys, Function<List<Object[]>, List<T>> loader, List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.VALUE);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<T> cached = new ArrayList<>((List<T>) multiGet(keys));
@@ -410,29 +488,14 @@ public class SafeCacheTemplate {
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
             }
-            Map<String,T> map=new HashMap<>();
-            for(Integer i:nullKeysIndex){
-                map.put(keys.get(i),cached.get(i));
-            }
 
-            redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                RedisSerializer<String> keySerializer = (RedisSerializer<String>) redisTemplate.getKeySerializer();
-                RedisSerializer<T> valueSerializer = (RedisSerializer<T>) redisTemplate.getValueSerializer();
-
-                if (keySerializer == null || valueSerializer == null) {
-                    throw new IllegalArgumentException("Redis serializers cannot be null");
-                }
-                for (Map.Entry<String, T> entry : map.entrySet()) {
-                    byte[] keyBytes = keySerializer.serialize(entry.getKey());
-                    byte[] valueBytes = valueSerializer.serialize(entry.getValue());
-                    if (keyBytes == null || valueBytes == null) {
-                        continue;
-                    }
-                    // 调用 setEx (setEx 接收 long 类型时间，不需要强转为 int)
-                    connection.setEx(keyBytes, timeUnit.toSeconds(cacheTtl), valueBytes);
-                }
-                return null;
-            });
+            multiSet(nullKeysIndex.stream()
+                    .map(i->keys.get(i))
+                    .toList(),
+                    (List<Object>) values,
+                    cacheTtl,
+                    timeUnit
+                    );
             return cached;
 
         } catch (InterruptedException e) {
@@ -456,6 +519,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> List<T> safeBatchGet(List<String> keys, Function<List<Object[]>, List<T>> loader, TypeReference<T> typeReference,List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.VALUE);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<T> cached = this.multiGet(keys,typeReference);
@@ -514,29 +578,14 @@ public class SafeCacheTemplate {
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
             }
-            Map<String,T> map=new HashMap<>();
-            for(Integer i:nullKeysIndex){
-                map.put(keys.get(i),cached.get(i));
-            }
 
-            redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                RedisSerializer<String> keySerializer = (RedisSerializer<String>) redisTemplate.getKeySerializer();
-                RedisSerializer<T> valueSerializer = (RedisSerializer<T>) redisTemplate.getValueSerializer();
-
-                if (keySerializer == null || valueSerializer == null) {
-                    throw new IllegalArgumentException("Redis serializers cannot be null");
-                }
-                for (Map.Entry<String, T> entry : map.entrySet()) {
-                    byte[] keyBytes = keySerializer.serialize(entry.getKey());
-                    byte[] valueBytes = valueSerializer.serialize(entry.getValue());
-                    if (keyBytes == null || valueBytes == null) {
-                        continue;
-                    }
-                    // 调用 setEx (setEx 接收 long 类型时间，不需要强转为 int)
-                    connection.setEx(keyBytes, timeUnit.toSeconds(cacheTtl), valueBytes);
-                }
-                return null;
-            });
+            multiSet(nullKeysIndex.stream()
+                            .map(i->keys.get(i))
+                            .toList(),
+                    (List<Object>) values,
+                    cacheTtl,
+                    timeUnit
+            );
             return cached;
 
         } catch (InterruptedException e) {
@@ -666,6 +715,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> List<List<T>> safeBatchLGet(List<String> keys, Function<List<Object[]>, List<List<T>>> loader, List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.LIST);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<List<T>> cached = new ArrayList<>(multiLGet(keys));
@@ -721,29 +771,16 @@ public class SafeCacheTemplate {
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
             }
-            Map<String,List<T>> map=new HashMap<>();
-            for(Integer i:nullKeysIndex){
-                map.put(keys.get(i),cached.get(i));
-            }
 
-            redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                RedisSerializer<String> keySerializer = (RedisSerializer<String>) redisTemplate.getKeySerializer();
-                RedisSerializer<T> valueSerializer = (RedisSerializer<T>) redisTemplate.getValueSerializer();
-                if (keySerializer == null || valueSerializer == null) {
-                    throw new IllegalArgumentException("Redis serializers cannot be null");
-                }
-                for(Map.Entry<String,List<T>> entry: map.entrySet()){
-                    byte[] keyBytes=keySerializer.serialize(entry.getKey());
-                    int size=entry.getValue().size();
-                    byte[][] valueList=new byte[size][];
-                    for(int i=0;i<size;i++){
-                        valueList[i]= valueSerializer.serialize(entry.getValue().get(i));
-                    }
-                    connection.listCommands().rPush(keyBytes,valueList);
-                    connection.keyCommands().expire(keyBytes, timeUnit.toSeconds(cacheTtl));
-                }
-                return null;
-            });
+            multiSet(nullKeysIndex.stream()
+                            .map(i->keys.get(i))
+                            .toList(),
+                    values.stream()
+                            .map(v->(Object) v)
+                            .toList(),
+                    cacheTtl,
+                    timeUnit
+            );
             return cached;
 
         } catch (InterruptedException e) {
@@ -767,6 +804,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> List<List<T>> safeBatchLGet(List<String> keys, Function<List<Object[]>, List<List<T>>> loader,TypeReference<T> typeReference ,List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
+        curContext.setRedisType(RedisType.LIST);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<List<T>> cached = multiLGet(keys,typeReference);
@@ -822,29 +860,17 @@ public class SafeCacheTemplate {
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
             }
-            Map<String,List<T>> map=new HashMap<>();
-            for(Integer i:nullKeysIndex){
-                map.put(keys.get(i),cached.get(i));
-            }
+            multiSet(nullKeysIndex.stream()
+                            .map(i->keys.get(i))
+                            .toList(),
+                    values.stream()
+                            .map(v->(Object) v)
+                            .toList(),
+                    cacheTtl,
+                    timeUnit
+            );
 
-            redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
-                RedisSerializer<String> keySerializer = (RedisSerializer<String>) redisTemplate.getKeySerializer();
-                RedisSerializer<T> valueSerializer = (RedisSerializer<T>) redisTemplate.getValueSerializer();
-                if (keySerializer == null || valueSerializer == null) {
-                    throw new IllegalArgumentException("Redis serializers cannot be null");
-                }
-                for(Map.Entry<String,List<T>> entry: map.entrySet()){
-                    byte[] keyBytes=keySerializer.serialize(entry.getKey());
-                    int size=entry.getValue().size();
-                    byte[][] valueList=new byte[size][];
-                    for(int i=0;i<size;i++){
-                        valueList[i]= valueSerializer.serialize(entry.getValue().get(i));
-                    }
-                    connection.listCommands().rPush(keyBytes,valueList);
-                    connection.keyCommands().expire(keyBytes, timeUnit.toSeconds(cacheTtl));
-                }
-                return null;
-            });
+
             return cached;
 
         } catch (InterruptedException e) {

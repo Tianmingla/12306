@@ -16,8 +16,6 @@ public class BooleanMaskDeserializer extends JsonDeserializer<BooleanMask> {
         if (bitString == null) {
             throw ctxt.mappingException("Expected a bit string like '0101', got null");
         }
-//        JsonNode node = p.getCodec().readTree(p);
-//        String bitString = node.get("mask").asText();
         int size = bitString.length();
         BitSet bits = new BitSet(size);
 

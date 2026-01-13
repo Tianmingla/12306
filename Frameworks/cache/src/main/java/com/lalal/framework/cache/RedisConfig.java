@@ -2,6 +2,7 @@ package com.lalal.framework.cache;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lalal.framework.cache.RedisSerializer.DefaultValueRedisSerializer;
 import org.redisson.api.RedissonClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,18 +17,24 @@ public class RedisConfig {
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+
 
         template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer(mapper));
+
         template.setHashKeySerializer(new StringRedisSerializer());
-        template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer(mapper));
+
         template.afterPropertiesSet();
         return template;
     }
     @Bean
     public SafeCacheTemplate safeCacheTemplate(RedisTemplate redisTemplate, RedissonClient redissonClient){
-        return new SafeCacheTemplate(redisTemplate,redissonClient);
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        CacheContext ctx=CacheContext.builder()
+                .mapper(mapper)
+                .valueSerializer(new DefaultValueRedisSerializer(mapper))
+                .redisType(RedisType.VALUE)
+                .build();
+        return new SafeCacheTemplate(redisTemplate,redissonClient,ctx);
     }
 }

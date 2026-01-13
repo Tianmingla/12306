@@ -36,6 +36,7 @@ public class TicketDTO {
         private long passengerId;
         private String seatNum;      // 物理座位号，如 "12F"
         private Integer seatType;
+        private String carriageNum;
     }
 }
 

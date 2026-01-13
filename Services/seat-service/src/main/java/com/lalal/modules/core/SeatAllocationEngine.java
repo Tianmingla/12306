@@ -41,7 +41,6 @@ public class SeatAllocationEngine {
 
     private CarriageSelector carriageSelector;
 
-
     private SafeCacheTemplate safeCacheTemplate;
 
     TrainMapper trainMapper;
@@ -167,7 +166,7 @@ public class SeatAllocationEngine {
             // 获取物理车厢信息
             Carriage carriage = ctx.getTrain().getCarriage(location.getCarIndex());
 
-            TicketDTO.TicketItem item = new TicketDTO.TicketItem(passenger.getId(), location.getSeatNo(), carriage.getSeatType().getCode());
+            TicketDTO.TicketItem item = new TicketDTO.TicketItem(passenger.getId(), location.getSeatNo(), carriage.getSeatType().getCode(), location.getCarNo());
 
             items.add(item);
         }

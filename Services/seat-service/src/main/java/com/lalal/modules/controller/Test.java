@@ -13,7 +13,7 @@ import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
 
 import java.util.Collections;
 
-@Controller
+@RestController
 public class Test {
     @Autowired
     SeatAllocationEngine seatAllocationEngine;
@@ -25,7 +25,7 @@ public class Test {
         requestDTO.setDate("2025-12-21");
         requestDTO.setTrainNum("D7452");
 
-        Passenger p= Passenger.builder().id(Long.getLong("111")).seatPreference("F").seatType("二等座").build();
+        Passenger p= Passenger.builder().id(111L).seatPreference("F").seatType("二等座").build();
 
         requestDTO.setPassengers(Collections.singletonList(p));
 

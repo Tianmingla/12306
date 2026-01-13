@@ -2,6 +2,7 @@ package com.lalal.modules.core.context;
 
 import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
 import com.lalal.modules.model.Passenger;
+import com.lalal.modules.model.PassengerGroup;
 import com.lalal.modules.model.SeatInventory;
 import com.lalal.modules.model.SeatLocation;
 import com.lalal.modules.model.Train;
@@ -22,7 +23,9 @@ public class AllocationContext {
 
     private final Train train;
 
-    private int tryCount;
+    private int tryCount=1;
+
+
 
     // 结果容器：Passenger -> Location
     private Map<Passenger, SeatLocation> allocatedResult = new HashMap<>();

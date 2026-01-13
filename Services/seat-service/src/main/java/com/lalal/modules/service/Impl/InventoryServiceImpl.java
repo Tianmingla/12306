@@ -12,6 +12,7 @@ import com.lalal.modules.dao.TicketDO;
 import com.lalal.modules.mapper.SeatMapper;
 import com.lalal.modules.mapper.TicketMapper;
 import com.lalal.modules.model.*;
+import com.lalal.modules.model.Serialization.BooleanMaskSerializer;
 import com.lalal.modules.service.InventoryService;
 import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
@@ -47,13 +48,20 @@ public class InventoryServiceImpl implements InventoryService {
     SeatMapper seatMapper;
     @Autowired
     SeatTypeParser parser;
+    @Autowired
+    BooleanMaskSerializer serializer;
 
-    String savingSeatLuaScript;
+    String savingSeatLuaScript; //指定座位 抢座
+    String selectSeatLuaScript;//脚本抢座
 
     InventoryServiceImpl(ResourceLoader resourceLoader) throws IOException {
         Resource resource = resourceLoader.getResource("classpath:lua/savingSeat.lua");
+        Resource resource1 = resourceLoader.getResource("classpath:lua/selectSeat.lua");
         try (InputStream is = resource.getInputStream()) {
             this.savingSeatLuaScript = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        try (InputStream is = resource1.getInputStream()) {
+            this.selectSeatLuaScript = new String(is.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 
@@ -69,6 +77,7 @@ public class InventoryServiceImpl implements InventoryService {
         List<Object[]> carriageArgs=train.getCarriages().stream()
                 .map(c->new Object[]{c.getCarNumber()})
                 .toList();
+        safeCacheTemplate.setCustomizedSerializer(serializer);
         List<List<BooleanMask>> ticketDetails=safeCacheTemplate.safeBatchLGet(
                 ticketDetailCacheKeys,
                 (args)->{
@@ -124,6 +133,7 @@ public class InventoryServiceImpl implements InventoryService {
                 3,
                 TimeUnit.DAYS
         );
+        safeCacheTemplate.clearContext();
         SeatInventory seatInventory=new SeatInventory(train,start,end);
         List<Carriage> carriages=train.getCarriages();
         for(int i=0;i<carriages.size();i++){
@@ -139,7 +149,6 @@ public class InventoryServiceImpl implements InventoryService {
 
         RedisTemplate redisTemplate=safeCacheTemplate.instance();
         RedisSerializer keySerializer=redisTemplate.getKeySerializer();
-        RedisSerializer valueSerializer=redisTemplate.getValueSerializer();
 
         List<SeatLocation> seatLocations=ctx.getResult().entrySet().stream().map(Map.Entry::getValue).toList();
         Long trainId=ctx.getTrain().getId();
@@ -154,9 +163,9 @@ public class InventoryServiceImpl implements InventoryService {
             for(SeatLocation seatLocation:seatLocations) {
 
                 byte[] keyBytes = keySerializer.serialize(CacheConstant.trainTicketDetailKey(trainId, date, seatLocation.getCarNo()));
-                byte[] startIdxBytes= valueSerializer.serialize(startIdx);
-                byte[] endIdxBytes= valueSerializer.serialize(endIdx);
-                byte[] seatIdxBytes=valueSerializer.serialize(seatLocation.getSeatIndex());
+                byte[] startIdxBytes= String.valueOf(startIdx).getBytes(StandardCharsets.UTF_8);
+                byte[] endIdxBytes= String.valueOf(endIdx).getBytes(StandardCharsets.UTF_8);
+                byte[] seatIdxBytes=String.valueOf(seatLocation.getSeatIndex()).getBytes(StandardCharsets.UTF_8);
 
                 Object evalResult=connection.scriptingCommands().eval(savingSeatLuaScript.getBytes(StandardCharsets.UTF_8), ReturnType.BOOLEAN, 1, keyBytes,startIdxBytes,endIdxBytes,seatIdxBytes);
                 res.add((Boolean) evalResult);
@@ -168,6 +177,36 @@ public class InventoryServiceImpl implements InventoryService {
 
         return result.stream()
                 .allMatch(r -> r instanceof Boolean && (Boolean) r == Boolean.TRUE);
+    }
+
+    @Override
+    public int selectSeat(AllocationContext ctx) {
+        RedisTemplate redisTemplate=safeCacheTemplate.instance();
+        RedisSerializer keySerializer=redisTemplate.getKeySerializer();
+
+        Long trainId=ctx.getTrain().getId();
+        String date=ctx.getRequest().getDate();
+        Train train=ctx.getTrain();
+        Integer startIdx=train.stationIndex(ctx.getInventory().getStartStation());
+        Integer endIdx=train.stationIndex(ctx.getInventory().getEndStation())-1;
+
+
+        Integer result= (Integer) redisTemplate.execute((RedisCallback<Integer>) connection->{
+
+            for(Passenger passenger:ctx.) {
+
+                byte[] keyBytes = keySerializer.serialize(CacheConstant.trainTicketDetailKey(trainId, date, seatLocation.getCarNo()));
+                byte[] startIdxBytes= String.valueOf(startIdx).getBytes(StandardCharsets.UTF_8);
+                byte[] endIdxBytes= String.valueOf(endIdx).getBytes(StandardCharsets.UTF_8);
+
+                Object evalResult=connection.scriptingCommands().eval(selectSeatLuaScript.getBytes(StandardCharsets.UTF_8), ReturnType.INTEGER, 1, keyBytes,startIdxBytes,endIdxBytes);
+            }
+
+            return 0;
+        });
+        ctx.getResult()
+
+        return 0;
     }
 
 
