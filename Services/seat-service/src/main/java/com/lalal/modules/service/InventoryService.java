@@ -16,6 +16,6 @@ public interface  InventoryService{
     //最终扣减库存（Lua脚本，乐观锁）
     boolean commit(AllocationContext ctx);
     //lua脚本选座 最终降级 返回座位索引
-    int selectSeat(AllocationContext ctx);
+    List<Integer> selectSeat(AllocationContext ctx);
 
 }

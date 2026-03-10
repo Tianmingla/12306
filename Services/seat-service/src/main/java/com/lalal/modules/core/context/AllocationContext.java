@@ -25,6 +25,7 @@ public class AllocationContext {
 
     private int tryCount=1;
 
+    PassengerGroup passengerGroup;
 
 
     // 结果容器：Passenger -> Location

@@ -180,7 +180,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
-    public int selectSeat(AllocationContext ctx) {
+    public List<Integer> selectSeat(AllocationContext ctx) {
         RedisTemplate redisTemplate=safeCacheTemplate.instance();
         RedisSerializer keySerializer=redisTemplate.getKeySerializer();
 
@@ -189,24 +189,25 @@ public class InventoryServiceImpl implements InventoryService {
         Train train=ctx.getTrain();
         Integer startIdx=train.stationIndex(ctx.getInventory().getStartStation());
         Integer endIdx=train.stationIndex(ctx.getInventory().getEndStation())-1;
+        PassengerGroup passengerGroup=ctx.getPassengerGroup();
 
-
-        Integer result= (Integer) redisTemplate.execute((RedisCallback<Integer>) connection->{
-
-            for(Passenger passenger:ctx.) {
-
+        List<Integer> results= redisTemplate.execute((RedisCallback<List<Integer>>) connection->{
+            List<Integer> evalResults=new ArrayList<>();
+            for(Passenger passenger:passengerGroup.getMembers()) {
                 byte[] keyBytes = keySerializer.serialize(CacheConstant.trainTicketDetailKey(trainId, date, seatLocation.getCarNo()));
                 byte[] startIdxBytes= String.valueOf(startIdx).getBytes(StandardCharsets.UTF_8);
                 byte[] endIdxBytes= String.valueOf(endIdx).getBytes(StandardCharsets.UTF_8);
-
                 Object evalResult=connection.scriptingCommands().eval(selectSeatLuaScript.getBytes(StandardCharsets.UTF_8), ReturnType.INTEGER, 1, keyBytes,startIdxBytes,endIdxBytes);
+                evalResults.add((Integer) evalResult);
             }
 
-            return 0;
+            return evalResults;
         });
-        ctx.getResult()
+        for(Passenger passenger:passengerGroup.getMembers()) {
+//            ctx.addMatch(passenger,train.getCarriage().);
+        }
 
-        return 0;
+        return null;
     }
 
 

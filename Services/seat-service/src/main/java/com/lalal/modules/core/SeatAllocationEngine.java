@@ -119,6 +119,7 @@ public class SeatAllocationEngine {
         AllocationContext ctx = new AllocationContext(request, inventory, train);
         for(PassengerGroup mainGroup:groups) {
             boolean flag=false;
+            ctx.setPassengerGroup(mainGroup);
             while(!flag) {
                 // 5. 获取策略链 (例如：Adjacent -> SameCarriage -> Any)
                 List<SeatAllocationStrategy> strategies = strategyRouter.getStrategies(request);
