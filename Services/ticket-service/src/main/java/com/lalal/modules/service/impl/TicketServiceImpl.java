@@ -1,16 +1,24 @@
 package com.lalal.modules.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.lalal.modules.dto.TicketDTO;
 import com.lalal.modules.dto.request.PurchaseTicketRequestDto;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
 import com.lalal.modules.entity.TicketDO;
 import com.lalal.modules.enumType.RequestStatus;
 import com.lalal.modules.mapper.TicketMapper;
+import com.lalal.modules.remote.OrderServiceClient;
+import com.lalal.modules.remote.SeatServiceClient;
 import com.lalal.modules.service.TicketService;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
+@AllArgsConstructor
 public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> implements TicketService {
+    OrderServiceClient orderServiceClient;
+    SeatServiceClient seatServiceClient;
+
     @Override
     public PurchaseTicketVO purchase(PurchaseTicketRequestDto purchaseTicketRequestDto) {
         //TODO 过滤器 请求参数验证
@@ -24,7 +32,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             return purchaseTicketVO;
         }else{
             //调用座位服务
-
+            TicketDTO ticketDTO=seatServiceClient.select()
             //调用订单服务
 
             purchaseTicketVO.setStatus(RequestStatus.SUCCESS.toString());

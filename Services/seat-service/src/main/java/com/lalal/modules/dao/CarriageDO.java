@@ -21,7 +21,6 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.lalal.modules.base.BaseDO;
-import com.lalal.modules.core.tool.CarriageUtils;
 import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.model.Carriage;
 import lombok.Data;
@@ -63,13 +62,13 @@ public class CarriageDO extends BaseDO {
      */
     private Integer seatCount;
 
-    public Carriage toCarriage(){
-        Carriage carriage=new Carriage();
-        carriage.setCarNumber(carriageNumber);
-        SeatType seatType=SeatType.findByCode(carriageType);
-        carriage.setSeatType(seatType);
-        carriage.setIndex(Integer.parseInt(carriageNumber)-1);
-        carriage.setLayout(CarriageUtils.getLayout(seatType));
-        return carriage;
-    }
+//    public Carriage toCarriage(){
+//        Carriage carriage=new Carriage();
+//        carriage.setCarNumber(carriageNumber);
+//        SeatType seatType=SeatType.findByCode(carriageType);
+//        carriage.setSeatType(seatType);
+//        carriage.setIndex(Integer.parseInt(carriageNumber)-1);
+//        carriage.setLayout(CarriageUtils.getLayout(seatType));
+//        return carriage;
+//    }
 }

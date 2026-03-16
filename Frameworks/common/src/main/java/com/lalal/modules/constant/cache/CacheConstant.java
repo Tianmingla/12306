@@ -98,6 +98,13 @@ public class CacheConstant {
     public static String trainCarriage(Long trainId){
         return String.format(TRAIN_CARRIAGE_KEY_TEMPLATE,trainId);
     }
+
+    /**
+     * 构建车厢的座位数key
+     */
+    public static String trainCarriageCount(Long trainId,String carriage_num){
+        return String.format(TRAIN_CARRIAGE_COUNT,trainId,carriage_num);
+    }
     /**
      * 通用缓存Key构建方法（谨慎使用，无参数校验）
      *
@@ -124,4 +131,6 @@ public class CacheConstant {
     public static final String TRAIN_STATION_KEY_TEMPLATE="TRAIN::STATION::%s";
     public static final String TRAIN_CARRIAGE_KEY_TEMPLATE="TRAIN::CARRIAGE::%s";
     public static final String  TRAIN_CODE_TO_DETAIL_TEMPLATE = "TRAIN::CODE::%s";
+    public static final String  TRAIN_CARRIAGE_COUNT = "TRAIN::CARRIAGE::%s::%s";
+
 }

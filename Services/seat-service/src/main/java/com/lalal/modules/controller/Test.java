@@ -1,12 +1,10 @@
 package com.lalal.modules.controller;
 
-import com.lalal.modules.core.SeatAllocationEngine;
-
 import com.lalal.modules.dto.response.TicketDTO;
 import com.lalal.modules.model.Passenger;
 import com.lalal.modules.result.Result;
+import com.lalal.modules.service.SeatSelectionService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
@@ -16,7 +14,7 @@ import java.util.Collections;
 @RestController
 public class Test {
     @Autowired
-    SeatAllocationEngine seatAllocationEngine;
+    SeatSelectionService seatSelectionService;
     @GetMapping("/test")
     public Result<TicketDTO> testSelectSeat(){
         SeatSelectionRequestDTO requestDTO=new SeatSelectionRequestDTO();
@@ -29,6 +27,6 @@ public class Test {
 
         requestDTO.setPassengers(Collections.singletonList(p));
 
-        return Result.success(seatAllocationEngine.execute(requestDTO));
+        return Result.success(seatSelectionService.select(requestDTO));
     }
 }
