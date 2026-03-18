@@ -1,5 +1,7 @@
 
 spring:
+  application:
+    name: 12306-order${unique-name:}-service
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
@@ -22,5 +24,11 @@ spring:
       port: 6379
       database: 0
       timeout: 2000ms       # 连接超时
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+      password: nacos
+      username: nacos
 server:
-  port: 8082
+  port: 8083

@@ -17,6 +17,7 @@
         <module>cache</module>
         <module>log</module>
         <module>Idempotent</module>
+        <module>mq</module>
     </modules>
 
 

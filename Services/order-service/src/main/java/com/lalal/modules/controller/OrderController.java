@@ -1,6 +1,6 @@
 package com.lalal.modules.controller;
 
-import com.lalal.modules.dto.request.OrderCreateRequestDTO;
+import com.lalal.modules.dto.OrderCreateRequestDTO;
 import com.lalal.modules.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
