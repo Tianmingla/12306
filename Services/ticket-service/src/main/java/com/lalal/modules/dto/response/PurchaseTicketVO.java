@@ -10,5 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class PurchaseTicketVO {
     String status;
+    String orderSn;
     TicketDO ticketDO;
 }

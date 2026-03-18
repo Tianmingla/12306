@@ -11,8 +11,12 @@
     <file url="file://$PROJECT_DIR$/Frameworks/database/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/log/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/log/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Frameworks/mq/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Frameworks/mq/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/gateway-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/gateway-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/order-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/order-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/seat-service/src/main/java" charset="UTF-8" />

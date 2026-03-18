@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.math.BigDecimal;
 import java.util.List;
 
-@FeignClient(name = "order-service", url = "${remote.order-service.url:http://order-service:8081}")
+@FeignClient(name = "order-service", url = "${remote.order-service.url:http://order-service:8082}")
 @Service
 public interface OrderServiceClient {
     @PostMapping("/api/order/create")
