@@ -27,7 +27,9 @@ public class IdempotentAspect {
         if (key.isEmpty()) {
             key = method.getDeclaringClass().getName() + ":" + method.getName() + ":" + joinPoint.getArgs().hashCode();
         }
-        boolean success = Boolean.TRUE.equals(safeCacheTemplate.safeset(key, "1", idempotent.expire(), TimeUnit.SECONDS));
+        //TODO
+//        boolean success = Boolean.TRUE.equals(safeCacheTemplate.set(key, "1", idempotent.expire(), TimeUnit.SECONDS));
+        boolean success=true;
         if (!success) {
             throw new RuntimeException("重复请求，请勿重复提交");
         }

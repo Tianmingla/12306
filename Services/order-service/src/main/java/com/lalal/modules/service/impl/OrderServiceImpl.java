@@ -41,7 +41,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             itemDO.setSeatNumber(item.getSeatNumber());
             itemDO.setSeatType(item.getSeatType());
             itemDO.setAmount(item.getAmount());
-            itemDO.setRealName(item.getRealName());
             itemDO.setIdCard(item.getIdCard());
             orderItemMapper.insert(itemDO);
         }

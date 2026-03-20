@@ -15,5 +15,5 @@
 # limitations under the License.
 #
 
-com.lalal.modules.config.mqConfig
+com.lalal.modules.mq.config.MqConfig
 

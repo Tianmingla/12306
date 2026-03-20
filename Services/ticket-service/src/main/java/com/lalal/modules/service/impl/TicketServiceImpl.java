@@ -12,7 +12,7 @@ import com.lalal.modules.remote.OrderServiceClient;
 import com.lalal.modules.remote.SeatServiceClient;
 import com.lalal.modules.service.TicketService;
 import lombok.RequiredArgsConstructor;
-import com.lalal.modules.mq.MessageQueueService;
+
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -28,7 +28,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
 
     private final SeatServiceClient seatServiceClient;
     private final OrderServiceClient orderServiceClient;
-    private final MessageQueueService messageQueueService;
+//    private final MessageQueueService messageQueueService;
     private final StringRedisTemplate redisTemplate;
 
     private static final String PEAK_STATUS_KEY = "traffic:peak:status";
@@ -45,7 +45,7 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
         if (peakHour) {
             // 1. 发送消息到MQ进行异步处理（削峰填谷）
             // TODO: 定义MQ Topic常量
-            messageQueueService.send("ticket_purchase_topic", purchaseTicketRequestDto);
+//            messageQueueService.send("ticket_purchase_topic", purchaseTicketRequestDto);
 
             // TODO: 需要在后台启动一个MQ消费者来处理 ticket_purchase_topic 消息，
             // 消费者逻辑应调用下方的非高峰期购票逻辑（调用座位服务和订单服务）

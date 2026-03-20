@@ -3,14 +3,16 @@ package com.lalal.modules.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Base64;
 
 @Data
 @TableName("t_order_item")
-public class OrderItemDO {
+public class OrderItemDO extends BaseDO {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long orderId;
@@ -22,6 +24,4 @@ public class OrderItemDO {
     private String seatNumber;
     private Integer seatType;
     private BigDecimal amount;
-    private LocalDateTime createTime;
-    private LocalDateTime updateTime;
 }
