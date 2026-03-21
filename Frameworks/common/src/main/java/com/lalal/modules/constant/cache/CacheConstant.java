@@ -105,6 +105,26 @@ public class CacheConstant {
     public static String trainCarriageCount(Long trainId,String carriage_num){
         return String.format(TRAIN_CARRIAGE_COUNT,trainId,carriage_num);
     }
+
+    //------------------------用户------------------------------------------------------
+    /**
+     * 构建用户名缓存
+     */
+    public static String userDetailByName(String name){
+        return String.format("USER::DETAIL::%s",name);
+    }
+    /**
+     * 构建id缓存
+     */
+    public static String userDetailById(long id){
+        return String.format("USER::DETAIL::%x",id);
+    }
+    /**
+     * 构建idCard缓存
+     */
+    public static String userDetailByIdCard(String idCard){
+        return String.format("USER::DETAIL::%s",idCard);
+    }
     /**
      * 通用缓存Key构建方法（谨慎使用，无参数校验）
      *

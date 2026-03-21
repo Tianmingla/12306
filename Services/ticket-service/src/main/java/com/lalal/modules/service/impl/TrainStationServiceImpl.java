@@ -12,6 +12,7 @@ import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.service.TrainStationService;
 import lombok.AllArgsConstructor;
+import com.lalal.modules.dto.response.TrainStationDetailRespDTO;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,6 +28,49 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
     SafeCacheTemplate safeCacheTemplate;
     TrainStationMapper trainStationMapper;
     TrainMapper trainMapper;
+
+    @Override
+    public List<TrainStationDetailRespDTO> getStationDetailsByTrainNum(String trainNum) {
+        String detailCacheKey = CacheConstant.trainCodeToDetail(trainNum);
+        TrainDO trainDO = safeCacheTemplate.safeGet(
+                detailCacheKey,
+                () -> {
+                    LambdaQueryWrapper<TrainDO> lambdaQueryWrapper = new LambdaQueryWrapper<TrainDO>()
+                            .eq(TrainDO::getTrainNumber, trainNum);
+                    return trainMapper.selectOne(lambdaQueryWrapper);
+                },
+                new TypeReference<TrainDO>() {},
+                10,
+                TimeUnit.DAYS
+        );
+
+        if (trainDO == null) {
+            return new ArrayList<>();
+        }
+
+
+        return safeCacheTemplate.safeGet(
+                    CacheConstant.trainStation(trainDO.getId()),
+                    ()->{
+                        LambdaQueryWrapper<TrainStationDO> lambdaQueryWrapper = new LambdaQueryWrapper<TrainStationDO>()
+                                .eq(TrainStationDO::getTrainId, trainDO.getId())
+                                .orderByAsc(TrainStationDO::getSequence);
+                        List<TrainStationDO> stations = trainStationMapper.selectList(lambdaQueryWrapper);
+                        return stations;
+                    },
+                    new TypeReference<List<TrainStationDO>>(){},
+                    10,
+                    TimeUnit.DAYS
+            ).stream().map(station -> {
+                TrainStationDetailRespDTO dto = new TrainStationDetailRespDTO();
+                dto.setStationName(station.getStationName());
+                dto.setArrivalTime(station.getArrivalTime());
+                dto.setDepartureTime(station.getDepartureTime());
+                dto.setStopoverTime(station.getStopoverTime());
+                return dto;
+            }).collect(Collectors.toList());
+    }
+
     @Override
     public List<String> getStationNamesByTrainNum(String trainNum) {
         String detailCacheKey=CacheConstant.trainCodeToDetail(trainNum);

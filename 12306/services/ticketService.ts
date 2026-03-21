@@ -133,7 +133,7 @@ export const purchaseTicket = async (request: import('../types').PurchaseTicketR
   }
 };
 
-export const getTrainRouteDetails = async (trainNum: string): Promise<string[]> => {
+export const getTrainRouteDetails = async (trainNum: string): Promise<import('../types').TrainStationDetail[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/trainDetail/stations?trainNum=${encodeURIComponent(trainNum)}`, {
       headers: getHeaders()

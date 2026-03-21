@@ -26,7 +26,7 @@ const StopoverModal: React.FC<{
   from: string;
   to: string;
 }> = ({ isOpen, onClose, trainNumber, from, to }) => {
-  const [stops, setStops] = useState<Stopover[]>([]);
+  const [stops, setStops] = useState<import('../types').TrainStationDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,17 +38,7 @@ const StopoverModal: React.FC<{
       setError(null);
       try {
         const stations = await getTrainRouteDetails(trainNumber);
-        // Map station names to Stopover objects
-        // TODO: The backend API currently only returns station names.
-        // We need to update the backend to return arrival/departure times,
-        // or mock them here for now.
-        const mappedStops = stations.map((station, idx) => ({
-          station,
-          arrive: idx === 0 ? '----' : '--:--', // TODO: Fetch real arrive time
-          depart: idx === stations.length - 1 ? '----' : '--:--', // TODO: Fetch real depart time
-          stopTime: idx === 0 ? '始发' : (idx === stations.length - 1 ? '终点' : '--分'), // TODO: Fetch real stop time
-        }));
-        setStops(mappedStops);
+        setStops(stations);
       } catch (err: any) {
         setError(err.message || '获取列车时刻表失败');
       } finally {
@@ -60,6 +50,12 @@ const StopoverModal: React.FC<{
   }, [isOpen, trainNumber]);
 
   if (!isOpen) return null;
+
+  const formatTime = (time: string | null) => {
+    if (!time) return '----';
+    const date = new Date(time);
+    return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -99,11 +95,13 @@ const StopoverModal: React.FC<{
                      } z-10`}></div>
                      
                      <div className={`pl-4 font-medium ${idx === 0 || idx === stops.length - 1 ? 'text-blue-600' : 'text-gray-800'}`}>
-                       {stop.station}
+                       {stop.stationName}
                      </div>
-                     <div className="text-gray-600">{stop.arrive}</div>
-                     <div className="text-gray-600">{stop.depart}</div>
-                     <div className="text-right text-gray-400 text-xs">{stop.stopTime}</div>
+                     <div className="text-gray-600">{formatTime(stop.arrivalTime)}</div>
+                     <div className="text-gray-600">{formatTime(stop.departureTime)}</div>
+                     <div className="text-right text-gray-400 text-xs">
+                       {idx === 0 ? '始发' : (idx === stops.length - 1 ? '终点' : `${stop.stopoverTime || 0}分`)}
+                     </div>
                    </div>
                  ))}
                </div>

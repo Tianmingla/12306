@@ -42,6 +42,7 @@ public class SafeCacheTemplate {
 
     private RedissonClient redissonClient;
 
+    //这里设计错误 应该当参数传 这样变成状态机 十分难用
     private CacheContext curContext;  //也可以把参数都放到上下文中 但这里因为代码再中途的想法 一改要改挺多的 这里其实也有点状态机的意思
 
     //操作上下文控制 TODO 将这几个序列化器固定 而不是每次去分配 浪费性能

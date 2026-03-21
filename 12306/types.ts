@@ -106,10 +106,17 @@ export interface PurchaseTicketResponse {
   requestId: string;
 }
 
+export interface TrainStationDetail {
+  stationName: string;
+  arrivalTime: string | null;
+  departureTime: string | null;
+  stopoverTime: number | null;
+}
+
 export interface TrainRouteDetailsResponse {
   code: number;
   message: string | null;
-  data: string[];
+  data: TrainStationDetail[];
   requestId: string;
 }
 

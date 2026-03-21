@@ -1,5 +1,6 @@
 package com.lalal.modules.controller;
 
+import com.lalal.modules.dto.response.TrainStationDetailRespDTO;
 import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.service.TrainStationService;
@@ -25,8 +26,8 @@ public class TrainDetailController {
      * @return 车次经过的站台名
      * */
     @GetMapping("/stations")
-    public Result<List<String>> getStationNamesByTrainNum(@RequestParam String trainNum){
-        return Result.success(trainStationService.getStationNamesByTrainNum(trainNum));
+    public Result<List<TrainStationDetailRespDTO>> getStationDetailsByTrainNum(@RequestParam String trainNum){
+        return Result.success(trainStationService.getStationDetailsByTrainNum(trainNum));
     }
 
 }
