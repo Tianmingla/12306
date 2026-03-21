@@ -7,14 +7,14 @@ export interface TrainTicket {
   departureTime: string;
   arrivalTime: string;
   duration: string;
-  price: number; 
+  price: number;
   seatsAvailable: {
     business: number | string;
     first: number | string;
     second: number | string;
     standing: number | string;
   };
-  type: 'G' | 'D' | 'K' | 'Z'; 
+  type: 'G' | 'D' | 'K' | 'Z';
 }
 
 export interface ChatMessage {
@@ -89,6 +89,7 @@ export interface PurchaseTicketRequest {
   account: string;
   IDCardCodelist: number[];
   seatTypelist: string[];
+  chooseSeats?: string[];
   trainNum: string;
   startStation: string;
   endStation: string;

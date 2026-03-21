@@ -36,25 +36,29 @@ public abstract class AbstractSeatSelectionStrategy implements SeatSelectionStra
     @Override
     public TicketDTO select(SeatSelectionRequestDTO request, List<CarriageDO> carriages) {
         // 1. 获取区间信息
-        List<TrainStationDO> stations=safeCacheTemplate.safeGet(
+        List<String> stations=safeCacheTemplate.safeGet(
                 CacheConstant.trainStation(carriages.get(0).getTrainId()),
                 () -> trainStationMapper.selectList(new LambdaQueryWrapper<TrainStationDO>()
+                        .select(TrainStationDO::getStationName)
+                                //.eq(TrainStationDO::getRunDate, request.getDate())
                         .eq(TrainStationDO::getTrainNumber, request.getTrainNum())
-//                .eq(TrainStationDO::getRunDate, request.getDate())
-                        .orderByAsc(TrainStationDO::getSequence)),
-                new TypeReference<List<TrainStationDO>>() {},
+                                .orderByAsc(TrainStationDO::getSequence))
+                        .stream()
+                        .map(TrainStationDO::getStationName)
+                        .toList(),
+                new TypeReference<List<String>>() {},
                 3,
                 TimeUnit.DAYS
         );
 
         int startSeq = -1;
         int endSeq = -1;
-        for (TrainStationDO station : stations) {
-            if (station.getStationName().equals(request.getStartStation())) {
-                startSeq = station.getSequence();
+        for (int i=0;i<stations.size();i++) {
+            if (stations.get(i).equals(request.getStartStation())) {
+                startSeq = i;
             }
-            if (station.getStationName().equals(request.getEndStation())) {
-                endSeq = station.getSequence();
+            if (stations.get(i).equals(request.getEndStation())) {
+                endSeq = i;
             }
         }
         

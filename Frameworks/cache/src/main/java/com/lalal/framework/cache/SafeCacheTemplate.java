@@ -554,8 +554,27 @@ public class SafeCacheTemplate {
             // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
             locked = mLock.tryLock(2, 10, TimeUnit.SECONDS);
             if (!locked) {
-                //TODO
-                throw new RuntimeException("获取分布式锁超时，keys: " +"");
+                String failedKeys = java.util.Arrays.stream(locks)
+                        .filter(lock -> {
+                            try {
+                                // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
+                                // 这里简单判断，更准确的是去 Redis 查 TTL
+                                return lock.isLocked();
+                            } catch (Exception e) {
+                                return true;
+                            }
+                        })
+                        .map(RLock::getName)
+                        .collect(Collectors.joining(", "));
+
+                // 记录详细日志
+                System.err.println("获取分布式锁超时！等待5秒仍未成功。");
+                System.err.println("请求锁列表: " + nullKeys);
+                System.err.println("疑似被占用的锁: " + failedKeys);
+
+                // 可选：去 Redis 检查这些 Key 的剩余时间
+                // 这里抛出异常或进行降级处理
+                throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
             }
 
             // 3. 双重检查：可能其他线程已加载

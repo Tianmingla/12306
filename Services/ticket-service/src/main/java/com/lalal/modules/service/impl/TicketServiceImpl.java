@@ -11,14 +11,16 @@ import com.lalal.modules.mapper.TicketMapper;
 import com.lalal.modules.remote.OrderServiceClient;
 import com.lalal.modules.remote.SeatServiceClient;
 import com.lalal.modules.service.TicketService;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -58,14 +60,18 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             seatRequest.setTrainNum(purchaseTicketRequestDto.getTrainNum());
             seatRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
             seatRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
-            seatRequest.setDate(LocalDate.parse(purchaseTicketRequestDto.getDate()));
+            seatRequest.setDate(java.time.LocalDate.parse(purchaseTicketRequestDto.getDate()));
             seatRequest.setAccount(purchaseTicketRequestDto.getAccount());
 
             List<SeatSelectionRequestDTO.PassengerDTO> passengers = new ArrayList<>();
-            for (int i = 0; i < purchaseTicketRequestDto.getIDCardCodelist().size(); i++) {
+            for (int i = 0; i < purchaseTicketRequestDto.getSeatTypelist().size(); i++) {
                 SeatSelectionRequestDTO.PassengerDTO p = new SeatSelectionRequestDTO.PassengerDTO();
-                p.setId(purchaseTicketRequestDto.getIDCardCodelist().get(i));
+//                p.setId(purchaseTicketRequestDto.getIDCardCodelist().get(i));
+                p.setId(1L);
                 p.setSeatType(purchaseTicketRequestDto.getSeatTypelist().get(i));
+                if (purchaseTicketRequestDto.getChooseSeats() != null && i < purchaseTicketRequestDto.getChooseSeats().size()) {
+                    p.setSeatPreference(purchaseTicketRequestDto.getChooseSeats().get(i));
+                }
                 passengers.add(p);
             }
             seatRequest.setPassengers(passengers);
@@ -81,6 +87,9 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             orderRequest.setTrainNumber(purchaseTicketRequestDto.getTrainNum());
             orderRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
             orderRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
+            //TODO
+            orderRequest.setUsername("1");
+            orderRequest.setRunDate(new Date());
 
             List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = selectedSeats.getItems().stream().map(item -> {
                 OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO orderItem = new OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO();
@@ -90,6 +99,8 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
                 orderItem.setSeatType(item.getSeatType());
                 orderItem.setAmount(new BigDecimal("100")); // TODO: 动态计算金额
                 // TODO: 获取真实姓名和身份证号
+                orderItem.setIdCard("1");
+                orderItem.setRealName("1");
                 return orderItem;
             }).collect(Collectors.toList());
             orderRequest.setItems(orderItems);

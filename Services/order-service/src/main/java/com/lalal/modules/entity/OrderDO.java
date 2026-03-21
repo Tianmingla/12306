@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 @Data
 @TableName("t_order")
@@ -15,11 +16,11 @@ public class OrderDO extends BaseDO {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String orderSn;
-    private Long userId;
+    private String username;
     private String trainNumber;
     private String startStation;
     private String endStation;
-    private LocalDateTime runDate;
+    private Date runDate;
     private BigDecimal totalAmount;
     private Integer status; // 0: 待支付, 1: 已支付, 2: 已取消, 3: 已退票
 }

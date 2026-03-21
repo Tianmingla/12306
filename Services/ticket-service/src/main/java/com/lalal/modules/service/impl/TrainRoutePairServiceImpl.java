@@ -65,6 +65,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 TimeUnit.DAYS
         );
         if (!direct.isEmpty()) {
+            direct=direct.stream().limit(10).toList();
             List<TrainSearchResponseDTO> result=direct
                     .stream()
                     .map((e)->{

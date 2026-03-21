@@ -23,9 +23,9 @@ public class Test {
         requestDTO.setDate("2025-12-21");
         requestDTO.setTrainNum("D7452");
 
-        Passenger p= Passenger.builder().id(111L).seatPreference("F").seatType("二等座").build();
+//        Passenger p= Passenger.builder().id(111L).seatPreference("F").seatType("二等座").build();
 
-        requestDTO.setPassengers(Collections.singletonList(p));
+//        requestDTO.setPassengers(Collections.singletonList(p));
 
         return Result.success(seatSelectionService.select(requestDTO));
     }

@@ -23,6 +23,10 @@ public class PurchaseTicketRequestDto {
      */
     List<String> seatTypelist;
     /**
+     * 座位偏好
+     */
+    List<String> chooseSeats;
+    /**
      * 车次
      */
     String trainNum;

@@ -24,6 +24,6 @@ public class SeatSelectionRequestDTO {
     public static class PassengerDTO {
         private Long id;
         private String seatType;
-        private String preference;
+        private String seatPreference;
     }
 }

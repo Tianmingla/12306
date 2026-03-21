@@ -30,6 +30,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         orderDO.setStartStation(request.getStartStation());
         orderDO.setEndStation(request.getEndStation());
         orderDO.setStatus(0); // 待支付
+        orderDO.setUsername(request.getUsername());
+        orderDO.setRunDate(request.getRun_date());
         // totalAmount calculation could be added here
         this.save(orderDO);
 
@@ -42,6 +44,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             itemDO.setSeatType(item.getSeatType());
             itemDO.setAmount(item.getAmount());
             itemDO.setIdCard(item.getIdCard());
+            itemDO.setPassengerName(item.getRealName());
             orderItemMapper.insert(itemDO);
         }
 

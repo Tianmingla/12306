@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 
 @FeignClient(name = "order-service")
@@ -20,6 +21,8 @@ public interface OrderServiceClient {
         private String trainNumber;
         private String startStation;
         private String endStation;
+        private String username;
+        private Date runDate;
         private List<OrderItemRemoteRequestDTO> items;
 
         @Data
