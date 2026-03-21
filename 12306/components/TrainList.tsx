@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, Filter, AlertCircle, RefreshCw, MapPin, X } from 'lucide-react';
 import { TrainTicket, SearchParams, FilterOptions } from '../types';
-import { searchTickets } from '../services/ticketService';
+import { searchTickets, getTrainRouteDetails } from '../services/ticketService';
 import BookingModal from './BookingModal';
 import FilterPanel from './FilterPanel';
 
@@ -26,15 +26,40 @@ const StopoverModal: React.FC<{
   from: string;
   to: string;
 }> = ({ isOpen, onClose, trainNumber, from, to }) => {
-  if (!isOpen) return null;
+  const [stops, setStops] = useState<Stopover[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data generator based on train info
-  const stops: Stopover[] = [
-    { station: from, arrive: '----', depart: '08:00', stopTime: '始发' },
-    { station: '济南西', arrive: '09:30', depart: '09:33', stopTime: '3分' },
-    { station: '南京南', arrive: '11:15', depart: '11:18', stopTime: '3分' },
-    { station: to, arrive: '12:30', depart: '----', stopTime: '终点' },
-  ];
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchRouteDetails = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const stations = await getTrainRouteDetails(trainNumber);
+        // Map station names to Stopover objects
+        // TODO: The backend API currently only returns station names.
+        // We need to update the backend to return arrival/departure times,
+        // or mock them here for now.
+        const mappedStops = stations.map((station, idx) => ({
+          station,
+          arrive: idx === 0 ? '----' : '--:--', // TODO: Fetch real arrive time
+          depart: idx === stations.length - 1 ? '----' : '--:--', // TODO: Fetch real depart time
+          stopTime: idx === 0 ? '始发' : (idx === stations.length - 1 ? '终点' : '--分'), // TODO: Fetch real stop time
+        }));
+        setStops(mappedStops);
+      } catch (err: any) {
+        setError(err.message || '获取列车时刻表失败');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRouteDetails();
+  }, [isOpen, trainNumber]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -46,34 +71,44 @@ const StopoverModal: React.FC<{
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-           {/* Table Header */}
-           <div className="grid grid-cols-4 text-sm font-medium text-gray-500 mb-2 px-2">
-             <div>车站</div>
-             <div>到达</div>
-             <div>出发</div>
-             <div className="text-right">停留</div>
-           </div>
-           {/* Timeline */}
-           <div className="relative">
-             {/* Vertical Line */}
-             <div className="absolute left-[5px] top-3 bottom-3 w-0.5 bg-gray-200"></div>
-             
-             {stops.map((stop, idx) => (
-               <div key={idx} className="grid grid-cols-4 text-sm py-3 items-center relative group hover:bg-gray-50 rounded px-2">
-                 {/* Dot */}
-                 <div className={`absolute left-0 w-3 h-3 rounded-full border-2 ${
-                   idx === 0 || idx === stops.length - 1 ? 'border-blue-500 bg-white' : 'border-gray-300 bg-gray-100'
-                 } z-10`}></div>
-                 
-                 <div className={`pl-4 font-medium ${idx === 0 || idx === stops.length - 1 ? 'text-blue-600' : 'text-gray-800'}`}>
-                   {stop.station}
-                 </div>
-                 <div className="text-gray-600">{stop.arrive}</div>
-                 <div className="text-gray-600">{stop.depart}</div>
-                 <div className="text-right text-gray-400 text-xs">{stop.stopTime}</div>
+           {loading ? (
+             <div className="flex justify-center items-center h-32">
+               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+             </div>
+           ) : error ? (
+             <div className="text-center text-red-500 py-8">{error}</div>
+           ) : (
+             <>
+               {/* Table Header */}
+               <div className="grid grid-cols-4 text-sm font-medium text-gray-500 mb-2 px-2">
+                 <div>车站</div>
+                 <div>到达</div>
+                 <div>出发</div>
+                 <div className="text-right">停留</div>
                </div>
-             ))}
-           </div>
+               {/* Timeline */}
+               <div className="relative">
+                 {/* Vertical Line */}
+                 <div className="absolute left-[5px] top-3 bottom-3 w-0.5 bg-gray-200"></div>
+                 
+                 {stops.map((stop, idx) => (
+                   <div key={idx} className="grid grid-cols-4 text-sm py-3 items-center relative group hover:bg-gray-50 rounded px-2">
+                     {/* Dot */}
+                     <div className={`absolute left-0 w-3 h-3 rounded-full border-2 ${
+                       idx === 0 || idx === stops.length - 1 ? 'border-blue-500 bg-white' : 'border-gray-300 bg-gray-100'
+                     } z-10`}></div>
+                     
+                     <div className={`pl-4 font-medium ${idx === 0 || idx === stops.length - 1 ? 'text-blue-600' : 'text-gray-800'}`}>
+                       {stop.station}
+                     </div>
+                     <div className="text-gray-600">{stop.arrive}</div>
+                     <div className="text-gray-600">{stop.depart}</div>
+                     <div className="text-right text-gray-400 text-xs">{stop.stopTime}</div>
+                   </div>
+                 ))}
+               </div>
+             </>
+           )}
         </div>
       </div>
     </div>

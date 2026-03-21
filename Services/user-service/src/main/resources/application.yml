@@ -1,0 +1,14 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: user-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+
+jwt:
+  secret: 12306-secret-key-12306-secret-key-12306-secret-key
+  expiration: 86400000

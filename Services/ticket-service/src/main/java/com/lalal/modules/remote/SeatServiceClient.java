@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@FeignClient(name = "seat-service", url = "${remote.seat-service.url:http://seat-service:8083}")
+@FeignClient(name = "seat-service")
 @Service
 public interface SeatServiceClient {
     @PostMapping("/api/seat/select")

@@ -53,12 +53,14 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({ onSearch }) => {
           onClick={() => alert("往返功能开发中...")}
           className="text-gray-500 hover:text-blue-600 font-medium transition-colors px-2"
         >
+          {/* TODO: Implement round-trip search */}
           往返
         </button>
         <button 
           onClick={() => alert("中转功能开发中...")}
           className="text-gray-500 hover:text-blue-600 font-medium transition-colors px-2"
         >
+          {/* TODO: Implement transfer search */}
           中转
         </button>
       </div>

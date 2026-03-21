@@ -6,6 +6,7 @@ import com.lalal.modules.enumType.ReturnCode;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.Map;
 import java.util.UUID;
 @Data
 public class Result<T> implements Serializable {
@@ -32,4 +33,7 @@ public class Result<T> implements Serializable {
     }
 
 
+    public static <T> Result<T> fail(String message) {
+        return new Result<>(ReturnCode.unauthorized.code(),message);
+    }
 }

@@ -7,10 +7,14 @@ spring:
   cloud:
     gateway:
       routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/user/**
         - id: ticket-service
           uri: lb://ticket-service
           predicates:
-            - Path=/api/ticket/**
+            - Path=/api/ticket/**,/api/trainDetail/**
         - id: seat-service
           uri: lb://seat-service
           predicates:
@@ -23,7 +27,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-
 
 # 流量监控配置
 traffic:

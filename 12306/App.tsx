@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SearchWidget from './components/SearchWidget';
 import TrainList from './components/TrainList';
@@ -7,12 +7,29 @@ import Features from './components/Features';
 import AIAssistant from './components/AIAssistant';
 import LoginModal from './components/LoginModal';
 import { AppView, SearchParams } from './types';
+import { getUserInfo } from './services/userService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
   const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const [userName, setUserName] = useState<string>('');
+
+  useEffect(() => {
+    const checkLoginStatus = async () => {
+      try {
+        // TODO: Implement token refresh mechanism if token is expired
+        const userInfo = await getUserInfo();
+        setIsLoggedIn(true);
+        setUserName(userInfo.username);
+      } catch (error) {
+        setIsLoggedIn(false);
+      }
+    };
+    checkLoginStatus();
+  }, []);
 
   const handleSearch = (params: SearchParams) => {
     setSearchParams(params);
@@ -23,12 +40,20 @@ const App: React.FC = () => {
     setCurrentView(view);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setIsLoggedIn(false);
+    setUserName('');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
       <Navbar 
         onNavigate={handleNavigate} 
         onLoginClick={() => setIsLoginOpen(true)}
         isLoggedIn={isLoggedIn}
+        userName={userName}
+        onLogout={handleLogout}
       />
 
       {currentView === AppView.HOME && (
@@ -78,7 +103,15 @@ const App: React.FC = () => {
       <LoginModal 
         isOpen={isLoginOpen} 
         onClose={() => setIsLoginOpen(false)}
-        onLoginSuccess={() => setIsLoggedIn(true)}
+        onLoginSuccess={async () => {
+          setIsLoggedIn(true);
+          try {
+            const userInfo = await getUserInfo();
+            setUserName(userInfo.username);
+          } catch (e) {
+            console.error(e);
+          }
+        }}
       />
     </div>
   );

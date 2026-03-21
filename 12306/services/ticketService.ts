@@ -60,6 +60,14 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
   };
 };
 
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
+
 export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]> => {
   try {
     const queryParams = new URLSearchParams({
@@ -68,7 +76,9 @@ export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]
       date: params.date,
     });
 
-    const response = await fetch(`${API_BASE_URL}/ticket/search?${queryParams.toString()}`);
+    const response = await fetch(`${API_BASE_URL}/ticket/search?${queryParams.toString()}`, {
+      headers: getHeaders()
+    });
     
     if (!response.ok) {
       throw new Error(`API Error: ${response.statusText}`);
@@ -95,6 +105,52 @@ export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]
   } catch (error) {
     console.error("Failed to fetch tickets:", error);
     // Return empty array or throw depending on how you want UI to handle it
+    throw error;
+  }
+};
+
+export const purchaseTicket = async (request: import('../types').PurchaseTicketRequest): Promise<import('../types').PurchaseTicketResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/ticket/purchase`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.statusText}`);
+    }
+
+    const json = await response.json();
+    if (json.code !== 200) {
+      throw new Error(json.message || 'Unknown API error');
+    }
+
+    return json;
+  } catch (error) {
+    console.error("Failed to purchase ticket:", error);
+    throw error;
+  }
+};
+
+export const getTrainRouteDetails = async (trainNum: string): Promise<string[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/trainDetail/stations?trainNum=${encodeURIComponent(trainNum)}`, {
+      headers: getHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.statusText}`);
+    }
+
+    const json: import('../types').TrainRouteDetailsResponse = await response.json();
+    if (json.code !== 200) {
+      throw new Error(json.message || 'Unknown API error');
+    }
+
+    return json.data;
+  } catch (error) {
+    console.error("Failed to fetch train route details:", error);
     throw error;
   }
 };

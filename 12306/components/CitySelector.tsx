@@ -6,6 +6,7 @@ interface CitySelectorProps {
   onClose: () => void;
 }
 
+// TODO: Fetch real city data from backend instead of hardcoding
 const HOT_CITIES = ['北京', '上海', '广州', '深圳', '杭州', '天津', '南京', '武汉', '西安', '成都', '重庆', '长沙'];
 const TABS = [
   { label: '热门', data: HOT_CITIES },

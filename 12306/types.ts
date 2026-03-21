@@ -84,3 +84,46 @@ export interface ApiResponse {
   data: ApiRoute[];
   requestId: string;
 }
+
+export interface PurchaseTicketRequest {
+  account: string;
+  IDCardCodelist: number[];
+  seatTypelist: string[];
+  trainNum: string;
+  startStation: string;
+  endStation: string;
+  date: string;
+}
+
+export interface PurchaseTicketResponse {
+  code: number;
+  message: string | null;
+  data: {
+    status: string;
+    orderSn: string;
+    ticketDO: any; // TODO: define TicketDO type if needed
+  };
+  requestId: string;
+}
+
+export interface TrainRouteDetailsResponse {
+  code: number;
+  message: string | null;
+  data: string[];
+  requestId: string;
+}
+
+export interface LoginRequest {
+  username: string;
+  password?: string; // Optional if using other methods
+}
+
+export interface LoginResponse {
+  token: string;
+}
+
+export interface UserInfoResponse {
+  username: string;
+  role: string;
+  // Add other user fields as needed
+}

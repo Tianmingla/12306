@@ -2,6 +2,8 @@ package com.lalal.modules.enumType;
 
 public enum ReturnCode {
     success(200),
+    fail(404),
+    unauthorized(401),
 
     SEVER_ERROR(505);
 

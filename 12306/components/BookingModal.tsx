@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { TrainTicket, Passenger } from '../types';
 import { X, UserPlus, Check, CreditCard, AlertCircle } from 'lucide-react';
+import { purchaseTicket } from '../services/ticketService';
 
 interface BookingModalProps {
   ticket: TrainTicket | null;
@@ -16,22 +17,64 @@ const MOCK_PASSENGERS: Passenger[] = [
 
 const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
   const [selectedPassengers, setSelectedPassengers] = useState<string[]>(['1']);
-  const [selectedSeat, setSelectedSeat] = useState<string>('');
-  const [step, setStep] = useState<'fill' | 'paying' | 'success'>('fill');
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [step, setStep] = useState<'fill' | 'paying' | 'success' | 'error'>('fill');
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   if (!ticket) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setStep('paying');
-    setTimeout(() => {
+    try {
+      // TODO: Get actual user account info instead of hardcoding
+      const account = 'test_user';
+      // TODO: Map passenger IDs to actual ID card codes expected by backend
+      const IDCardCodelist = selectedPassengers.map(id => parseInt(id, 10)); 
+      // TODO: Map selected seats to actual seat types expected by backend
+      const seatTypelist = selectedSeats.length > 0 ? selectedSeats : ['二等座']; 
+      
+      const request = {
+        account,
+        IDCardCodelist,
+        seatTypelist,
+        trainNum: ticket.trainNumber,
+        startStation: ticket.fromStation,
+        endStation: ticket.toStation,
+        // TODO: Get actual selected date instead of current date
+        date: new Date().toISOString().split('T')[0], 
+      };
+
+      await purchaseTicket(request);
       setStep('success');
-    }, 2000);
+    } catch (error: any) {
+      console.error(error);
+      setErrorMessage(error.message || '购票失败，请重试');
+      setStep('error');
+    }
   };
 
   const togglePassenger = (id: string) => {
-    setSelectedPassengers(prev => 
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
+    setSelectedPassengers(prev => {
+      const newPassengers = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
+      // Adjust selected seats if passenger count decreases
+      if (selectedSeats.length > newPassengers.length) {
+        setSelectedSeats(selectedSeats.slice(0, newPassengers.length));
+      }
+      return newPassengers;
+    });
+  };
+
+  const toggleSeat = (seat: string) => {
+    setSelectedSeats(prev => {
+      if (prev.includes(seat)) {
+        return prev.filter(s => s !== seat);
+      }
+      if (prev.length < selectedPassengers.length) {
+        return [...prev, seat];
+      }
+      // If already at max, replace the first selected seat
+      return [...prev.slice(1), seat];
+    });
   };
 
   const totalPrice = ticket.price * selectedPassengers.length;
@@ -113,11 +156,11 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                  <div className="flex justify-center space-x-6">
                     {['A', 'B', 'C', '过道', 'D', 'F'].map((seat, i) => {
                       if (seat === '过道') return <div key={i} className="w-8 flex items-center justify-center text-gray-300 text-xs">|</div>;
-                      const isSelected = selectedSeat === seat;
+                      const isSelected = selectedSeats.includes(seat);
                       return (
                         <button
                           key={seat}
-                          onClick={() => setSelectedSeat(seat)}
+                          onClick={() => toggleSeat(seat)}
                           className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm transition-all ${
                             isSelected 
                             ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-200' 
@@ -128,6 +171,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                         </button>
                       )
                     })}
+                 </div>
+                 <div className="text-center mt-2 text-xs text-gray-500">
+                    已选 {selectedSeats.length}/{selectedPassengers.length} 个偏好座位
                  </div>
                  <div className="flex justify-center mt-3 space-x-8 text-xs text-gray-400">
                     <span className="flex items-center"><div className="w-3 h-3 bg-gray-200 rounded mr-1"></div> 靠窗</span>
@@ -140,6 +186,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
               <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-gray-800">联系方式</h3>
+                  {/* TODO: Fetch real contact info */}
                   <p className="text-sm text-gray-500 mt-1">138****8888</p>
                 </div>
                 <button className="text-blue-600 text-sm">修改</button>
@@ -152,6 +199,24 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
               <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
               <h3 className="text-xl font-bold text-gray-800">正在安全支付...</h3>
               <p className="text-gray-500 mt-2">请稍候，正在为您出票</p>
+            </div>
+          )}
+
+          {step === 'error' && (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+                <AlertCircle className="h-8 w-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800">预订失败</h3>
+              <p className="text-gray-500 mt-2 mb-6">{errorMessage}</p>
+              <div className="flex space-x-4">
+                <button onClick={() => setStep('fill')} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                  重新尝试
+                </button>
+                <button onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                  取消
+                </button>
+              </div>
             </div>
           )}
 

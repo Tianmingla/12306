@@ -25,6 +25,8 @@
     <file url="file://$PROJECT_DIR$/Services/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/ticket-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/ticket-service/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/user-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/user-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
   </component>
