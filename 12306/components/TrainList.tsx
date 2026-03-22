@@ -367,7 +367,8 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack }) => {
 
       <BookingModal 
         ticket={selectedTicketForBooking} 
-        onClose={() => setSelectedTicketForBooking(null)} 
+        onClose={() => setSelectedTicketForBooking(null)}
+        travelDate={searchParams.date}
       />
       
       {stopoverInfo && (

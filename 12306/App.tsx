@@ -7,7 +7,8 @@ import Features from './components/Features';
 import AIAssistant from './components/AIAssistant';
 import LoginModal from './components/LoginModal';
 import { AppView, SearchParams } from './types';
-import { getUserInfo } from './services/userService';
+import { getUserInfo, logout as userLogout } from './services/userService';
+import PassengerManageModal from './components/PassengerManageModal';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
@@ -16,6 +17,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [userName, setUserName] = useState<string>('');
+  const [passengerModalOpen, setPassengerModalOpen] = useState(false);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -41,7 +43,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    userLogout();
     setIsLoggedIn(false);
     setUserName('');
   };
@@ -54,6 +56,7 @@ const App: React.FC = () => {
         isLoggedIn={isLoggedIn}
         userName={userName}
         onLogout={handleLogout}
+        onOpenPassengerManage={() => setPassengerModalOpen(true)}
       />
 
       {currentView === AppView.HOME && (
@@ -112,6 +115,11 @@ const App: React.FC = () => {
             console.error(e);
           }
         }}
+      />
+
+      <PassengerManageModal
+        isOpen={passengerModalOpen}
+        onClose={() => setPassengerModalOpen(false)}
       />
     </div>
   );

@@ -10,7 +10,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +26,26 @@ public class PassengerServiceImpl implements PassengerService {
         LambdaQueryWrapper<PassengerDO> qw = new LambdaQueryWrapper<>();
         qw.eq(PassengerDO::getUserId, userId).eq(PassengerDO::getDelFlag, 0).orderByDesc(PassengerDO::getId);
         return passengerMapper.selectList(qw).stream().map(this::toVo).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PassengerVO> listByUserIdAndPassengerIdsOrdered(Long userId, List<Long> passengerIds) {
+        if (passengerIds == null || passengerIds.isEmpty()) {
+            throw new IllegalArgumentException("乘车人列表不能为空");
+        }
+        LambdaQueryWrapper<PassengerDO> qw = new LambdaQueryWrapper<>();
+        qw.eq(PassengerDO::getUserId, userId).in(PassengerDO::getId, passengerIds).eq(PassengerDO::getDelFlag, 0);
+        List<PassengerDO> rows = passengerMapper.selectList(qw);
+        Map<Long, PassengerVO> map = rows.stream().collect(Collectors.toMap(PassengerDO::getId, this::toVo));
+        List<PassengerVO> ordered = new ArrayList<>();
+        for (Long id : passengerIds) {
+            PassengerVO vo = map.get(id);
+            if (vo == null) {
+                throw new RuntimeException("乘车人不存在或不属于当前用户");
+            }
+            ordered.add(vo);
+        }
+        return ordered;
     }
 
     @Override

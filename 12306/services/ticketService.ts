@@ -1,7 +1,6 @@
 
 import { SearchParams, TrainTicket, ApiResponse, ApiRoute } from '../types';
-
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_BASE, authHeaders } from './http';
 
 /**
  * Helper to format ISO date string to HH:mm
@@ -10,7 +9,7 @@ const formatTime = (isoString: string | null): string => {
   if (!isoString) return '--:--';
   try {
     const date = new Date(isoString);
-    return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' }); // Use en-GB for HH:mm format
+    return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
   } catch (e) {
     return '--:--';
   }
@@ -20,20 +19,15 @@ const formatTime = (isoString: string | null): string => {
  * Adapts backend route data to frontend TrainTicket model
  */
 const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
-  // We currently only handle direct trains (single segment) or display the first segment's info for simplicity
   const segment = route.segments[0];
   if (!segment) return null;
 
   const seats = route.remainingTicketNumMap || {};
 
-  // Mock price logic based on train type
-  // Backend data doesn't provide price yet, so we estimate based on type
   const isHighSpeed = segment.trainNumber.startsWith('G') || segment.trainNumber.startsWith('D');
-  const basePrice = isHighSpeed ? 553 : 156; 
-  // Add some randomness so it looks realistic but consistent enough for demo
-  const mockPrice = basePrice + (segment.id % 50); 
+  const basePrice = isHighSpeed ? 553 : 156;
+  const mockPrice = basePrice + (segment.id % 50);
 
-  // Format Duration
   const h = Math.floor(route.totalDurationMinutes / 60);
   const m = route.totalDurationMinutes % 60;
   const durationStr = `${h}小时${m}分`;
@@ -43,114 +37,86 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
     trainNumber: segment.trainNumber,
     fromStation: segment.departureStation,
     toStation: segment.arrivalStation,
-    // Use the formatted time string directly from API route object if available
     departureTime: route.firstDepartureTime || formatTime(segment.startTime),
     arrivalTime: route.finalArrivalTime || formatTime(segment.endTime),
     duration: durationStr,
     price: mockPrice,
-    type: segment.trainNumber.startsWith('G') ? 'G' : 
-          segment.trainNumber.startsWith('D') ? 'D' : 
+    type: segment.trainNumber.startsWith('G') ? 'G' :
+          segment.trainNumber.startsWith('D') ? 'D' :
           segment.trainNumber.startsWith('Z') ? 'Z' : 'K',
     seatsAvailable: {
       business: seats['商务座'] ?? 0,
-      first: seats['一等座'] ?? seats['软卧'] ?? 0, // Fallback Soft Sleeper to First class slot for display
-      second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0, // Fallback others to Second class slot
+      first: seats['一等座'] ?? seats['软卧'] ?? 0,
+      second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0,
       standing: seats['无座'] ?? 0,
     }
   };
 };
 
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  };
-};
-
 export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]> => {
-  try {
-    const queryParams = new URLSearchParams({
-      from: params.from,
-      to: params.to,
-      date: params.date,
-    });
+  const queryParams = new URLSearchParams({
+    from: params.from,
+    to: params.to,
+    date: params.date,
+  });
 
-    const response = await fetch(`${API_BASE_URL}/ticket/search?${queryParams.toString()}`, {
-      headers: getHeaders()
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
+  const response = await fetch(`${API_BASE}/ticket/search?${queryParams.toString()}`, {
+    headers: authHeaders()
+  });
 
-    const json: ApiResponse = await response.json();
-
-    if (json.code !== 200) {
-      throw new Error(json.message || 'Unknown API error');
-    }
-
-    // Transform data
-    const validTickets = json.data
-      .map(adaptRouteToTicket)
-      .filter((t): t is TrainTicket => t !== null);
-
-    // Filter high speed if requested
-    if (params.onlyHighSpeed) {
-      return validTickets.filter(t => t.type === 'G' || t.type === 'D');
-    }
-
-    return validTickets;
-
-  } catch (error) {
-    console.error("Failed to fetch tickets:", error);
-    // Return empty array or throw depending on how you want UI to handle it
-    throw error;
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
   }
+
+  const json: ApiResponse = await response.json();
+
+  if (json.code !== 200) {
+    throw new Error(json.message || 'Unknown API error');
+  }
+
+  const validTickets = json.data
+    .map(adaptRouteToTicket)
+    .filter((t): t is TrainTicket => t !== null);
+
+  if (params.onlyHighSpeed) {
+    return validTickets.filter(t => t.type === 'G' || t.type === 'D');
+  }
+
+  return validTickets;
 };
 
 export const purchaseTicket = async (request: import('../types').PurchaseTicketRequest): Promise<import('../types').PurchaseTicketResponse> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/ticket/purchase`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(request),
-    });
+  const response = await fetch(`${API_BASE}/ticket/purchase`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(request),
+  });
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-
-    const json = await response.json();
-    if (json.code !== 200) {
-      throw new Error(json.message || 'Unknown API error');
-    }
-
-    return json;
-  } catch (error) {
-    console.error("Failed to purchase ticket:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
   }
+
+  const json = await response.json();
+  if (json.code !== 200) {
+    throw new Error(json.message || 'Unknown API error');
+  }
+
+  return json;
 };
 
 export const getTrainRouteDetails = async (trainNum: string): Promise<import('../types').TrainStationDetail[]> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/trainDetail/stations?trainNum=${encodeURIComponent(trainNum)}`, {
-      headers: getHeaders()
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
+  const response = await fetch(`${API_BASE}/trainDetail/stations?trainNum=${encodeURIComponent(trainNum)}`, {
+    headers: authHeaders()
+  });
 
-    const json: import('../types').TrainRouteDetailsResponse = await response.json();
-    if (json.code !== 200) {
-      throw new Error(json.message || 'Unknown API error');
-    }
-
-    return json.data;
-  } catch (error) {
-    console.error("Failed to fetch train route details:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
   }
+
+  const json: import('../types').TrainRouteDetailsResponse = await response.json();
+  if (json.code !== 200) {
+    throw new Error(json.message || 'Unknown API error');
+  }
+
+  return json.data;
 };

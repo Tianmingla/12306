@@ -1,5 +1,6 @@
 package com.lalal.modules.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,6 +18,7 @@ public class PurchaseTicketRequestDto {
     /**
      * 身份证的索引 不暴露身份证号
      */
+    @JsonProperty("IDCardCodelist")
     List<Long> IDCardCodelist;
     /**
      * 座位种类

@@ -15,6 +15,7 @@ public class Result<T> implements Serializable {
     //保证分布式事务 以及幂等处理
     private String requestId;
     private Integer code;
+    public Result(){};
     Result(Integer code,String message){
         requestId= RequestContext.getRequestId();
         this.code=code;

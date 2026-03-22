@@ -7,16 +7,17 @@ import com.lalal.modules.dto.request.PurchaseTicketRequestDto;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
 import com.lalal.modules.entity.TicketDO;
 import com.lalal.modules.enumType.RequestStatus;
+import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.mapper.TicketMapper;
 import com.lalal.modules.remote.OrderServiceClient;
 import com.lalal.modules.remote.SeatServiceClient;
+import com.lalal.modules.remote.UserServiceClient;
+import com.lalal.modules.result.Result;
 import com.lalal.modules.service.TicketService;
-import jakarta.servlet.ServletContext;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -30,86 +31,112 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
 
     private final SeatServiceClient seatServiceClient;
     private final OrderServiceClient orderServiceClient;
-//    private final MessageQueueService messageQueueService;
+    private final UserServiceClient userServiceClient;
     private final StringRedisTemplate redisTemplate;
 
     private static final String PEAK_STATUS_KEY = "traffic:peak:status";
 
     @Override
-    public PurchaseTicketVO purchase(PurchaseTicketRequestDto purchaseTicketRequestDto) {
-        //TODO 过滤器 请求参数验证
+    public PurchaseTicketVO purchase(PurchaseTicketRequestDto purchaseTicketRequestDto, Long userId) {
         PurchaseTicketVO purchaseTicketVO = new PurchaseTicketVO();
 
-        // 检查当前流量状态
+        if (userId == null) {
+            purchaseTicketVO.setStatus(RequestStatus.FAILED.toString());
+            return purchaseTicketVO;
+        }
+        if (purchaseTicketRequestDto.getIDCardCodelist() == null
+                || purchaseTicketRequestDto.getSeatTypelist() == null
+                || purchaseTicketRequestDto.getIDCardCodelist().size() != purchaseTicketRequestDto.getSeatTypelist().size()) {
+            purchaseTicketVO.setStatus(RequestStatus.FAILED.toString());
+            return purchaseTicketVO;
+        }
+
+        UserServiceClient.PassengersBatchRequest batchReq = new UserServiceClient.PassengersBatchRequest();
+        batchReq.setUserId(userId);
+        batchReq.setPassengerIds(purchaseTicketRequestDto.getIDCardCodelist());
+        Result<List<UserServiceClient.PassengerRemoteVO>> passengerResult = userServiceClient.batchPassengers(batchReq);
+        if (passengerResult == null
+                || passengerResult.getCode() == null
+                || !ReturnCode.success.code().equals(passengerResult.getCode())
+                || passengerResult.getData() == null
+                || passengerResult.getData().isEmpty()) {
+            purchaseTicketVO.setStatus(RequestStatus.FAILED.toString());
+            return purchaseTicketVO;
+        }
+        List<UserServiceClient.PassengerRemoteVO> passengers = passengerResult.getData();
+
         String peakStatus = redisTemplate.opsForValue().get(PEAK_STATUS_KEY);
         boolean peakHour = "true".equals(peakStatus);
 
         if (peakHour) {
-            // 1. 发送消息到MQ进行异步处理（削峰填谷）
-            // TODO: 定义MQ Topic常量
-//            messageQueueService.send("ticket_purchase_topic", purchaseTicketRequestDto);
-
-            // TODO: 需要在后台启动一个MQ消费者来处理 ticket_purchase_topic 消息，
-            // 消费者逻辑应调用下方的非高峰期购票逻辑（调用座位服务和订单服务）
-
             purchaseTicketVO.setStatus(RequestStatus.PROCESSING.toString());
             return purchaseTicketVO;
-        } else {
-            // 1. 调用座位服务
-            SeatSelectionRequestDTO seatRequest = new SeatSelectionRequestDTO();
-            seatRequest.setTrainNum(purchaseTicketRequestDto.getTrainNum());
-            seatRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
-            seatRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
-            seatRequest.setDate(java.time.LocalDate.parse(purchaseTicketRequestDto.getDate()));
-            seatRequest.setAccount(purchaseTicketRequestDto.getAccount());
+        }
 
-            List<SeatSelectionRequestDTO.PassengerDTO> passengers = new ArrayList<>();
-            for (int i = 0; i < purchaseTicketRequestDto.getSeatTypelist().size(); i++) {
-                SeatSelectionRequestDTO.PassengerDTO p = new SeatSelectionRequestDTO.PassengerDTO();
-//                p.setId(purchaseTicketRequestDto.getIDCardCodelist().get(i));
-                p.setId(1L);
-                p.setSeatType(purchaseTicketRequestDto.getSeatTypelist().get(i));
-                if (purchaseTicketRequestDto.getChooseSeats() != null && i < purchaseTicketRequestDto.getChooseSeats().size()) {
-                    p.setSeatPreference(purchaseTicketRequestDto.getChooseSeats().get(i));
-                }
-                passengers.add(p);
+        SeatSelectionRequestDTO seatRequest = new SeatSelectionRequestDTO();
+        seatRequest.setTrainNum(purchaseTicketRequestDto.getTrainNum());
+        seatRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
+        seatRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
+        seatRequest.setDate(java.time.LocalDate.parse(purchaseTicketRequestDto.getDate()));
+        String account = StringUtils.hasText(purchaseTicketRequestDto.getAccount())
+                ? purchaseTicketRequestDto.getAccount()
+                : "";
+        seatRequest.setAccount(account);
+
+        List<SeatSelectionRequestDTO.PassengerDTO> seatPassengers = new ArrayList<>();
+        for (int i = 0; i < passengers.size(); i++) {
+            SeatSelectionRequestDTO.PassengerDTO p = new SeatSelectionRequestDTO.PassengerDTO();
+            p.setId(passengers.get(i).getId());
+            p.setSeatType(purchaseTicketRequestDto.getSeatTypelist().get(i));
+            if (purchaseTicketRequestDto.getChooseSeats() != null && i < purchaseTicketRequestDto.getChooseSeats().size()) {
+                p.setSeatPreference(purchaseTicketRequestDto.getChooseSeats().get(i));
             }
-            seatRequest.setPassengers(passengers);
+            seatPassengers.add(p);
+        }
+        seatRequest.setPassengers(seatPassengers);
 
-            TicketDTO selectedSeats = seatServiceClient.select(seatRequest);
-            if (selectedSeats == null) {
-                purchaseTicketVO.setStatus(RequestStatus.FAILED.toString());
-                return purchaseTicketVO;
-            }
-
-            // 2. 调用订单服务
-            OrderServiceClient.OrderCreateRemoteRequestDTO orderRequest = new OrderServiceClient.OrderCreateRemoteRequestDTO();
-            orderRequest.setTrainNumber(purchaseTicketRequestDto.getTrainNum());
-            orderRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
-            orderRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
-            //TODO
-            orderRequest.setUsername("1");
-            orderRequest.setRunDate(new Date());
-
-            List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = selectedSeats.getItems().stream().map(item -> {
-                OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO orderItem = new OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO();
-                orderItem.setPassengerId(item.getPassengerId());
-                orderItem.setCarriageNumber(item.getCarriageNum());
-                orderItem.setSeatNumber(item.getSeatNum());
-                orderItem.setSeatType(item.getSeatType());
-                orderItem.setAmount(new BigDecimal("100")); // TODO: 动态计算金额
-                // TODO: 获取真实姓名和身份证号
-                orderItem.setIdCard("1");
-                orderItem.setRealName("1");
-                return orderItem;
-            }).collect(Collectors.toList());
-            orderRequest.setItems(orderItems);
-
-            String orderSn = orderServiceClient.create(orderRequest);
-            purchaseTicketVO.setOrderSn(orderSn);
-            purchaseTicketVO.setStatus(RequestStatus.SUCCESS.toString());
+        TicketDTO selectedSeats = seatServiceClient.select(seatRequest);
+        if (selectedSeats == null) {
+            purchaseTicketVO.setStatus(RequestStatus.FAILED.toString());
             return purchaseTicketVO;
         }
+
+        OrderServiceClient.OrderCreateRemoteRequestDTO orderRequest = new OrderServiceClient.OrderCreateRemoteRequestDTO();
+        orderRequest.setTrainNumber(purchaseTicketRequestDto.getTrainNum());
+        orderRequest.setStartStation(purchaseTicketRequestDto.getStartStation());
+        orderRequest.setEndStation(purchaseTicketRequestDto.getEndStation());
+        orderRequest.setUsername(account);
+        orderRequest.setRunDate(new Date());
+
+        List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = selectedSeats.getItems().stream().map(item -> {
+            OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO orderItem =
+                    new OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO();
+            orderItem.setPassengerId(item.getPassengerId());
+            orderItem.setCarriageNumber(item.getCarriageNum());
+            orderItem.setSeatNumber(item.getSeatNum());
+            orderItem.setSeatType(item.getSeatType());
+            orderItem.setAmount(new BigDecimal("100"));
+
+            UserServiceClient.PassengerRemoteVO matched = passengers.stream()
+                    .filter(pv -> pv.getId().equals(item.getPassengerId()))
+                    .findFirst()
+                    .orElse(null);
+            if (matched != null) {
+                orderItem.setIdCard(matched.getIdCardNumber());
+                orderItem.setRealName(matched.getRealName());
+            } else {
+                orderItem.setIdCard("");
+                orderItem.setRealName("");
+            }
+            return orderItem;
+        }).collect(Collectors.toList());
+        orderRequest.setItems(orderItems);
+
+        String orderSn = orderServiceClient.create(orderRequest);
+        purchaseTicketVO.setOrderSn(orderSn);
+        purchaseTicketVO.setStatus(RequestStatus.SUCCESS.toString());
+        purchaseTicketVO.setTicketDTO(selectedSeats);
+        return purchaseTicketVO;
     }
 
     @Override

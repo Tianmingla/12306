@@ -50,6 +50,24 @@ export interface Passenger {
   type: 'adult' | 'student' | 'child';
 }
 
+/** 与 user-service PassengerVO 一致 */
+export interface PassengerApi {
+  id: number;
+  realName: string;
+  idCardType: number;
+  idCardNumber: string;
+  passengerType: number;
+  phone?: string | null;
+}
+
+export interface PassengerSavePayload {
+  realName: string;
+  idCardType: number;
+  idCardNumber: string;
+  passengerType: number;
+  phone?: string;
+}
+
 export interface FilterOptions {
   trainTypes: string[];
   departureTime: string[]; // '0-6', '6-12', '12-18', '18-24'
@@ -86,7 +104,9 @@ export interface ApiResponse {
 }
 
 export interface PurchaseTicketRequest {
+  /** 登录账号手机号 */
   account: string;
+  /** 乘车人主键 id 列表（与 user-service 一致） */
   IDCardCodelist: number[];
   seatTypelist: string[];
   chooseSeats?: string[];

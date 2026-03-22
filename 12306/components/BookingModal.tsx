@@ -1,36 +1,81 @@
 
-import React, { useState } from 'react';
-import { TrainTicket, Passenger } from '../types';
+import React, { useEffect, useState } from 'react';
+import { TrainTicket } from '../types';
 import { X, UserPlus, Check, CreditCard, AlertCircle } from 'lucide-react';
 import { purchaseTicket } from '../services/ticketService';
+import { listPassengers } from '../services/passengerService';
+import type { PassengerApi } from '../types';
 
 interface BookingModalProps {
   ticket: TrainTicket | null;
   onClose: () => void;
+  /** 查询车次使用的出发日期 yyyy-MM-dd */
+  travelDate: string;
 }
 
-const MOCK_PASSENGERS: Passenger[] = [
-  { id: '1', name: '张三', idCard: '110101199001011234', type: 'adult' },
-  { id: '2', name: '李四', idCard: '110101199505204321', type: 'student' },
-  { id: '3', name: '王五', idCard: '320502198811110000', type: 'adult' },
-];
+function passengerTypeLabel(t: number): string {
+  switch (t) {
+    case 1: return '成人';
+    case 2: return '儿童';
+    case 3: return '学生';
+    default: return '其他';
+  }
+}
 
-const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
-  const [selectedPassengers, setSelectedPassengers] = useState<string[]>(['1']);
+const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate }) => {
+  const [passengers, setPassengers] = useState<PassengerApi[]>([]);
+  const [passengersLoading, setPassengersLoading] = useState(false);
+  const [selectedPassengers, setSelectedPassengers] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [step, setStep] = useState<'fill' | 'paying' | 'success' | 'error'>('fill');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
+  useEffect(() => {
+    if (!ticket) return;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setPassengers([]);
+      setSelectedPassengers([]);
+      return;
+    }
+    setPassengersLoading(true);
+    listPassengers()
+      .then((list) => {
+        setPassengers(list);
+        if (list.length > 0) {
+          setSelectedPassengers([String(list[0].id)]);
+        } else {
+          setSelectedPassengers([]);
+        }
+      })
+      .catch(() => setPassengers([]))
+      .finally(() => setPassengersLoading(false));
+  }, [ticket]);
+
   if (!ticket) return null;
 
   const handleSubmit = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setErrorMessage('请先登录后再购票');
+      setStep('error');
+      return;
+    }
+    const account = localStorage.getItem('userPhone') || '';
+    if (!account) {
+      setErrorMessage('无法获取登录手机号，请重新登录');
+      setStep('error');
+      return;
+    }
+    if (selectedPassengers.length === 0) {
+      setErrorMessage('请选择乘车人');
+      setStep('error');
+      return;
+    }
+
     setStep('paying');
     try {
-      // TODO: Get actual user account info instead of hardcoding
-      const account = 'test_user';
-      // TODO: Map passenger IDs to actual ID card codes expected by backend
-      const IDCardCodelist = selectedPassengers.map(id => parseInt(id, 10));
-      // TODO: Map selected seats to actual seat types expected by backend
+      const IDCardCodelist = selectedPassengers.map((id) => Number(id));
       const seatTypelist = selectedPassengers.map(() => '二等座');
       const chooseSeats = selectedSeats;
 
@@ -42,49 +87,49 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
         trainNum: ticket.trainNumber,
         startStation: ticket.fromStation,
         endStation: ticket.toStation,
-        // TODO: Get actual selected date instead of current date
-        date: new Date().toISOString().split('T')[0],
+        date: travelDate,
       };
 
       await purchaseTicket(request);
       setStep('success');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      setErrorMessage(error.message || '购票失败，请重试');
+      setErrorMessage(error instanceof Error ? error.message : '购票失败，请重试');
       setStep('error');
     }
   };
 
   const togglePassenger = (id: string) => {
-    setSelectedPassengers(prev => {
-      const newPassengers = prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id];
-      // Adjust selected seats if passenger count decreases
-      if (selectedSeats.length > newPassengers.length) {
-        setSelectedSeats(selectedSeats.slice(0, newPassengers.length));
+    setSelectedPassengers((prev) => {
+      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
+      if (selectedSeats.length > next.length) {
+        setSelectedSeats(selectedSeats.slice(0, next.length));
       }
-      return newPassengers;
+      return next;
     });
   };
 
   const toggleSeat = (seat: string) => {
-    setSelectedSeats(prev => {
+    setSelectedSeats((prev) => {
       if (prev.includes(seat)) {
-        return prev.filter(s => s !== seat);
+        return prev.filter((s) => s !== seat);
       }
       if (prev.length < selectedPassengers.length) {
         return [...prev, seat];
       }
-      // If already at max, replace the first selected seat
       return [...prev.slice(1), seat];
     });
   };
 
   const totalPrice = ticket.price * selectedPassengers.length;
+  const userPhone = localStorage.getItem('userPhone') || '';
+  const maskedPhone = userPhone.length >= 7
+    ? `${userPhone.slice(0, 3)}****${userPhone.slice(-4)}`
+    : userPhone || '—';
 
   return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
         <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-          {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white relative flex-shrink-0">
             <button
                 onClick={onClose}
@@ -106,7 +151,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                   <span className="text-2xl font-bold">{ticket.toStation}</span>
                 </div>
                 <p className="text-blue-100 text-sm mt-2">
-                  {ticket.departureTime} 出发 • {new Date().toLocaleDateString('zh-CN')}
+                  {ticket.departureTime} 出发 • {travelDate}
                 </p>
               </div>
               <div className="text-right">
@@ -116,43 +161,54 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
             </div>
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             {step === 'fill' && (
                 <div className="space-y-6">
-                  {/* Passenger Selection */}
+                  {!localStorage.getItem('token') && (
+                    <div className="bg-amber-50 border border-amber-100 text-amber-800 text-sm px-4 py-3 rounded-lg">
+                      请先登录后再选择乘车人并提交订单。
+                    </div>
+                  )}
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-gray-800">选择乘车人</h3>
-                      <button className="text-blue-600 text-sm flex items-center hover:bg-blue-50 px-2 py-1 rounded transition-colors">
-                        <UserPlus className="h-4 w-4 mr-1" /> 添加乘车人
-                      </button>
+                      <span className="text-xs text-gray-400">在导航栏用户菜单中可管理乘车人</span>
                     </div>
+                    {passengersLoading ? (
+                      <p className="text-sm text-gray-500">加载乘车人…</p>
+                    ) : passengers.length === 0 ? (
+                      <div className="text-sm text-gray-500 flex items-center gap-2">
+                        <UserPlus className="h-4 w-4" />
+                        暂无乘车人，请登录后在右上角用户菜单 → 乘车人管理 中添加。
+                      </div>
+                    ) : (
                     <div className="flex flex-wrap gap-3">
-                      {MOCK_PASSENGERS.map(p => {
-                        const isSelected = selectedPassengers.includes(p.id);
+                      {passengers.map((p) => {
+                        const idStr = String(p.id);
+                        const isSelected = selectedPassengers.includes(idStr);
                         return (
                             <button
                                 key={p.id}
-                                onClick={() => togglePassenger(p.id)}
+                                type="button"
+                                onClick={() => togglePassenger(idStr)}
                                 className={`flex items-center px-4 py-2 rounded-lg border transition-all ${
                                     isSelected
                                         ? 'bg-blue-600 border-blue-600 text-white shadow-md'
                                         : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
                                 }`}
                             >
-                              <span className="mr-2">{p.name}</span>
+                              <span className="mr-2">{p.realName}</span>
                               <span className={`text-xs px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>
-                          {p.type === 'adult' ? '成人' : '学生'}
+                          {passengerTypeLabel(p.passengerType)}
                         </span>
                               {isSelected && <Check className="h-3 w-3 ml-2" />}
                             </button>
                         );
                       })}
                     </div>
+                    )}
                   </div>
 
-                  {/* Seat Selection */}
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                     <h3 className="font-bold text-gray-800 mb-4">选座服务 <span className="text-xs font-normal text-gray-500 ml-2">(仅供参考，余票不足时随机分配)</span></h3>
                     <div className="flex justify-center space-x-6">
@@ -162,6 +218,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                         return (
                             <button
                                 key={seat}
+                                type="button"
                                 onClick={() => toggleSeat(seat)}
                                 className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm transition-all ${
                                     isSelected
@@ -171,7 +228,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                             >
                               {seat}
                             </button>
-                        )
+                        );
                       })}
                     </div>
                     <div className="text-center mt-2 text-xs text-gray-500">
@@ -184,14 +241,12 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                     </div>
                   </div>
 
-                  {/* Contact Info (Mock) */}
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div>
                       <h3 className="font-bold text-gray-800">联系方式</h3>
-                      {/* TODO: Fetch real contact info */}
-                      <p className="text-sm text-gray-500 mt-1">138****8888</p>
+                      <p className="text-sm text-gray-500 mt-1">{maskedPhone}</p>
                     </div>
-                    <button className="text-blue-600 text-sm">修改</button>
+                    <CreditCard className="h-8 w-8 text-gray-200" />
                   </div>
                 </div>
             )}
@@ -212,10 +267,10 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                   <h3 className="text-2xl font-bold text-gray-800">预订失败</h3>
                   <p className="text-gray-500 mt-2 mb-6">{errorMessage}</p>
                   <div className="flex space-x-4">
-                    <button onClick={() => setStep('fill')} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                    <button type="button" onClick={() => setStep('fill')} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
                       重新尝试
                     </button>
-                    <button onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                    <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
                       取消
                     </button>
                   </div>
@@ -229,14 +284,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">预订成功！</h3>
                   <p className="text-gray-500 mt-2 mb-6">出票成功短信已发送至您的手机</p>
-                  <button onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                  <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
                     返回首页
                   </button>
                 </div>
             )}
           </div>
 
-          {/* Footer Actions */}
           {step === 'fill' && (
               <div className="p-4 bg-white border-t border-gray-200 flex items-center justify-between flex-shrink-0">
                 <div className="text-gray-600">
@@ -246,8 +300,9 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose }) => {
                   </div>
                 </div>
                 <button
-                    onClick={handleSubmit}
-                    disabled={selectedPassengers.length === 0}
+                    type="button"
+                    onClick={() => void handleSubmit()}
+                    disabled={selectedPassengers.length === 0 || !localStorage.getItem('token')}
                     className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   提交订单

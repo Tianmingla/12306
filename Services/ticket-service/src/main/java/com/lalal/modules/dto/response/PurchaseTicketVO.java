@@ -1,5 +1,6 @@
 package com.lalal.modules.dto.response;
 
+import com.lalal.modules.dto.TicketDTO;
 import com.lalal.modules.entity.TicketDO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class PurchaseTicketVO {
     String status;
     String orderSn;
-    TicketDO ticketDO;
+    TicketDTO ticketDTO;
 }
