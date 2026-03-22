@@ -23,7 +23,7 @@ const App: React.FC = () => {
         // TODO: Implement token refresh mechanism if token is expired
         const userInfo = await getUserInfo();
         setIsLoggedIn(true);
-        setUserName(userInfo.username);
+        setUserName(userInfo.phone);
       } catch (error) {
         setIsLoggedIn(false);
       }
@@ -107,7 +107,7 @@ const App: React.FC = () => {
           setIsLoggedIn(true);
           try {
             const userInfo = await getUserInfo();
-            setUserName(userInfo.username);
+            setUserName(userInfo.phone);
           } catch (e) {
             console.error(e);
           }

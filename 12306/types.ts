@@ -122,16 +122,18 @@ export interface TrainRouteDetailsResponse {
 }
 
 export interface LoginRequest {
-  username: string;
-  password?: string; // Optional if using other methods
+  phone: string;
+  smsCode: string;
 }
 
 export interface LoginResponse {
   token: string;
+  phone?: string;
+  userId?: string;
 }
 
 export interface UserInfoResponse {
-  username: string;
+  phone: string;
+  userId: string;
   role: string;
-  // Add other user fields as needed
 }

@@ -32,8 +32,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
-        // Skip authentication for login and register
-        if (path.contains("/api/user/login") || path.contains("/api/user/register")) {
+        // Skip authentication for login / 短信验证码
+        if (path.contains("/api/user/login")
+                || path.contains("/api/user/register")
+                || path.contains("/api/user/sms/send")) {
             return chain.filter(exchange);
         }
 
@@ -54,11 +56,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                         .parseClaimsJws(token)
                         .getBody();
                 
-                String username = claims.getSubject();
-                // Mutate request to add user header
-                ServerHttpRequest mutatedRequest = request.mutate()
-                        .header("X-User-Name", username)
-                        .build();
+                String phone = claims.getSubject();
+                Object uid = claims.get("uid");
+                ServerHttpRequest.Builder mutate = request.mutate()
+                        .header("X-User-Name", phone != null ? phone : "");
+                if (uid != null) {
+                    mutate.header("X-User-Id", uid.toString());
+                }
+                ServerHttpRequest mutatedRequest = mutate.build();
                 return chain.filter(exchange.mutate().request(mutatedRequest).build());
             } catch (Exception e) {
                 ServerHttpResponse response = exchange.getResponse();

@@ -126,6 +126,24 @@ public class CacheConstant {
         return String.format("USER::DETAIL::%s",idCard);
     }
     /**
+     * 手机号登录账号缓存
+     */
+    public static String userDetailByPhone(String phone) {
+        return String.format("USER::DETAIL::PHONE::%s", phone);
+    }
+    /**
+     * 短信登录验证码
+     */
+    public static String smsLoginCodeKey(String phone) {
+        return String.format("SMS::LOGIN::CODE::%s", phone);
+    }
+    /**
+     * 短信发送频率限制（同一手机号）
+     */
+    public static String smsSendRateLimitKey(String phone) {
+        return String.format("SMS::LOGIN::RATE::%s", phone);
+    }
+    /**
      * 通用缓存Key构建方法（谨慎使用，无参数校验）
      *
      * @param pattern 格式模板，如 "TICKET::REMAINING::%s::%s::%s-%s"

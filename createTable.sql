@@ -239,3 +239,34 @@ CREATE TABLE `t_train_station` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-03-10 22:05:44
+
+--
+-- 用户账号（手机验证码登录）与乘车人（一对多）
+--
+
+CREATE TABLE IF NOT EXISTS `t_user` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `phone` varchar(20) NOT NULL COMMENT '登录手机号',
+  `email` varchar(64) DEFAULT NULL,
+  `create_time` datetime DEFAULT NULL,
+  `update_time` datetime DEFAULT NULL,
+  `del_flag` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_phone` (`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='登录账号';
+
+CREATE TABLE IF NOT EXISTS `t_passenger` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `real_name` varchar(64) NOT NULL,
+  `id_card_type` int NOT NULL DEFAULT '1',
+  `id_card_number` varchar(32) NOT NULL,
+  `passenger_type` int NOT NULL DEFAULT '1',
+  `phone` varchar(20) DEFAULT NULL,
+  `create_time` datetime DEFAULT NULL,
+  `update_time` datetime DEFAULT NULL,
+  `del_flag` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id_card` (`user_id`,`id_card_number`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='乘车人';

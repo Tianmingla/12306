@@ -4,6 +4,12 @@ import lombok.Data;
 
 @Data
 public class LoginRequest {
-    private String username;
-    private String password;
+    /**
+     * 手机号
+     */
+    private String phone;
+    /**
+     * 短信验证码
+     */
+    private String smsCode;
 }

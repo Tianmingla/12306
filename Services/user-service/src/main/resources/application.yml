@@ -37,3 +37,11 @@ jwt:
   expiration: 86400000
 
 salt: "lalal_secret_salt_2026"
+
+# 短信登录（未接第三方时默认 mock：验证码见日志，固定为 mock-code）
+user:
+  sms:
+    mock-enabled: true
+    mock-code: "123456"
+    expire-minutes: 5
+    send-interval-seconds: 60

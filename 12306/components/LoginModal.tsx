@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { X, User, Lock, QrCode, Smartphone } from 'lucide-react';
-import { login } from '../services/userService';
+import React, { useEffect, useState } from 'react';
+import { X, QrCode, Smartphone } from 'lucide-react';
+import { login, sendLoginSms } from '../services/userService';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -12,27 +12,44 @@ interface LoginModalProps {
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
   const [loginMethod, setLoginMethod] = useState<'scan' | 'account'>('scan');
   const [isLoading, setIsLoading] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [smsCode, setSmsCode] = useState('');
   const [error, setError] = useState('');
+  const [smsCooldown, setSmsCooldown] = useState(0);
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const t = window.setInterval(() => {
+      setSmsCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [smsCooldown]);
 
   if (!isOpen) return null;
+
+  const handleSendSms = async () => {
+    setError('');
+    try {
+      await sendLoginSms(phone);
+      setSmsCooldown(60);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '发送失败');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    
-    // TODO: Add form validation (e.g., check if username/password are empty)
-    
+
     try {
-      await login({ username, password });
+      await login({ phone, smsCode });
       setIsLoading(false);
       onLoginSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsLoading(false);
-      setError(err.message || '登录失败，请检查用户名和密码');
+      setError(err instanceof Error ? err.message : '登录失败，请检查手机号与验证码');
     }
   };
 
@@ -47,14 +64,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
         </button>
 
         <div className="flex h-full">
-           {/* Main Content */}
            <div className="w-full p-8">
              <div className="text-center mb-8">
                <h2 className="text-2xl font-bold text-gray-800">欢迎登录12306</h2>
                <p className="text-sm text-gray-500 mt-2">官方购票 安全出行</p>
              </div>
 
-             {/* Tabs */}
              <div className="flex justify-center mb-8 border-b border-gray-100">
                <button 
                  onClick={() => setLoginMethod('scan')}
@@ -71,7 +86,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
                    loginMethod === 'account' ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
                  }`}
                >
-                 账号登录
+                 手机验证码登录
                  {loginMethod === 'account' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-full" />}
                </button>
              </div>
@@ -101,27 +116,37 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
                  {error && <div className="text-red-500 text-sm text-center">{error}</div>}
                  <div className="space-y-1">
                    <div className="relative">
-                     <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                     <Smartphone className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                      <input 
-                       type="text" 
-                       value={username}
-                       onChange={(e) => setUsername(e.target.value)}
-                       placeholder="用户名/邮箱/手机号"
+                       type="tel" 
+                       value={phone}
+                       onChange={(e) => setPhone(e.target.value)}
+                       placeholder="11位手机号"
+                       maxLength={11}
                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                      />
                    </div>
                  </div>
-                 <div className="space-y-1">
-                   <div className="relative">
-                     <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                 <div className="flex gap-2">
+                   <div className="relative flex-1">
                      <input 
-                       type="password" 
-                       value={password}
-                       onChange={(e) => setPassword(e.target.value)}
-                       placeholder="密码"
-                       className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                       type="text" 
+                       inputMode="numeric"
+                       value={smsCode}
+                       onChange={(e) => setSmsCode(e.target.value)}
+                       placeholder="短信验证码"
+                       maxLength={6}
+                       className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                      />
                    </div>
+                   <button
+                     type="button"
+                     onClick={handleSendSms}
+                     disabled={smsCooldown > 0 || !/^1[3-9]\d{9}$/.test(phone.trim())}
+                     className="shrink-0 px-3 py-2.5 text-sm font-medium rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                   >
+                     {smsCooldown > 0 ? `${smsCooldown}s` : '获取验证码'}
+                   </button>
                  </div>
                  <button 
                    type="submit" 
@@ -134,10 +159,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
                      '登录'
                    )}
                  </button>
-                 <div className="flex justify-between text-xs text-gray-500 pt-2">
-                   <a href="#" className="hover:text-blue-600">注册账号</a>
-                   <a href="#" className="hover:text-blue-600">忘记密码?</a>
-                 </div>
+                 <p className="text-xs text-gray-400 text-center">
+                   开发环境默认验证码为 123456（见后端日志 [MOCK SMS]）
+                 </p>
                </form>
              )}
            </div>
