@@ -34,6 +34,7 @@ export interface Station {
 export enum AppView {
   HOME = 'HOME',
   SEARCH_RESULTS = 'SEARCH_RESULTS',
+  ORDER_DETAIL = 'ORDER_DETAIL',
 }
 
 export interface SearchParams {
@@ -116,15 +117,60 @@ export interface PurchaseTicketRequest {
   date: string;
 }
 
+export interface TicketDTO {
+  account?: string;
+  trainNum?: string;
+  startStation?: string;
+  endStation?: string;
+  date?: string;
+  items?: Array<{
+    passengerId: number;
+    seatNum: string;
+    seatType: number;
+    carriageNum: string;
+  }>;
+}
+
 export interface PurchaseTicketResponse {
   code: number;
   message: string | null;
   data: {
     status: string;
     orderSn: string;
-    ticketDO: any; // TODO: define TicketDO type if needed
+    totalAmount?: string | number | null;
+    ticketDTO?: TicketDTO | null;
   };
   requestId: string;
+}
+
+export interface OrderItemVO {
+  id: number;
+  passengerId: number | null;
+  passengerName: string | null;
+  idCardMasked: string;
+  carriageNumber: string | null;
+  seatNumber: string | null;
+  seatType: number | null;
+  amount: string | number | null;
+}
+
+export interface OrderDetailVO {
+  orderSn: string;
+  username: string;
+  trainNumber: string;
+  startStation: string;
+  endStation: string;
+  runDate: string | null;
+  totalAmount: string | number | null;
+  status: number;
+  statusText: string;
+  items: OrderItemVO[];
+}
+
+export interface PayOrderVO {
+  orderSn: string;
+  payFormHtml: string | null;
+  hint?: string | null;
 }
 
 export interface TrainStationDetail {

@@ -1,6 +1,5 @@
 package com.lalal.modules.dto.request;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
 import java.math.BigDecimal;
 import java.util.Date;
@@ -12,7 +11,8 @@ public class OrderCreateRequestDTO {
     private String startStation;
     private String endStation;
     private String username;
-    private Date run_date;
+    /** 与 ticket-service Feign 字段名 runDate 对齐 */
+    private Date runDate;
     private List<OrderItemRequestDTO> items;
 
     @Data

@@ -9,6 +9,7 @@ import FilterPanel from './FilterPanel';
 interface TrainListProps {
   searchParams: SearchParams;
   onBack: () => void;
+  onPurchaseSuccess?: (orderSn: string) => void;
 }
 
 // --- Mock Data & Types for Stopovers ---
@@ -113,7 +114,7 @@ const StopoverModal: React.FC<{
   );
 };
 
-const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack }) => {
+const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseSuccess }) => {
   const [tickets, setTickets] = useState<TrainTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -369,6 +370,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack }) => {
         ticket={selectedTicketForBooking} 
         onClose={() => setSelectedTicketForBooking(null)}
         travelDate={searchParams.date}
+        onPurchaseSuccess={onPurchaseSuccess}
       />
       
       {stopoverInfo && (

@@ -11,6 +11,8 @@ interface BookingModalProps {
   onClose: () => void;
   /** 查询车次使用的出发日期 yyyy-MM-dd */
   travelDate: string;
+  /** 下单成功，跳转订单详情 */
+  onPurchaseSuccess?: (orderSn: string) => void;
 }
 
 function passengerTypeLabel(t: number): string {
@@ -22,12 +24,12 @@ function passengerTypeLabel(t: number): string {
   }
 }
 
-const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate }) => {
+const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate, onPurchaseSuccess }) => {
   const [passengers, setPassengers] = useState<PassengerApi[]>([]);
   const [passengersLoading, setPassengersLoading] = useState(false);
   const [selectedPassengers, setSelectedPassengers] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [step, setStep] = useState<'fill' | 'paying' | 'success' | 'error'>('fill');
+  const [step, setStep] = useState<'fill' | 'paying' | 'error'>('fill');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
@@ -90,8 +92,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
         date: travelDate,
       };
 
-      await purchaseTicket(request);
-      setStep('success');
+      const json = await purchaseTicket(request);
+      const orderSn = json.data?.orderSn;
+      if (!orderSn) {
+        throw new Error('未返回订单号');
+      }
+      onPurchaseSuccess?.(orderSn);
+      onClose();
     } catch (error: unknown) {
       console.error(error);
       setErrorMessage(error instanceof Error ? error.message : '购票失败，请重试');
@@ -254,8 +261,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
             {step === 'paying' && (
                 <div className="flex flex-col items-center justify-center h-64">
                   <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-                  <h3 className="text-xl font-bold text-gray-800">正在安全支付...</h3>
-                  <p className="text-gray-500 mt-2">请稍候，正在为您出票</p>
+                  <h3 className="text-xl font-bold text-gray-800">正在创建订单…</h3>
+                  <p className="text-gray-500 mt-2">请稍候</p>
                 </div>
             )}
 
@@ -277,18 +284,6 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                 </div>
             )}
 
-            {step === 'success' && (
-                <div className="flex flex-col items-center justify-center h-64 text-center">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6">
-                    <Check className="h-8 w-8" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-800">预订成功！</h3>
-                  <p className="text-gray-500 mt-2 mb-6">出票成功短信已发送至您的手机</p>
-                  <button type="button" onClick={onClose} className="px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors">
-                    返回首页
-                  </button>
-                </div>
-            )}
           </div>
 
           {step === 'fill' && (

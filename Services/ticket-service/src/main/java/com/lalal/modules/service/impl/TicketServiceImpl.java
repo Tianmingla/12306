@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -131,6 +132,12 @@ public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> imple
             return orderItem;
         }).collect(Collectors.toList());
         orderRequest.setItems(orderItems);
+
+        BigDecimal totalAmount = orderItems.stream()
+                .map(OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO::getAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        purchaseTicketVO.setTotalAmount(totalAmount);
 
         String orderSn = orderServiceClient.create(orderRequest);
         purchaseTicketVO.setOrderSn(orderSn);

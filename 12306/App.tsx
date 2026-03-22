@@ -7,6 +7,7 @@ import Features from './components/Features';
 import AIAssistant from './components/AIAssistant';
 import LoginModal from './components/LoginModal';
 import { AppView, SearchParams } from './types';
+import OrderDetailPage from './components/OrderDetailPage';
 import { getUserInfo, logout as userLogout } from './services/userService';
 import PassengerManageModal from './components/PassengerManageModal';
 
@@ -18,6 +19,17 @@ const App: React.FC = () => {
 
   const [userName, setUserName] = useState<string>('');
   const [passengerModalOpen, setPassengerModalOpen] = useState(false);
+  const [orderDetailOrderSn, setOrderDetailOrderSn] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === '1' && params.get('orderSn')) {
+      const sn = params.get('orderSn')!;
+      setOrderDetailOrderSn(sn);
+      setCurrentView(AppView.ORDER_DETAIL);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -39,6 +51,9 @@ const App: React.FC = () => {
   };
 
   const handleNavigate = (view: AppView) => {
+    if (view !== AppView.ORDER_DETAIL) {
+      setOrderDetailOrderSn(null);
+    }
     setCurrentView(view);
   };
 
@@ -89,9 +104,23 @@ const App: React.FC = () => {
         <div className="animate-fade-in">
           <TrainList 
             searchParams={searchParams} 
-            onBack={() => setCurrentView(AppView.HOME)} 
+            onBack={() => setCurrentView(AppView.HOME)}
+            onPurchaseSuccess={(orderSn) => {
+              setOrderDetailOrderSn(orderSn);
+              setCurrentView(AppView.ORDER_DETAIL);
+            }}
           />
         </div>
+      )}
+
+      {currentView === AppView.ORDER_DETAIL && orderDetailOrderSn && (
+        <OrderDetailPage
+          orderSn={orderDetailOrderSn}
+          onBack={() => {
+            setOrderDetailOrderSn(null);
+            setCurrentView(AppView.HOME);
+          }}
+        />
       )}
 
       {/* Footer */}
