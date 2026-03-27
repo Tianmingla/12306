@@ -1,0 +1,223 @@
+// 全局样式 - 深色主题
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  font-family: $font-family;
+  background-color: $bg-dark;
+  color: $text-primary;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: $bg-dark;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border-color;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: $text-muted;
+}
+
+// Arco Design 深色主题覆盖
+body {
+  // 背景色
+  --color-bg-1: #{$bg-dark};
+  --color-bg-2: #{$bg-card};
+  --color-bg-3: #{$bg-hover};
+  --color-bg-4: #{$border-color};
+
+  // 文字色
+  --color-text-1: #{$text-primary};
+  --color-text-2: #{$text-secondary};
+  --color-text-3: #{$text-muted};
+  --color-text-4: #{$text-muted};
+
+  // 边框
+  --color-border: #{$border-color};
+  --color-border-2: #{lighten($border-color, 10%)};
+
+  // 主色
+  --primary-6: #{$primary-color};
+  --primary-5: #{lighten($primary-color, 10%)};
+  --primary-7: #{darken($primary-color, 10%)};
+
+  // 成功色
+  --success-6: #{$success-color};
+
+  // 警告色
+  --warning-6: #{$warning-color};
+
+  // 危险色
+  --danger-6: #{$danger-color};
+}
+
+// 统计卡片样式
+.stat-card {
+  background: $bg-card;
+  border-radius: $border-radius-lg;
+  border: 1px solid $border-color;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all $transition;
+
+  &:hover {
+    border-color: $primary-color;
+    transform: translateY(-2px);
+    box-shadow: $shadow-lg;
+  }
+
+  .stat-content {
+    .stat-title {
+      font-size: 14px;
+      color: $text-secondary;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 600;
+      color: $text-primary;
+    }
+
+    .stat-footer {
+      font-size: 12px;
+      color: $text-muted;
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .trend {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+
+        &.up {
+          color: $success-color;
+        }
+
+        &.down {
+          color: $danger-color;
+        }
+      }
+    }
+  }
+
+  .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: $border-radius-lg;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    svg {
+      font-size: 28px;
+      color: #fff;
+    }
+
+    &.primary {
+      background: linear-gradient(135deg, $primary-color 0%, #{lighten($primary-color, 15%)} 100%);
+    }
+
+    &.secondary {
+      background: linear-gradient(135deg, $secondary-color 0%, #{lighten($secondary-color, 15%)} 100%);
+    }
+
+    &.success {
+      background: linear-gradient(135deg, $success-color 0%, #{lighten($success-color, 15%)} 100%);
+    }
+
+    &.warning {
+      background: linear-gradient(135deg, $warning-color 0%, #{lighten($warning-color, 15%)} 100%);
+    }
+  }
+}
+
+// 页面容器
+.page-container {
+  padding: 20px;
+}
+
+// 页面标题
+.page-header {
+  margin-bottom: 20px;
+
+  .page-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: $text-secondary;
+    margin-top: 4px;
+  }
+}
+
+// 搜索表单
+.search-form {
+  background: $bg-card;
+  border-radius: $border-radius;
+  border: 1px solid $border-color;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+// 表格卡片
+.table-card {
+  background: $bg-card;
+  border-radius: $border-radius;
+  border: 1px solid $border-color;
+  padding: 20px;
+}
+
+// 过渡动画
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity $transition ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-fade-enter-active {
+  transition: all $transition ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all $transition-fast cubic-bezier(1, 0.5, 0.8, 1);
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateX(-20px);
+  opacity: 0;
+}
