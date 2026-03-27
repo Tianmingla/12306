@@ -16,11 +16,11 @@
 - [x] 实现 RocketMQ 配置类
 - [x] 实现延迟消息支持
 - [x] 实现顺序消息支持
-- [ ] 实现 RocketMQ 消息消费服务（使用注解方式）
+- [x] 实现 RocketMQ 消息消费服务（使用注解方式）
 
 ### 1.3 消息队列功能
 - [x] 消息发送重试机制（RocketMQ内置）
-- [ ] 消息幂等性处理（结合Idempotent模块）
+- [x] 消息幂等性处理（结合Idempotent模块，`BaseMessageConsumer` 内置）
 - [ ] 死信队列处理
 - [ ] 消息追踪机制
 
@@ -52,12 +52,39 @@ messageQueueService.send(message);
 
 #### 1.4.2 消费消息
 
+**方式一：使用 `@MessageConsumer` 注解 + 继承 `RocketMQBaseConsumer`（推荐）**
+
+```java
+@Component
+@MessageConsumer(
+    topic = "order-topic",
+    tag = "create",
+    consumerGroup = "order-consumer-group",
+    consumeMode = ConsumeMode.CONCURRENTLY
+)
+@RocketMQMessageListener(
+    topic = "order-topic",
+    consumerGroup = "order-consumer-group",
+    selectorExpression = "create"
+)
+public class OrderCreateConsumer extends RocketMQBaseConsumer<OrderDTO> {
+
+    @Override
+    protected void doProcess(OrderDTO order) {
+        // 处理订单逻辑
+        log.info("Received order: {}", order);
+    }
+}
+```
+
+**方式二：继承 `RocketMQMessageConsumer`（传统方式）**
+
 ```java
 @Component
 @RocketMQMessageListener(
     topic = "order-topic",
     consumerGroup = "order-consumer-group",
-    tag = "create"
+    selectorExpression = "create"
 )
 public class OrderConsumer extends RocketMQMessageConsumer<OrderDTO> {
 
@@ -109,10 +136,10 @@ rocketmq:
 - [x] 添加自定义异常处理
 - [x] 添加幂等性结果缓存
 
-### 2.3 幂等性应用
-- [ ] 购票接口添加幂等性注解
-- [ ] 订单创建接口添加幂等性注解
-- [ ] 支付回调接口添加幂等性注解
+### 2.3 幂等性应用 ✅
+- [x] 购票接口添加幂等性注解（`PurchaseTicketController.purchaseTicket`）
+- [x] 订单创建接口添加幂等性注解（`OrderController.create`）
+- [x] 支付回调接口添加幂等性注解（`OrderController.alipayNotify`）
 
 ### 2.4 使用示例
 
@@ -153,12 +180,18 @@ public class OrderController {
 ```
 
 ## 三、缓存模块 Cache
-- [ ] 审查 SafeCacheTemplate 实现是否完善
-- [ ] 添加分布式锁支持
+- [x] SafeCacheTemplate 基础实现完成
+- [x] 分布式锁支持（Redisson 已在 Idempotent 模块中使用）
+- [ ] 完善缓存序列化器配置（RawRedisSerializer）
+- [ ] 添加观察者/拦截器扩展机制
 
 ## 四、其他任务
-- [ ] 整理 Frameworks 模块的 spring-boot-starter 自动配置
-- [ ] 更新各服务的 pom.xml 依赖
+- [x] 整理 Frameworks 模块的 spring-boot-starter 自动配置
+  - [x] common 模块自动配置
+  - [x] database 模块自动配置
+  - [x] cache 模块自动配置
+  - [x] mq 模块自动配置
+- [x] 更新各服务的 pom.xml 依赖
 
 ---
 

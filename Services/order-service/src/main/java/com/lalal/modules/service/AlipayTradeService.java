@@ -5,6 +5,7 @@ import com.alipay.api.AlipayClient;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradePagePayRequest;
+import com.alipay.api.request.AlipayTradeRefundRequest;
 import com.lalal.modules.config.AlipayProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -57,6 +58,34 @@ public class AlipayTradeService {
         request.setBizContent(biz.toString());
 
         return client.pageExecute(request).getBody();
+    }
+
+    /**
+     * 退款
+     */
+    public void refund(String outTradeNo, BigDecimal refundAmount) throws AlipayApiException {
+        if (!alipayProperties.isEnabled()) {
+            throw new IllegalStateException("未启用支付宝（alipay.enabled=false）");
+        }
+
+        AlipayClient client = new DefaultAlipayClient(
+                alipayProperties.getGatewayUrl(),
+                alipayProperties.getAppId(),
+                alipayProperties.getPrivateKey().trim(),
+                "json",
+                StandardCharsets.UTF_8.name(),
+                alipayProperties.getAlipayPublicKey().trim(),
+                alipayProperties.getSignType()
+        );
+
+        AlipayTradeRefundRequest request = new AlipayTradeRefundRequest();
+        ObjectNode biz = objectMapper.createObjectNode();
+        biz.put("out_trade_no", outTradeNo);
+        biz.put("refund_amount", refundAmount.stripTrailingZeros().toPlainString());
+        biz.put("refund_reason", "用户申请退票");
+        request.setBizContent(biz.toString());
+
+        client.execute(request);
     }
 
     public boolean verifyNotify(Map<String, String> params) throws AlipayApiException {

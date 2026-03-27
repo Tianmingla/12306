@@ -8,6 +8,7 @@ import AIAssistant from './components/AIAssistant';
 import LoginModal from './components/LoginModal';
 import { AppView, SearchParams } from './types';
 import OrderDetailPage from './components/OrderDetailPage';
+import OrderHistoryPage from './components/OrderHistoryPage';
 import { getUserInfo, logout as userLogout } from './services/userService';
 import PassengerManageModal from './components/PassengerManageModal';
 
@@ -63,10 +64,15 @@ const App: React.FC = () => {
     setUserName('');
   };
 
+  const handleViewOrderDetail = (orderSn: string) => {
+    setOrderDetailOrderSn(orderSn);
+    setCurrentView(AppView.ORDER_DETAIL);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
-      <Navbar 
-        onNavigate={handleNavigate} 
+      <Navbar
+        onNavigate={handleNavigate}
         onLoginClick={() => setIsLoginOpen(true)}
         isLoggedIn={isLoggedIn}
         userName={userName}
@@ -78,9 +84,9 @@ const App: React.FC = () => {
         <>
           {/* Hero Section */}
           <div className="relative h-[500px] w-full bg-slate-900 overflow-hidden">
-            <img 
-              src="https://picsum.photos/1920/600?grayscale" 
-              alt="Train Station" 
+            <img
+              src="https://picsum.photos/1920/600?grayscale"
+              alt="Train Station"
               className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-blue-600/40"></div>
@@ -94,7 +100,7 @@ const App: React.FC = () => {
               </p>
             </div>
           </div>
-          
+
           <SearchWidget onSearch={handleSearch} />
           <Features />
         </>
@@ -102,8 +108,8 @@ const App: React.FC = () => {
 
       {currentView === AppView.SEARCH_RESULTS && searchParams && (
         <div className="animate-fade-in">
-          <TrainList 
-            searchParams={searchParams} 
+          <TrainList
+            searchParams={searchParams}
             onBack={() => setCurrentView(AppView.HOME)}
             onPurchaseSuccess={(orderSn) => {
               setOrderDetailOrderSn(orderSn);
@@ -123,6 +129,13 @@ const App: React.FC = () => {
         />
       )}
 
+      {currentView === AppView.ORDER_HISTORY && (
+        <OrderHistoryPage
+          onBack={() => setCurrentView(AppView.HOME)}
+          onViewDetail={handleViewOrderDetail}
+        />
+      )}
+
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-12 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center">
@@ -131,9 +144,9 @@ const App: React.FC = () => {
       </footer>
 
       <AIAssistant />
-      
-      <LoginModal 
-        isOpen={isLoginOpen} 
+
+      <LoginModal
+        isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
         onLoginSuccess={async () => {
           setIsLoggedIn(true);

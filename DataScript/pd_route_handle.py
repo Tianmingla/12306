@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 import logging
 
 # 配置
-DB_URI = "mysql+pymysql://user:password@localhost:3306/your_db?charset=utf8mb4"
+DB_URI = "mysql+pymysql://user:password@localhost:3306/my12306?charset=utf8mb4"
 TABLE_TRAIN_STATION = "train_station"
 TABLE_STATION = "station"
 TABLE_ROUTE_PAIR = "t_train_route_pair"

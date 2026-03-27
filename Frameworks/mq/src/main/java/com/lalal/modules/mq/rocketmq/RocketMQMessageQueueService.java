@@ -4,12 +4,16 @@ import com.alibaba.fastjson2.JSON;
 import com.lalal.modules.mq.Message;
 import com.lalal.modules.mq.MessageListener;
 import com.lalal.modules.mq.MessageQueueService;
+import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 /**
  * RocketMQ 消息队列服务实现
@@ -18,8 +22,12 @@ public class RocketMQMessageQueueService implements MessageQueueService {
 
     private static final Logger log = LoggerFactory.getLogger(RocketMQMessageQueueService.class);
 
-    @Autowired
+
     private RocketMQTemplate rocketMQTemplate;
+
+    RocketMQMessageQueueService(RocketMQTemplate rocketMQTemplate){
+        this.rocketMQTemplate=rocketMQTemplate;
+    }
 
     @Override
     public void send(String topic, Object message) {
@@ -58,14 +66,20 @@ public class RocketMQMessageQueueService implements MessageQueueService {
     @Override
     public void sendAsync(Message message, SendCallback callback) {
         String destination = buildDestination(message.getTopic(), message.getTag());
-        rocketMQTemplate.asyncSend(destination, message.getBody(), (sendResult, e) -> {
-            if (callback != null) {
-                if (e != null) {
-                    log.error("RocketMQ async send failed. MessageId: {}", message.getMessageId(), e);
-                    callback.onException(message, new RuntimeException("RocketMQ async send failed", e));
-                } else {
-                    log.debug("RocketMQ async send success. MessageId: {}", message.getMessageId());
+        rocketMQTemplate.asyncSend(destination,message.getBody(),new org.apache.rocketmq.client.producer.SendCallback(){
+            @Override
+            public void onSuccess(SendResult sendResult) {
+                log.debug("RocketMQ async send success. MessageId: {}", message.getMessageId());
+                if (callback != null) {
                     callback.onSuccess(message);
+                }
+            }
+
+            @Override
+            public void onException(Throwable throwable) {
+                log.error("RocketMQ async send failed. MessageId: {}", message.getMessageId());
+                if (callback != null) {
+                    callback.onException(message, new RuntimeException());
                 }
             }
         });
@@ -84,6 +98,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
         // RocketMQ 延迟等级：1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h
         // 需要将延迟时间映射到对应的等级
         int delayLevel = calculateDelayLevel(delayTime);
+        new org.apache.rocketmq.common.message.Message()
         try {
             SendResult sendResult = rocketMQTemplate.syncSend(destination, message.getBody(),
                     3000, delayLevel);

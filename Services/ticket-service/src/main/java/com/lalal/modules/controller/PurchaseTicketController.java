@@ -1,6 +1,7 @@
 package com.lalal.modules.controller;
 
 
+import com.lalal.framework.idempotent.Idempotent;
 import com.lalal.modules.dto.request.PurchaseTicketRequestDto;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
 import com.lalal.modules.result.Result;
@@ -20,7 +21,14 @@ public class PurchaseTicketController {
 
     /**
      * 网关会在已登录请求上注入 X-User-Id，供与 user-service 核对乘车人。
+     * 幂等性保护：同一用户重复提交购票请求会被拦截
      */
+    @Idempotent(
+        key = "${header.X-User-Id}-${#purchaseTicketRequestDto.trainNum}-${#purchaseTicketRequestDto.date}",
+        expire = 300,
+        message = "购票请求正在处理中，请勿重复提交",
+        cacheResult = true
+    )
     @PostMapping("/purchase")
     public Result<PurchaseTicketVO> purchaseTicket(
             @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,

@@ -35,6 +35,7 @@ export enum AppView {
   HOME = 'HOME',
   SEARCH_RESULTS = 'SEARCH_RESULTS',
   ORDER_DETAIL = 'ORDER_DETAIL',
+  ORDER_HISTORY = 'ORDER_HISTORY',
 }
 
 export interface SearchParams {
@@ -202,4 +203,16 @@ export interface UserInfoResponse {
   phone: string;
   userId: string;
   role: string;
+}
+
+export interface OrderListVO {
+  orderSn: string;
+  trainNumber: string;
+  startStation: string;
+  endStation: string;
+  runDate: string | null;
+  totalAmount: string | number | null;
+  status: number;
+  statusText: string;
+  passengerCount: number;
 }

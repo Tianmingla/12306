@@ -1,10 +1,12 @@
 package com.lalal.modules.controller;
 
 import com.alipay.api.AlipayApiException;
+import com.lalal.framework.idempotent.Idempotent;
 import com.lalal.modules.config.AlipayProperties;
 import com.lalal.modules.dto.request.OrderCreateRequestDTO;
 import com.lalal.modules.dto.request.OrderPayRequest;
 import com.lalal.modules.dto.response.OrderDetailVO;
+import com.lalal.modules.dto.response.OrderListVO;
 import com.lalal.modules.dto.response.PayOrderVO;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.service.AlipayTradeService;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -33,6 +36,12 @@ public class OrderController {
     private final AlipayProperties alipayProperties;
     private final AlipayTradeService alipayTradeService;
 
+    @Idempotent(
+        key = "${#request.trainNumber}-${#request.startStation}-${#request.endStation}-${#request.username}",
+        expire = 300,
+        message = "订单创建请求正在处理中，请勿重复提交",
+        cacheResult = true
+    )
     @PostMapping("/create")
     public String create(@RequestBody OrderCreateRequestDTO request) {
         return orderService.createOrder(request);
@@ -45,6 +54,45 @@ public class OrderController {
         try {
             return Result.success(orderService.getOrderDetail(orderSn, phone));
         } catch (IllegalArgumentException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 获取用户历史订单列表
+     */
+    @GetMapping("/list")
+    public Result<List<OrderListVO>> list(
+            @RequestHeader(value = "X-User-Name", required = false) String phone) {
+        return Result.success(orderService.getOrderList(phone));
+    }
+
+    /**
+     * 退款接口（仅限已支付且未发车的订单）
+     */
+    @PostMapping("/refund/{orderSn}")
+    public Result<Void> refund(
+            @PathVariable String orderSn,
+            @RequestHeader(value = "X-User-Name", required = false) String phone) {
+        try {
+            orderService.refundOrder(orderSn, phone);
+            return Result.success(null);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return Result.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 取消订单接口（仅限待支付订单）
+     */
+    @PostMapping("/cancel/{orderSn}")
+    public Result<Void> cancel(
+            @PathVariable String orderSn,
+            @RequestHeader(value = "X-User-Name", required = false) String phone) {
+        try {
+            orderService.cancelOrder(orderSn, phone);
+            return Result.success(null);
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return Result.fail(e.getMessage());
         }
     }
@@ -67,6 +115,18 @@ public class OrderController {
         }
     }
 
+    /**
+     * 支付回调接口 - 添加幂等性保护
+     * 防止支付宝重复回调导致订单状态异常
+     * 使用 out_trade_no（商户订单号）作为幂等键
+     */
+    @Idempotent(
+        key = "${#request.getParameter('out_trade_no')}",
+        expire = 600,
+        message = "支付回调正在处理中",
+        cacheResult = true,
+        deleteKeyOnSuccess = false
+    )
     @PostMapping(value = "/pay/notify", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public String alipayNotify(HttpServletRequest request) {
         Map<String, String> params = toSingleValueMap(request);

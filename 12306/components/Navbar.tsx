@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Train, User, Globe, Menu, ChevronDown } from 'lucide-react';
+import { Train, User, Globe, Menu, ChevronDown, FileText } from 'lucide-react';
 import { AppView } from '../types';
 
 interface NavbarProps {
@@ -30,8 +30,8 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
     <nav className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div 
-            className="flex items-center cursor-pointer group" 
+          <div
+            className="flex items-center cursor-pointer group"
             onClick={() => onNavigate(AppView.HOME)}
           >
             <div className="bg-blue-600 p-2 rounded-lg group-hover:bg-blue-700 transition-colors">
@@ -43,8 +43,8 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
           </div>
 
           <div className="hidden md:flex space-x-8">
-            <button 
-              onClick={() => onNavigate(AppView.HOME)} 
+            <button
+              onClick={() => onNavigate(AppView.HOME)}
               className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
             >
               首页
@@ -59,7 +59,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
               <Globe className="h-4 w-4 mr-1" />
               <span>简体中文</span>
             </div>
-            
+
             {isLoggedIn ? (
                <div className="relative flex items-center" ref={menuRef}>
                  <button
@@ -77,13 +77,24 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
                    <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-1 z-50">
                      <button
                        type="button"
-                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
                        onClick={() => {
                          setMenuOpen(false);
                          onOpenPassengerManage?.();
                        }}
                      >
                        乘车人管理
+                     </button>
+                     <button
+                       type="button"
+                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+                       onClick={() => {
+                         setMenuOpen(false);
+                         onNavigate(AppView.ORDER_HISTORY);
+                       }}
+                     >
+                       <FileText className="h-4 w-4 mr-2" />
+                       我的订单
                      </button>
                      <button
                        type="button"
@@ -99,7 +110,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
                  )}
                </div>
             ) : (
-              <button 
+              <button
                 onClick={onLoginClick}
                 className="flex items-center space-x-2 text-gray-600 hover:text-blue-600 transition-colors"
               >

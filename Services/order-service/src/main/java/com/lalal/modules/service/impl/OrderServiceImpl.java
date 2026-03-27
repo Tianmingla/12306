@@ -5,9 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lalal.modules.config.AlipayProperties;
 import com.lalal.modules.dto.request.OrderCreateRequestDTO;
-import com.lalal.modules.dto.request.OrderPayRequest;
 import com.lalal.modules.dto.response.OrderDetailVO;
 import com.lalal.modules.dto.response.OrderItemVO;
+import com.lalal.modules.dto.response.OrderListVO;
 import com.lalal.modules.dto.response.PayOrderVO;
 import com.lalal.modules.entity.OrderDO;
 import com.lalal.modules.entity.OrderItemDO;
@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -197,5 +198,88 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             case 3 -> "已退票";
             default -> "未知";
         };
+    }
+
+    @Override
+    public List<OrderListVO> getOrderList(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            return List.of();
+        }
+        LambdaQueryWrapper<OrderDO> qw = new LambdaQueryWrapper<>();
+        qw.eq(OrderDO::getUsername, phone);
+        qw.orderByDesc(OrderDO::getCreateTime);
+        List<OrderDO> orders = this.list(qw);
+
+        return orders.stream().map(order -> {
+            OrderListVO vo = new OrderListVO();
+            vo.setOrderSn(order.getOrderSn());
+            vo.setTrainNumber(order.getTrainNumber());
+            vo.setStartStation(order.getStartStation());
+            vo.setEndStation(order.getEndStation());
+            vo.setRunDate(order.getRunDate());
+            vo.setTotalAmount(order.getTotalAmount());
+            vo.setStatus(order.getStatus());
+            vo.setStatusText(statusText(order.getStatus()));
+
+            // 统计乘客数量
+            LambdaQueryWrapper<OrderItemDO> itemQw = new LambdaQueryWrapper<>();
+            itemQw.eq(OrderItemDO::getOrderSn, order.getOrderSn());
+            Long count = orderItemMapper.selectCount(itemQw);
+            vo.setPassengerCount(count != null ? count.intValue() : 0);
+
+            return vo;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refundOrder(String orderSn, String phone) {
+        OrderDO order = findByOrderSn(orderSn);
+        if (order == null) {
+            throw new IllegalArgumentException("订单不存在");
+        }
+        if (!StringUtils.hasText(phone) || !phone.equals(order.getUsername())) {
+            throw new IllegalArgumentException("无权操作该订单");
+        }
+        if (!Objects.equals(order.getStatus(), 1)) {
+            throw new IllegalStateException("只有已支付的订单才能退款");
+        }
+        // 检查是否已发车
+        if (order.getRunDate() != null) {
+            Date now = new Date();
+            if (order.getRunDate().before(now)) {
+                throw new IllegalStateException("列车已发车，无法退款");
+            }
+        }
+
+        // 如果支付宝功能启用，调用退款接口
+        if (alipayProperties.isEnabled() && order.getTotalAmount() != null) {
+            try {
+                alipayTradeService.refund(orderSn, order.getTotalAmount());
+            } catch (AlipayApiException e) {
+                throw new IllegalStateException("支付宝退款失败: " + e.getMessage());
+            }
+        }
+
+        order.setStatus(3); // 已退票
+        this.updateById(order);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelOrder(String orderSn, String phone) {
+        OrderDO order = findByOrderSn(orderSn);
+        if (order == null) {
+            throw new IllegalArgumentException("订单不存在");
+        }
+        if (!StringUtils.hasText(phone) || !phone.equals(order.getUsername())) {
+            throw new IllegalArgumentException("无权操作该订单");
+        }
+        if (!Objects.equals(order.getStatus(), 0)) {
+            throw new IllegalStateException("只有待支付的订单才能取消");
+        }
+
+        order.setStatus(2); // 已取消
+        this.updateById(order);
     }
 }
