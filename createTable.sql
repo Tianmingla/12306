@@ -270,3 +270,47 @@ CREATE TABLE IF NOT EXISTS `t_passenger` (
   UNIQUE KEY `uk_user_id_card` (`user_id`,`id_card_number`),
   KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='乘车人';
+
+CREATE TABLE `t_order` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `order_sn` VARCHAR(64) NOT NULL COMMENT '订单编号',
+  `username` VARCHAR(64) DEFAULT NULL COMMENT '用户名',
+  `train_number` VARCHAR(20) NOT NULL COMMENT '车次',
+  `start_station` VARCHAR(64) NOT NULL COMMENT '出发站',
+  `end_station` VARCHAR(64) NOT NULL COMMENT '到达站',
+  `run_date` datetime NOT NULL COMMENT '乘车日期',
+  `total_amount` DECIMAL(10,2) NOT NULL COMMENT '订单总金额',
+  `status` INT NOT NULL DEFAULT 0 COMMENT '订单状态：0-待支付, 1-已支付, 2-已取消, 3-已退票',
+
+  -- BaseDO 字段
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',
+  `del_flag` TINYINT DEFAULT 0 COMMENT '删除标志：0-正常, 1-已删除',
+
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_sn` (`order_sn`),
+  KEY `idx_username` (`username`),
+  KEY `idx_run_date` (`run_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='火车票订单主表';
+
+CREATE TABLE `t_order_item` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `order_id` BIGINT NOT NULL COMMENT '关联订单ID',
+  `order_sn` VARCHAR(64) NOT NULL COMMENT '关联订单编号',
+  `passenger_id` BIGINT DEFAULT NULL COMMENT '乘客ID',
+  `passenger_name` VARCHAR(64) NOT NULL COMMENT '乘客姓名',
+  `id_card` VARCHAR(32) NOT NULL COMMENT '身份证号',
+  `carriage_number` VARCHAR(10) NOT NULL COMMENT '车厢号',
+  `seat_number` VARCHAR(10) NOT NULL COMMENT '座位号',
+  `seat_type` INT NOT NULL COMMENT '座位类型',
+  `amount` DECIMAL(10,2) NOT NULL COMMENT '单项金额',
+
+  -- BaseDO 字段
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP  COMMENT '修改时间',
+  `del_flag` TINYINT DEFAULT 0 COMMENT '删除标志：0-正常, 1-已删除',
+
+  PRIMARY KEY (`id`),
+  KEY `idx_order_id` (`order_id`),
+  KEY `idx_order_sn` (`order_sn`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='火车票订单明细表';

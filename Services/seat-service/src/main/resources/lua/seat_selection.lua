@@ -21,7 +21,7 @@ if not bitmap then
     bitmap = redis.call('GET', detail_key)
 end
 -- Helper to check if a seat is free for segments [start_seg, end_seg]
-local function is_free(current_bitmap, seat_idx,  g 123, e, sc)
+local function is_free(current_bitmap, seat_idx,s, e, sc)
     for i = s, e do
         local bit_pos = seat_idx * sc + i
         local byte_pos = math.floor(bit_pos / 8) + 1

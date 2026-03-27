@@ -98,17 +98,16 @@ public class RocketMQMessageQueueService implements MessageQueueService {
         // RocketMQ 延迟等级：1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h
         // 需要将延迟时间映射到对应的等级
         int delayLevel = calculateDelayLevel(delayTime);
-        new org.apache.rocketmq.common.message.Message()
-        try {
-            SendResult sendResult = rocketMQTemplate.syncSend(destination, message.getBody(),
-                    3000, delayLevel);
-            log.debug("RocketMQ delay send success. MessageId: {}, DelayTime: {}ms",
-                    message.getMessageId(), delayTime);
-        } catch (Exception e) {
-            log.error("RocketMQ delay send exception. MessageId: {}, DelayTime: {}ms",
-                    message.getMessageId(), delayTime, e);
-            throw new RuntimeException("RocketMQ delay send exception", e);
-        }
+//        try {
+//            SendResult sendResult = rocketMQTemplate.syncSend(destination, message.getBody(),
+//                    3000, delayLevel);
+//            log.debug("RocketMQ delay send success. MessageId: {}, DelayTime: {}ms",
+//                    message.getMessageId(), delayTime);
+//        } catch (Exception e) {
+//            log.error("RocketMQ delay send exception. MessageId: {}, DelayTime: {}ms",
+//                    message.getMessageId(), delayTime, e);
+//            throw new RuntimeException("RocketMQ delay send exception", e);
+//        }
     }
 
     @Override
