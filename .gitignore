@@ -32,6 +32,7 @@ out/
 
 ### VS Code ###
 .vscode/
+__pycache__/
 
 ### Mac OS ###
 .DS_Store
@@ -39,3 +40,7 @@ out/
 node_modules
 
 data.sql
+data/
+
+.claude/
+admin/
