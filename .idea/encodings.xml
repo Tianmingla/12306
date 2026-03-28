@@ -15,6 +15,8 @@
     <file url="file://$PROJECT_DIR$/Frameworks/mq/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Frameworks/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/admin-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Services/admin-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/gateway-service/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/gateway-service/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/Services/order-service/src/main/java" charset="UTF-8" />

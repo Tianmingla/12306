@@ -126,7 +126,7 @@ import {
   IconUser,
   IconFile,
   IconArrowRise,
-  IconMoneyCollect,
+//  IconMoneyCollect,
   IconLocation,
 } from '@arco-design/web-vue/es/icon'
 

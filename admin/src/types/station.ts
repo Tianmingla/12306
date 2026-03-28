@@ -12,7 +12,7 @@ export interface Station {
   updateTime: string
 }
 
-// 车站查询参数
+// 车站查询参数（普通分页）
 export interface StationQueryParams {
   pageNum?: number
   pageSize?: number

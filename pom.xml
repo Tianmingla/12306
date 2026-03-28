@@ -24,6 +24,7 @@
         <mybatis-spring-boot-starter.version>3.0.2</mybatis-spring-boot-starter.version>
         <shardingsphere.version>5.3.2</shardingsphere.version>
         <jjwt.version>0.9.1</jjwt.version>
+        <jjwt-api.version>0.11.5</jjwt-api.version>
         <fastjson2.version>2.0.36</fastjson2.version>
         <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
         <jdbc.version>8.0.19</jdbc.version>
@@ -98,6 +99,23 @@
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt</artifactId>
                 <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- JJWT API 0.11.5 for admin-service -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt-api.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt-api.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt-api.version}</version>
             </dependency>
 
             <dependency>

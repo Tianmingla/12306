@@ -1,5 +1,6 @@
 package com.lalal.modules.user.controller;
 
+import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.user.dao.UserDO;
 import com.lalal.modules.user.dto.LoginRequest;
@@ -37,14 +38,14 @@ public class UserController {
     public Result<String> sendLoginSms(@RequestBody SendSmsRequest request) {
         try {
             if (request == null) {
-                return Result.fail("请求体不能为空");
+                return Result.fail("请求体不能为空", ReturnCode.fail.code());
             }
             smsCodeService.sendLoginCode(request.getPhone());
             return Result.success("验证码已发送");
         } catch (IllegalArgumentException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 
@@ -52,7 +53,7 @@ public class UserController {
     public Result<Map<String, String>> login(@RequestBody LoginRequest loginRequest) {
         UserDO user = userService.loginBySms(loginRequest);
         if (user == null) {
-            return Result.fail("手机号或验证码错误");
+            return Result.fail("手机号或验证码错误",ReturnCode.fail.code());
         }
         String token = jwtUtils.generateToken(user.getPhone(), user.getId());
         Map<String, String> data = new HashMap<>();
@@ -66,11 +67,11 @@ public class UserController {
     public Result<Map<String, String>> getUserInfo(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         Long userId = resolveUserId(authHeader);
         if (userId == null) {
-            return Result.fail("Unauthorized");
+            return Result.fail("Unauthorized",ReturnCode.fail.code());
         }
         UserDO user = userService.findById(userId);
         if (user == null) {
-            return Result.fail("用户不存在");
+            return Result.fail("用户不存在",ReturnCode.fail.code());
         }
         Map<String, String> userInfo = new HashMap<>();
         userInfo.put("phone", user.getPhone());
@@ -83,7 +84,7 @@ public class UserController {
     public Result<List<PassengerVO>> listPassengers(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         Long userId = resolveUserId(authHeader);
         if (userId == null) {
-            return Result.fail("Unauthorized");
+            return Result.fail("Unauthorized",ReturnCode.fail.code());
         }
         return Result.success(passengerService.listByUserId(userId));
     }
@@ -93,12 +94,12 @@ public class UserController {
                                      @RequestBody PassengerSaveRequest request) {
         Long userId = resolveUserId(authHeader);
         if (userId == null) {
-            return Result.fail("Unauthorized");
+            return Result.fail("Unauthorized",ReturnCode.fail.code());
         }
         try {
             return Result.success(passengerService.addPassenger(userId, request));
         } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 
@@ -108,13 +109,13 @@ public class UserController {
                                           @RequestBody PassengerSaveRequest request) {
         Long userId = resolveUserId(authHeader);
         if (userId == null) {
-            return Result.fail("Unauthorized");
+            return Result.fail("Unauthorized",ReturnCode.fail.code());
         }
         try {
             passengerService.updatePassenger(userId, passengerId, request);
             return Result.success("ok");
         } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 
@@ -123,13 +124,13 @@ public class UserController {
                                          @PathVariable("id") Long passengerId) {
         Long userId = resolveUserId(authHeader);
         if (userId == null) {
-            return Result.fail("Unauthorized");
+            return Result.fail("Unauthorized",ReturnCode.fail.code());
         }
         try {
             passengerService.deletePassenger(userId, passengerId);
             return Result.success("ok");
         } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 

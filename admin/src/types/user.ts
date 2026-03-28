@@ -55,12 +55,15 @@ export interface LoginRequest {
 // 登录响应
 export interface LoginResponse {
   token: string
-  userInfo: User
+  userId: number
+  username: string
+  realName?: string
+  role?: string
 }
 
-// 用户查询参数
+// 用户查询参数（游标分页）
 export interface UserQueryParams {
-  pageNum?: number
+  lastId?: number
   pageSize?: number
   keyword?: string
   status?: UserStatus

@@ -10,16 +10,27 @@ export interface Result<T = any> {
   requestId?: string
 }
 
-// 分页响应
+// 分页响应（支持游标分页和普通分页）
 export interface PageResult<T = any> {
   list: T[]
   total: number
-  pageNum: number
-  pageSize: number
+  // 游标分页字段
+  nextId?: number
+  hasMore?: boolean
+  // 普通分页字段
+  pageNum?: number
+  pageSize?: number
 }
 
-// 分页请求参数
+// 分页请求参数（游标分页）
 export interface PageParams {
+  lastId?: number
+  pageSize?: number
+  keyword?: string
+}
+
+// 普通分页请求参数
+export interface PageParamsNormal {
   pageNum?: number
   pageSize?: number
   keyword?: string
@@ -27,7 +38,7 @@ export interface PageParams {
 
 // 创建axios实例
 const service: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost:8080/api',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',

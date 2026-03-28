@@ -16,7 +16,7 @@ export function getOrderList(params: OrderQueryParams): Promise<Result<PageResul
 
 // 获取订单详情
 export function getOrderDetail(orderSn: string): Promise<Result<OrderDetail>> {
-  return request.get(`/order/detail/${orderSn}`)
+  return request.get(`/admin/order/${orderSn}`)
 }
 
 // 更新订单状态
@@ -26,12 +26,12 @@ export function updateOrderStatus(orderSn: string, status: number): Promise<Resu
 
 // 取消订单
 export function cancelOrder(orderSn: string): Promise<Result<void>> {
-  return request.post(`/order/cancel/${orderSn}`)
+  return request.put(`/admin/order/${orderSn}/cancel`)
 }
 
 // 退款
 export function refundOrder(orderSn: string): Promise<Result<void>> {
-  return request.post(`/order/refund/${orderSn}`)
+  return request.put(`/admin/order/${orderSn}/refund`)
 }
 
 // 获取退款记录列表

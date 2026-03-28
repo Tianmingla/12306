@@ -4,6 +4,7 @@ package com.lalal.modules.controller;
 import com.lalal.framework.idempotent.Idempotent;
 import com.lalal.modules.dto.request.PurchaseTicketRequestDto;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
+import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.service.TicketService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,13 +35,13 @@ public class PurchaseTicketController {
             @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
             @RequestBody PurchaseTicketRequestDto purchaseTicketRequestDto) {
         if (userIdHeader == null || userIdHeader.isBlank()) {
-            return Result.fail("请先登录后再购票");
+            return Result.fail("请先登录后再购票", ReturnCode.fail.code());
         }
         Long userId;
         try {
             userId = Long.parseLong(userIdHeader);
         } catch (NumberFormatException e) {
-            return Result.fail("用户身份无效");
+            return Result.fail("用户身份无效",ReturnCode.fail.code());
         }
         return Result.success(ticketService.purchase(purchaseTicketRequestDto, userId));
     }

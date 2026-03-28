@@ -32,12 +32,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
-        // Skip authentication for login / 短信验证码 / 支付宝回调
+        // Skip authentication for login / 短信验证码 / 支付宝回调 / Admin登录
         if (path.contains("/api/user/login")
                 || path.contains("/api/user/register")
                 || path.contains("/api/user/sms/send")
                 || path.contains("/api/order/pay/notify")
-                || path.contains("/api/order/pay/return")) {
+                || path.contains("/api/order/pay/return")
+                || path.contains("/api/admin/auth/login")) {
             return chain.filter(exchange);
         }
 
@@ -45,36 +46,58 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         if (path.startsWith("/api/")) {
             String token = extractToken(request);
             if (token == null || !validateToken(token)) {
-                ServerHttpResponse response = exchange.getResponse();
-                response.setStatusCode(HttpStatus.UNAUTHORIZED);
-                return response.setComplete();
+                return unauthorized(exchange);
             }
 
-            // Optional: extract user info and pass to downstream services
             try {
                 Claims claims = Jwts.parserBuilder()
                         .setSigningKey(getSigningKey())
                         .build()
                         .parseClaimsJws(token)
                         .getBody();
-                
+
+                // 获取 Token 类型
+                String tokenType = claims.get("type", String.class);
+
+                // Admin 接口需要 ADMIN 类型 Token
+                if (path.startsWith("/api/admin/")) {
+                    if (!"ADMIN".equals(tokenType)) {
+                        return unauthorized(exchange);
+                    }
+                    // 传递 Admin 用户信息
+                    Object uid = claims.get("uid");
+                    String username = claims.getSubject();
+                    ServerHttpRequest mutatedRequest = request.mutate()
+                            .header("X-Admin-Id", uid != null ? uid.toString() : "")
+                            .header("X-Admin-Name", username != null ? username : "")
+                            .header("X-User-Type", "ADMIN")
+                            .build();
+                    return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                }
+
+                // 普通用户接口
                 String phone = claims.getSubject();
                 Object uid = claims.get("uid");
                 ServerHttpRequest.Builder mutate = request.mutate()
-                        .header("X-User-Name", phone != null ? phone : "");
+                        .header("X-User-Name", phone != null ? phone : "")
+                        .header("X-User-Type", "USER");
                 if (uid != null) {
                     mutate.header("X-User-Id", uid.toString());
                 }
                 ServerHttpRequest mutatedRequest = mutate.build();
                 return chain.filter(exchange.mutate().request(mutatedRequest).build());
             } catch (Exception e) {
-                ServerHttpResponse response = exchange.getResponse();
-                response.setStatusCode(HttpStatus.UNAUTHORIZED);
-                return response.setComplete();
+                return unauthorized(exchange);
             }
         }
 
         return chain.filter(exchange);
+    }
+
+    private Mono<Void> unauthorized(ServerWebExchange exchange) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        return response.setComplete();
     }
 
     private String extractToken(ServerHttpRequest request) {

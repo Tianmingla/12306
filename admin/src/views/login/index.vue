@@ -98,6 +98,7 @@ import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import { useUserStore } from '@/store/user'
+import { login as loginApi } from '@/api/user'
 import {
   IconUser,
   IconLock,
@@ -141,25 +142,27 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    // 模拟登录请求
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Mock 登录成功
-    const token = `mock_token_${Date.now()}`
-    const userInfo = {
-      id: 1,
+    const res = await loginApi({
       username: formData.username,
-      role: formData.role,
-      roleName: formData.role === 'admin' ? '系统管理员' : '运营人员',
+      password: formData.password,
+    })
+
+    if (res.code === 200 || res.code === 0) {
+      userStore.setToken(res.data.token)
+      userStore.setUserInfo({
+        id: res.data.userId,
+        username: res.data.username || formData.username,
+        role: formData.role,
+        roleName: formData.role === 'admin' ? '系统管理员' : '运营人员',
+      })
+
+      Message.success('登录成功')
+      router.push('/dashboard')
+    } else {
+      Message.error(res.message || '登录失败')
     }
-
-    userStore.setToken(token)
-    userStore.setUserInfo(userInfo)
-
-    Message.success('登录成功')
-    router.push('/dashboard')
-  } catch (error) {
-    Message.error('登录失败，请检查用户名和密码')
+  } catch (error: any) {
+    Message.error(error.message || '登录失败，请检查用户名和密码')
   } finally {
     loading.value = false
   }

@@ -55,9 +55,8 @@
         :columns="columns"
         :data="tableData"
         :loading="loading"
-        :pagination="pagination"
+        :pagination="false"
         row-key="id"
-        @page-change="handlePageChange"
       >
         <template #orderSn="{ record }">
           <a-link @click="handleViewDetail(record)">{{ record.orderSn }}</a-link>
@@ -150,7 +149,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { Order, OrderQueryParams } from '@/types'
-import { mockOrders } from '@/mock/data'
+import { getOrderList, getOrderDetail, refundOrder, cancelOrder } from '@/api/order'
 import {
   IconSearch,
   IconRefresh,
@@ -164,7 +163,7 @@ import {
 const searchForm = reactive<OrderQueryParams>({
   keyword: '',
   status: undefined,
-  pageNum: 1,
+  lastId: undefined,
   pageSize: 10,
 })
 
@@ -174,9 +173,9 @@ const dateRange = ref<string[]>([])
 const loading = ref(false)
 const tableData = ref<Order[]>([])
 const pagination = reactive({
-  current: 1,
+  nextId: undefined as number | undefined,
+  hasMore: true,
   pageSize: 10,
-  total: 0,
 })
 
 // 表格列定义
@@ -211,29 +210,20 @@ const getStatusColor = (status: number) => {
 const fetchOrders = async () => {
   loading.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    let filteredData = [...mockOrders]
-
-    if (searchForm.keyword) {
-      const keyword = searchForm.keyword.toLowerCase()
-      filteredData = filteredData.filter(
-        (order) =>
-          order.orderSn.toLowerCase().includes(keyword) ||
-          order.username.toLowerCase().includes(keyword) ||
-          order.trainNumber.toLowerCase().includes(keyword)
-      )
+    const params: OrderQueryParams = {
+      keyword: searchForm.keyword,
+      status: searchForm.status,
+      lastId: searchForm.lastId,
+      pageSize: searchForm.pageSize,
     }
-
-    if (searchForm.status !== undefined) {
-      filteredData = filteredData.filter((order) => order.status === searchForm.status)
+    const res = await getOrderList(params)
+    if (res.code === 200 || res.code === 0) {
+      tableData.value = res.data.list
+      pagination.nextId = res.data.nextId
+      pagination.hasMore = res.data.hasMore ?? true
+    } else {
+      Message.error(res.message || '获取数据失败')
     }
-
-    const start = (pagination.current - 1) * pagination.pageSize
-    const end = start + pagination.pageSize
-
-    tableData.value = filteredData.slice(start, end)
-    pagination.total = filteredData.length
   } finally {
     loading.value = false
   }
@@ -241,7 +231,7 @@ const fetchOrders = async () => {
 
 // 搜索
 const handleSearch = () => {
-  pagination.current = 1
+  searchForm.lastId = undefined
   fetchOrders()
 }
 
@@ -250,14 +240,16 @@ const handleReset = () => {
   searchForm.keyword = ''
   searchForm.status = undefined
   dateRange.value = []
-  pagination.current = 1
+  searchForm.lastId = undefined
   fetchOrders()
 }
 
 // 分页变化
 const handlePageChange = (page: number) => {
-  pagination.current = page
-  fetchOrders()
+  if (pagination.hasMore && tableData.value.length > 0) {
+    searchForm.lastId = tableData.value[tableData.value.length - 1].id
+    fetchOrders()
+  }
 }
 
 // 导出
@@ -266,9 +258,19 @@ const handleExport = () => {
 }
 
 // 查看详情
-const handleViewDetail = (order: Order) => {
-  currentOrder.value = order
-  detailVisible.value = true
+const handleViewDetail = async (order: Order) => {
+  try {
+    const res = await getOrderDetail(order.orderSn)
+    if (res.code === 200 || res.code === 0) {
+      currentOrder.value = res.data
+      detailVisible.value = true
+    } else {
+      Message.error(res.message || '获取订单详情失败')
+    }
+  } catch (error) {
+    currentOrder.value = order
+    detailVisible.value = true
+  }
 }
 
 // 退款
@@ -279,9 +281,14 @@ const handleRefund = (order: Order) => {
     okText: '确定退款',
     cancelText: '取消',
     hideCancel: false,
-    onOk: () => {
-      order.status = 3
-      Message.success('退款成功')
+    onOk: async () => {
+      try {
+        await refundOrder(order.orderSn)
+        Message.success('退款成功')
+        fetchOrders()
+      } catch (error) {
+        Message.error('退款失败')
+      }
     },
   })
 }
@@ -294,9 +301,14 @@ const handleCancel = (order: Order) => {
     okText: '确定',
     cancelText: '取消',
     hideCancel: false,
-    onOk: () => {
-      order.status = 2
-      Message.success('订单已取消')
+    onOk: async () => {
+      try {
+        await cancelOrder(order.orderSn)
+        Message.success('订单已取消')
+        fetchOrders()
+      } catch (error) {
+        Message.error('取消失败')
+      }
     },
   })
 }

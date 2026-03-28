@@ -34,7 +34,7 @@ public class Result<T> implements Serializable {
     }
 
 
-    public static <T> Result<T> fail(String message) {
-        return new Result<>(ReturnCode.unauthorized.code(),message);
+    public static <T> Result<T> fail(String message,Integer code) {
+        return new Result<>(code,message);
     }
 }

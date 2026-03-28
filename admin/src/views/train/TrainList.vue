@@ -154,7 +154,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import type { Train, TrainStation, TrainQueryParams, TrainFormData } from '@/types'
-import { mockTrains, mockTrainStations } from '@/mock/data'
+import { getTrainList, updateTrainSaleStatus } from '@/api/train'
 import {
   IconSearch,
   IconRefresh,
@@ -239,29 +239,21 @@ const getTrainTypeColor = (type: number) => {
 const fetchTrains = async () => {
   loading.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    let filteredData = [...mockTrains]
-
-    if (searchForm.keyword) {
-      filteredData = filteredData.filter((train) =>
-        train.trainNumber.toLowerCase().includes(searchForm.keyword!.toLowerCase())
-      )
+    const params: TrainQueryParams = {
+      keyword: searchForm.keyword,
+      trainType: searchForm.trainType,
+      saleStatus: searchForm.saleStatus,
+      pageNum: searchForm.pageNum,
+      pageSize: searchForm.pageSize,
     }
-
-    if (searchForm.trainType !== undefined) {
-      filteredData = filteredData.filter((train) => train.trainType === searchForm.trainType)
+    const res = await getTrainList(params)
+    if (res.code === 200 || res.code === 0) {
+      tableData.value = res.data.list
+      pagination.total = res.data.total
+      pagination.current = res.data.pageNum || searchForm.pageNum
+    } else {
+      Message.error(res.message || '获取数据失败')
     }
-
-    if (searchForm.saleStatus !== undefined) {
-      filteredData = filteredData.filter((train) => train.saleStatus === searchForm.saleStatus)
-    }
-
-    const start = (pagination.current - 1) * pagination.pageSize
-    const end = start + pagination.pageSize
-
-    tableData.value = filteredData.slice(start, end)
-    pagination.total = filteredData.length
   } finally {
     loading.value = false
   }
@@ -269,6 +261,7 @@ const fetchTrains = async () => {
 
 // 搜索
 const handleSearch = () => {
+  searchForm.pageNum = 1
   pagination.current = 1
   fetchTrains()
 }
@@ -278,12 +271,14 @@ const handleReset = () => {
   searchForm.keyword = ''
   searchForm.trainType = undefined
   searchForm.saleStatus = undefined
+  searchForm.pageNum = 1
   pagination.current = 1
   fetchTrains()
 }
 
 // 分页变化
 const handlePageChange = (page: number) => {
+  searchForm.pageNum = page
   pagination.current = page
   fetchTrains()
 }
@@ -348,14 +343,20 @@ const handleDelete = (train: Train) => {
 }
 
 // 状态切换
-const handleStatusChange = (train: Train, val: boolean) => {
-  train.saleStatus = val ? 0 : 1
-  Message.success(val ? '已开启售卖' : '已停止售卖')
+const handleStatusChange = async (train: Train, val: boolean) => {
+  try {
+    await updateTrainSaleStatus(train.id, val ? 0 : 1)
+    train.saleStatus = val ? 0 : 1
+    Message.success(val ? '已开启售卖' : '已停止售卖')
+  } catch (error) {
+    Message.error('操作失败')
+  }
 }
 
 // 查看经停站
 const handleViewStations = (train: Train) => {
-  stationData.value = mockTrainStations.filter((s) => s.trainId === train.id)
+  // TODO: 调用真实 API 获取经停站
+  stationData.value = []
   stationVisible.value = true
 }
 

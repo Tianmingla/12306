@@ -141,7 +141,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import type { Station, StationQueryParams, StationFormData } from '@/types'
-import { mockStations } from '@/mock/data'
+import { getStationList } from '@/api/station'
 import {
   IconSearch,
   IconRefresh,
@@ -212,29 +212,20 @@ const regionMap: Record<string, string> = {
 const fetchStations = async () => {
   loading.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    let filteredData = [...mockStations]
-
-    if (searchForm.keyword) {
-      const keyword = searchForm.keyword.toLowerCase()
-      filteredData = filteredData.filter(
-        (station) =>
-          station.name.includes(searchForm.keyword!) ||
-          station.code.toLowerCase().includes(keyword) ||
-          station.spell.includes(keyword)
-      )
+    const params: StationQueryParams = {
+      keyword: searchForm.keyword,
+      region: searchForm.region,
+      pageNum: searchForm.pageNum,
+      pageSize: searchForm.pageSize,
     }
-
-    if (searchForm.region) {
-      filteredData = filteredData.filter((station) => station.region === searchForm.region)
+    const res = await getStationList(params)
+    if (res.code === 200 || res.code === 0) {
+      tableData.value = res.data.list
+      pagination.total = res.data.total
+      pagination.current = res.data.pageNum || searchForm.pageNum
+    } else {
+      Message.error(res.message || '获取数据失败')
     }
-
-    const start = (pagination.current - 1) * pagination.pageSize
-    const end = start + pagination.pageSize
-
-    tableData.value = filteredData.slice(start, end)
-    pagination.total = filteredData.length
   } finally {
     loading.value = false
   }
@@ -242,6 +233,7 @@ const fetchStations = async () => {
 
 // 搜索
 const handleSearch = () => {
+  searchForm.pageNum = 1
   pagination.current = 1
   fetchStations()
 }
@@ -250,12 +242,14 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.region = undefined
+  searchForm.pageNum = 1
   pagination.current = 1
   fetchStations()
 }
 
 // 分页变化
 const handlePageChange = (page: number) => {
+  searchForm.pageNum = page
   pagination.current = page
   fetchStations()
 }

@@ -314,3 +314,28 @@ CREATE TABLE `t_order_item` (
   KEY `idx_order_id` (`order_id`),
   KEY `idx_order_sn` (`order_sn`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='火车票订单明细表';
+
+-- ------------------------------------------------------
+-- 运营管理人员表（与普通用户分离）
+-- ------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `t_admin_user` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `username` varchar(64) NOT NULL COMMENT '用户名',
+  `password` varchar(128) NOT NULL COMMENT '密码(BCrypt加密)',
+  `real_name` varchar(64) DEFAULT NULL COMMENT '真实姓名',
+  `phone` varchar(20) DEFAULT NULL COMMENT '手机号',
+  `email` varchar(64) DEFAULT NULL,
+  `role` varchar(32) NOT NULL DEFAULT 'OPERATOR' COMMENT '角色: ADMIN-管理员, OPERATOR-运营人员',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0-正常, 1-禁用',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `del_flag` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营管理人员';
+
+-- 初始管理员账号：admin / 123456
+INSERT INTO `t_admin_user` (`username`, `password`, `real_name`, `role`)
+VALUES ('admin', '$2a$10$8h4PBGvFnhSKKS67jBfyc.qu.hpvKwiM8el1cyZqin3zLqzKBD0ZW', '系统管理员', 'ADMIN')
+ON DUPLICATE KEY UPDATE `username` = `username`;

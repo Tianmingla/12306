@@ -4,6 +4,7 @@ public enum ReturnCode {
     success(200),
     fail(404),
     unauthorized(401),
+    failedAuthorized(402),
 
     SEVER_ERROR(505);
 

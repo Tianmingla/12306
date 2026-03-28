@@ -90,7 +90,7 @@ export enum SeatStatus {
   LOCKED = 2,         // 锁定
 }
 
-// 列车查询参数
+// 列车查询参数（普通分页）
 export interface TrainQueryParams {
   pageNum?: number
   pageSize?: number

@@ -8,6 +8,7 @@ import com.lalal.modules.dto.request.OrderPayRequest;
 import com.lalal.modules.dto.response.OrderDetailVO;
 import com.lalal.modules.dto.response.OrderListVO;
 import com.lalal.modules.dto.response.PayOrderVO;
+import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.service.AlipayTradeService;
 import com.lalal.modules.service.OrderService;
@@ -54,7 +55,7 @@ public class OrderController {
         try {
             return Result.success(orderService.getOrderDetail(orderSn, phone));
         } catch (IllegalArgumentException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(), ReturnCode.fail.code());
         }
     }
 
@@ -78,7 +79,7 @@ public class OrderController {
             orderService.refundOrder(orderSn, phone);
             return Result.success(null);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(), ReturnCode.fail.code());
         }
     }
 
@@ -93,7 +94,7 @@ public class OrderController {
             orderService.cancelOrder(orderSn, phone);
             return Result.success(null);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(), ReturnCode.fail.code());
         }
     }
 
@@ -102,16 +103,16 @@ public class OrderController {
             @RequestHeader(value = "X-User-Name", required = false) String phone,
             @RequestBody OrderPayRequest body) {
         if (body == null || body.getOrderSn() == null || body.getOrderSn().isBlank()) {
-            return Result.fail("orderSn 不能为空");
+            return Result.fail("orderSn 不能为空",ReturnCode.fail.code());
         }
         try {
             PayOrderVO vo = orderService.createPayForm(body.getOrderSn(), phone);
             if (vo.getPayFormHtml() == null && vo.getHint() != null) {
-                return Result.fail(vo.getHint());
+                return Result.fail(vo.getHint(),ReturnCode.fail.code());
             }
             return Result.success(vo);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 

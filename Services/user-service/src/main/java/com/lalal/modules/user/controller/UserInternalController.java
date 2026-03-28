@@ -1,5 +1,6 @@
 package com.lalal.modules.user.controller;
 
+import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.result.Result;
 import com.lalal.modules.user.dto.PassengerBatchRequest;
 import com.lalal.modules.user.dto.PassengerVO;
@@ -25,14 +26,14 @@ public class UserInternalController {
     @PostMapping("/passengers/batch")
     public Result<List<PassengerVO>> batchPassengers(@RequestBody PassengerBatchRequest request) {
         if (request == null || request.getUserId() == null || request.getPassengerIds() == null || request.getPassengerIds().isEmpty()) {
-            return Result.fail("参数错误");
+            return Result.fail("参数错误", ReturnCode.fail.code());
         }
         try {
             return Result.success(passengerService.listByUserIdAndPassengerIdsOrdered(request.getUserId(), request.getPassengerIds()));
         } catch (IllegalArgumentException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         } catch (RuntimeException e) {
-            return Result.fail(e.getMessage());
+            return Result.fail(e.getMessage(),ReturnCode.fail.code());
         }
     }
 }

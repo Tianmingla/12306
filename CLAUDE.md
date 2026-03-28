@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Cluade Code (cludae.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -9,6 +9,38 @@ This is a 12306 railway ticketing system implementation with a microservices arc
 - **Frontend**: React + TypeScript + Vite application
 - **Admin**: Vue3 + Arco Design backend management system
 - **Data Scripts**: Python scripts for data processing and import
+
+## Development Workflow
+
+### TODO 工作流
+
+每次开始工作前，请遵循以下工作流：
+
+1. **阅读任务**: 查看 `TODO.md` 文件，了解待办任务
+2. **理解需求**: 仔细阅读用户需求，明确任务目标
+3. **执行任务**:
+   - 标记任务为 `[x]` 表示进行中
+   - 按步骤实现功能
+   - 完成后将 `[x]` 改为 `[✓]`
+4. **记录重要改动**: 如果是较为重要的改动，将关键信息添加到 `CLAUDE.md`
+5. **清理任务**: 任务完成后，从 `TODO.md` 中删除该任务条目
+
+**TODO.md 格式**:
+```markdown
+# TODO
+
+- [ ] 任务描述1
+- [ ] 任务描述2
+- [x] 进行中的任务
+- [✓] 已完成的任务（删除前可保留片刻供确认）
+```
+
+### 代码规范
+
+1. **依赖管理**: 所有新依赖必须添加到根目录 `pom.xml` 的 `dependencyManagement` 中统一管理版本
+2. **缓存常量**: 所有缓存 Key 常量统一放在 `Frameworks/common/src/main/java/com/lalal/modules/constant/cache/CacheConstant.java`
+3. **枚举统一**: 类别、状态等应使用枚举定义，放在 `Frameworks/common/src/main/java/com/lalal/modules/constant/` 目录
+4. **API 分离**: 前端 API 调用与类型定义分离（`api/` 和 `types/` 目录）
 
 ## Build Commands
 
@@ -51,6 +83,7 @@ Default login: `admin / 123456`
 | seat-service | 8082 |
 | order-service | 8083 |
 | user-service | 8084 |
+| admin-service | 8085 |
 
 ## Infrastructure Dependencies
 
@@ -68,8 +101,51 @@ Services/
 ├── ticket-service/     # Train search, ticket purchase, orchestrates other services
 ├── seat-service/       # Seat selection and management
 ├── order-service/      # Order creation, payment (Alipay sandbox integration)
-└── user-service/       # User auth (JWT), passenger management, SMS login
+├── user-service/       # User auth (JWT), passenger management, SMS login
+└── admin-service/      # Admin backend management (CRUD, statistics)
 ```
+
+### Admin Service Architecture
+
+admin-service 是独立的后台运营管理微服务，具有以下特点：
+
+**核心设计**：
+- **独立认证**: 使用 `t_admin_user` 表存储管理员账户，与普通用户 `t_user` 分离
+- **Token 区分**: JWT token 中包含 `type: "ADMIN"` 标识，网关据此区分管理员和普通用户
+- **游标分页**: 使用 `lastId + pageSize` 游标分页，适配未来分库分表
+- **直连数据库**: 管理后台流量低，直接访问数据库，不通过 Feign 调用其他服务
+- **统计缓存**: 统计类数据使用 `SafeCacheTemplate` 进行 Redis 缓存，分页查询直连数据库
+
+**API 端点**：
+| 模块 | 端点 | 说明 |
+|------|------|------|
+| 认证 | `/api/admin/auth/login` | 管理员登录 |
+| 认证 | `/api/admin/auth/info` | 获取当前管理员信息 |
+| 用户 | `/api/admin/user/list` | 用户列表（游标分页） |
+| 用户 | `/api/admin/user/{id}/status` | 切换用户状态 |
+| 用户 | `/api/admin/user/{id}/passengers` | 用户乘车人列表 |
+| 列车 | `/api/admin/train/list` | 列车列表 |
+| 列车 | `/api/admin/train/{id}/sale-status` | 更新售卖状态 |
+| 车站 | `/api/admin/station/list` | 车站列表 |
+| 车站 | `/api/admin/station/all` | 所有车站（下拉用） |
+| 订单 | `/api/admin/order/list` | 订单列表 |
+| 订单 | `/api/admin/order/{orderSn}` | 订单详情 |
+| 统计 | `/api/admin/stats/dashboard` | Dashboard 统计 |
+| 统计 | `/api/admin/stats/order-trend` | 订单趋势 |
+| 统计 | `/api/admin/stats/train-distribution` | 列车类型分布 |
+| 统计 | `/api/admin/stats/hot-routes` | 热门线路 |
+
+**数据表**：
+- `t_admin_user`: 管理员账户（username, password[BCrypt], role, status）
+- `t_user`: 普通用户（phone, email, status）
+- `t_passenger`: 乘车人信息
+- `t_train`: 列车信息
+- `t_station`: 车站信息
+- `t_order`: 订单信息
+
+**网关路由**：
+- `/api/admin/**` -> admin-service
+- 网关验证 Admin Token，注入 `X-Admin-Id`, `X-Admin-Name`, `X-User-Type` 请求头
 
 ### Framework Modules
 
@@ -95,6 +171,7 @@ Frameworks/
   - `/api/ticket/**`, `/api/trainDetail/**` -> ticket-service
   - `/api/seat/**` -> seat-service
   - `/api/order/**` -> order-service
+  - `/api/admin/**` -> admin-service (requires Admin token with `type: "ADMIN"`)
 
 ### Key Patterns
 
@@ -212,6 +289,30 @@ rocketmq:
 
 Redis 缓存封装，提供 `SafeCacheTemplate` 安全操作模板。
 
+**缓存 Key 常量管理**:
+所有缓存 Key 统一在 `Frameworks/common/src/main/java/com/lalal/modules/constant/cache/CacheConstant.java` 中定义：
+
+```java
+// 使用示例
+String key = CacheConstant.trainTicketRemainingKey(trainId, date, seatType);
+String userKey = CacheConstant.userDetailById(userId);
+```
+
+**已有缓存 Key**:
+| 方法 | Key 格式 | 用途 |
+|------|----------|------|
+| `requestIdKey(requestId)` | `REQUEST::{requestId}` | 请求幂等性 |
+| `trainTicketRemainingKey(trainId, date, seatType)` | `TICKET::REMAINING::{trainId}::{date}::{seatType}` | 火车余票 |
+| `trainTicketDetailKey(trainId, date, carriageNumber)` | `TICKET::DETAIL::{trainId}::{date}::{carriageNumber}` | 余票详情 |
+| `trainRouteKey(startRegion, endRegion)` | `TRAIN::ROUTE::{startRegion}::{endRegion}` | 火车路线 |
+| `trainSeatType(trainId)` | `TRAIN::SEAT_TYPE::{trainId}` | 座位类型 |
+| `trainStation(trainId)` | `TRAIN::STATION::{trainId}` | 火车站台 |
+| `trainCarriage(trainId)` | `TRAIN::CARRIAGE::{trainId}` | 车厢信息 |
+| `trainCodeToDetail(trainNum)` | `TRAIN::CODE::{trainNum}` | 车次号映射 |
+| `userDetailById(id)` | `USER::DETAIL::{id}` | 用户详情 |
+| `userDetailByPhone(phone)` | `USER::DETAIL::PHONE::{phone}` | 用户手机号 |
+| `smsLoginCodeKey(phone)` | `SMS::LOGIN::CODE::{phone}` | 短信验证码 |
+
 **待完善**:
 - RawRedisSerializer 序列化器配置
 - 观察者/拦截器扩展机制
@@ -295,21 +396,17 @@ admin/
 3. **分页请求**: 使用 `PageParams` 和 `PageResult<T>`
 4. **Mock 数据优先**: 开发阶段使用 `mock/data.ts` 模拟数据
 
-### 与后端对接
+## Enums and Constants
 
-Admin 前端通过 `/api/admin/*` 路径与后端通信，需要在各微服务中新增 Admin Controller。
+### 枚举类定义 (Frameworks/common/src/main/java/com/lalal/modules/constant/)
 
-**待实现的后端 API**:
-- `GET /api/admin/user/list` - 用户分页列表
-- `PUT /api/admin/user/{id}/status` - 切换用户状态
-- `GET /api/admin/train/list` - 列车分页列表
-- `POST /api/admin/train` - 创建列车
-- `PUT /api/admin/train/{id}` - 更新列车
-- `DELETE /api/admin/train/{id}` - 删除列车
-- `GET /api/admin/station/list` - 车站分页列表
-- `POST /api/admin/station` - 创建车站
-- `PUT /api/admin/station/{id}` - 更新车站
-- `DELETE /api/admin/station/{id}` - 删除车站
-- `GET /api/admin/order/list` - 订单分页列表
-- `GET /api/admin/refund/list` - 退款申请列表
-- `PUT /api/admin/refund/{id}/audit` - 审核退款
+| 枚举类 | 说明 |
+|--------|------|
+| `SeatType` | 座位类型：硬座(0)、二等座(1)、一等座(2)、商务座(3)、软座(4)、硬卧(5)、软卧(6) |
+
+**新增枚举规范**:
+- 枚举类放在 `Frameworks/common/src/main/java/com/lalal/modules/constant/` 目录
+- 必须包含 `code` (int) 和 `description` (String) 字段
+- 提供 `fromCode(int code)` 静态方法用于反向查找
+
+

@@ -9,14 +9,14 @@ import type {
   UserQueryParams,
 } from '@/types/user'
 
-// 用户登录
+// 管理员登录
 export function login(data: LoginRequest): Promise<Result<LoginResponse>> {
-  return request.post('/user/login', data)
+  return request.post('/admin/auth/login', data)
 }
 
-// 获取用户信息
+// 获取当前管理员信息
 export function getUserInfo(): Promise<Result<User>> {
-  return request.get('/user/info')
+  return request.get('/admin/auth/info')
 }
 
 // 获取用户列表
@@ -36,7 +36,7 @@ export function toggleUserStatus(id: number): Promise<Result<void>> {
 
 // 获取用户乘车人列表
 export function getUserPassengers(userId: number): Promise<Result<Passenger[]>> {
-  return request.get(`/user/passengers/${userId}`)
+  return request.get(`/admin/user/${userId}/passengers`)
 }
 
 // 管理员重置用户密码

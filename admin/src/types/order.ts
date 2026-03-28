@@ -48,9 +48,9 @@ export interface OrderDetail extends Order {
   idCardType: string
 }
 
-// 订单查询参数
+// 订单查询参数（游标分页）
 export interface OrderQueryParams {
-  pageNum?: number
+  lastId?: number
   pageSize?: number
   keyword?: string
   orderSn?: string

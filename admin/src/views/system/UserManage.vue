@@ -45,9 +45,8 @@
         :columns="columns"
         :data="tableData"
         :loading="loading"
-        :pagination="pagination"
+        :pagination="false"
         row-key="id"
-        @page-change="handlePageChange"
       >
         <template #status="{ record }">
           <a-tag :color="record.status === 0 ? 'green' : 'red'">
@@ -125,7 +124,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { User, Passenger, UserQueryParams } from '@/types'
-import { mockUsers, mockPassengers, mockApi } from '@/mock/data'
+import { getUserList, getUserPassengers, toggleUserStatus } from '@/api/user'
 import {
   IconSearch,
   IconRefresh,
@@ -139,7 +138,7 @@ import {
 const searchForm = reactive<UserQueryParams>({
   keyword: '',
   status: undefined,
-  pageNum: 1,
+  lastId: undefined,
   pageSize: 10,
 })
 
@@ -147,9 +146,9 @@ const searchForm = reactive<UserQueryParams>({
 const loading = ref(false)
 const tableData = ref<User[]>([])
 const pagination = reactive({
-  current: 1,
+  nextId: undefined as number | undefined,
+  hasMore: true,
   pageSize: 10,
-  total: 0,
 })
 
 // 表格列定义
@@ -193,33 +192,20 @@ const getPassengerTypeName = (type: number) => {
 const fetchUsers = async () => {
   loading.value = true
   try {
-    // 模拟API请求
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    let filteredData = [...mockUsers]
-
-    // 关键词搜索
-    if (searchForm.keyword) {
-      const keyword = searchForm.keyword.toLowerCase()
-      filteredData = filteredData.filter(
-        (user) =>
-          user.username.toLowerCase().includes(keyword) ||
-          user.phone.includes(keyword) ||
-          user.email?.toLowerCase().includes(keyword)
-      )
+    const params: UserQueryParams = {
+      keyword: searchForm.keyword,
+      status: searchForm.status,
+      lastId: searchForm.lastId,
+      pageSize: searchForm.pageSize,
     }
-
-    // 状态筛选
-    if (searchForm.status !== undefined) {
-      filteredData = filteredData.filter((user) => user.status === searchForm.status)
+    const res = await getUserList(params)
+    if (res.code === 200 || res.code === 0) {
+      tableData.value = res.data.list
+      pagination.nextId = res.data.nextId
+      pagination.hasMore = res.data.hasMore ?? true
+    } else {
+      Message.error(res.message || '获取数据失败')
     }
-
-    // 分页
-    const start = (pagination.current - 1) * pagination.pageSize
-    const end = start + pagination.pageSize
-
-    tableData.value = filteredData.slice(start, end)
-    pagination.total = filteredData.length
   } finally {
     loading.value = false
   }
@@ -227,7 +213,7 @@ const fetchUsers = async () => {
 
 // 搜索
 const handleSearch = () => {
-  pagination.current = 1
+  searchForm.lastId = undefined
   fetchUsers()
 }
 
@@ -235,20 +221,31 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.status = undefined
-  pagination.current = 1
+  searchForm.lastId = undefined
   fetchUsers()
 }
 
-// 分页变化
+// 分页变化（游标分页）
 const handlePageChange = (page: number) => {
-  pagination.current = page
-  fetchUsers()
+  if (pagination.hasMore && tableData.value.length > 0) {
+    searchForm.lastId = tableData.value[tableData.value.length - 1].id
+    fetchUsers()
+  }
 }
 
 // 查看用户详情
-const handleView = (user: User) => {
+const handleView = async (user: User) => {
   currentUser.value = user
-  passengers.value = mockPassengers.filter((p) => p.userId === user.id)
+  try {
+    const res = await getUserPassengers(user.id)
+    if (res.code === 200 || res.code === 0) {
+      passengers.value = res.data
+    } else {
+      Message.error(res.message || '获取乘车人失败')
+    }
+  } catch (error) {
+    Message.error('获取乘车人失败')
+  }
   detailVisible.value = true
 }
 
@@ -260,9 +257,14 @@ const handleToggleStatus = (user: User) => {
     okText: '确定',
     cancelText: '取消',
     hideCancel: false,
-    onOk: () => {
-      user.status = user.status === 0 ? 1 : 0
-      Message.success(user.status === 0 ? '已启用' : '已禁用')
+    onOk: async () => {
+      try {
+        await toggleUserStatus(user.id)
+        Message.success(user.status === 0 ? '已禁用' : '已启用')
+        fetchUsers()
+      } catch (error) {
+        Message.error('操作失败')
+      }
     },
   })
 }
