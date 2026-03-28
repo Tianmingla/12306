@@ -1,0 +1,28 @@
+package com.lalal.modules.admin.annotation;
+
+import java.lang.annotation.*;
+
+/**
+ * 操作日志注解
+ * 标注在Controller方法上，用于记录操作日志
+ */
+@Target({ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface OperationLog {
+
+    /**
+     * 操作类型
+     */
+    String type() default "";
+
+    /**
+     * 操作模块
+     */
+    String module() default "";
+
+    /**
+     * 操作描述
+     */
+    String description() default "";
+}

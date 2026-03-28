@@ -120,13 +120,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import type { DashboardStats } from '@/types'
-import { mockDashboardStats } from '@/mock/data'
+import type { DashboardStats, OrderTrend, TrainTypeDistribution } from '@/types'
+import { getDashboardStats, getOrderTrend, getTrainTypeDistribution } from '@/api/stats'
 import {
   IconUser,
   IconFile,
   IconArrowRise,
-//  IconMoneyCollect,
   IconLocation,
 } from '@arco-design/web-vue/es/icon'
 
@@ -142,7 +141,16 @@ const IconTickets = {
 const router = useRouter()
 
 // 统计数据
-const stats = ref<DashboardStats>(mockDashboardStats)
+const stats = ref<DashboardStats>({
+  totalUsers: 0,
+  totalOrders: 0,
+  totalTrains: 0,
+  totalStations: 0,
+  todayTickets: 0,
+  todayAmount: 0,
+  userGrowth: 0,
+  orderGrowth: 0,
+})
 
 // 图表相关
 const chartType = ref('week')
@@ -292,9 +300,79 @@ const handleResize = () => {
   trainChart?.resize()
 }
 
+// 获取统计数据
+const fetchDashboardStats = async () => {
+  try {
+    const res = await getDashboardStats()
+    if (res.code === 200 || res.code === 0) {
+      stats.value = res.data
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+  }
+}
+
+// 获取订单趋势数据并更新图表
+const fetchOrderTrend = async () => {
+  try {
+    const res = await getOrderTrend({ type: chartType.value as 'day' | 'week' | 'month' })
+    if ((res.code === 200 || res.code === 0) && res.data && orderChart) {
+      const data = res.data as any
+      orderChart.setOption({
+        xAxis: { data: data.dates || [] },
+        series: [
+          { data: data.orders || [] },
+          { data: data.amounts || [] },
+        ],
+      })
+    }
+  } catch (error) {
+    console.error('获取订单趋势失败:', error)
+  }
+}
+
+// 获取列车分布数据并更新图表
+const fetchTrainDistribution = async () => {
+  try {
+    const res = await getTrainTypeDistribution()
+    if ((res.code === 200 || res.code === 0) && res.data && trainChart) {
+      const distributionData = (res.data as TrainTypeDistribution[]).map(item => ({
+        value: item.value,
+        name: item.name,
+        itemStyle: { color: getTrainColor(item.name) },
+      }))
+      trainChart.setOption({
+        series: [{ data: distributionData }],
+      })
+    }
+  } catch (error) {
+    console.error('获取列车分布失败:', error)
+  }
+}
+
+// 获取列车类型颜色
+const getTrainColor = (name: string) => {
+  const colorMap: Record<string, string> = {
+    '高铁': '#C41E3A',
+    '动车': '#1E3A5F',
+    '特快': '#10B981',
+    '快速': '#F59E0B',
+  }
+  return colorMap[name] || '#64748B'
+}
+
 onMounted(() => {
+  // 获取统计数据
+  fetchDashboardStats()
+
+  // 初始化图表
   initOrderChart()
   initTrainChart()
+
+  // 获取图表数据
+  fetchOrderTrend()
+  fetchTrainDistribution()
+
   window.addEventListener('resize', handleResize)
 })
 

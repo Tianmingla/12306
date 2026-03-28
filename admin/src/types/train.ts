@@ -46,48 +46,30 @@ export interface TrainStation {
 export interface Carriage {
   id: number
   trainId: number
-  carriageNumber: number
-  carriageType: CarriageType
+  carriageNumber: string
+  carriageType: number
   seatCount: number
   createTime: string
   updateTime: string
 }
 
-// 车厢类型
-export enum CarriageType {
-  BUSINESS = 0,       // 商务座
-  FIRST_CLASS = 1,    // 一等座
-  SECOND_CLASS = 2,   // 二等座
-  HARD_SLEEPER = 3,   // 硬卧
-  SOFT_SLEEPER = 4,   // 软卧
-  HARD_SEAT = 5,      // 硬座
-  SOFT_SEAT = 6,      // 软座
+// 车厢保存请求
+export interface CarriageSaveRequest {
+  trainId: number
+  carriageNumber: string
+  carriageType: number
+  seatCount: number
 }
 
 // 座位信息
 export interface Seat {
   id: number
   trainId: number
-  carriageNumber: number
+  carriageNumber: string
   seatNumber: string
-  seatType: SeatType
-  seatStatus: SeatStatus
+  seatType: number
   createTime: string
   updateTime: string
-}
-
-// 座位类型
-export enum SeatType {
-  WINDOW = 0,         // 靠窗
-  AISLE = 1,          // 靠过道
-  MIDDLE = 2,         // 中间
-}
-
-// 座位状态
-export enum SeatStatus {
-  AVAILABLE = 0,      // 可售
-  SOLD = 1,           // 已售
-  LOCKED = 2,         // 锁定
 }
 
 // 列车查询参数（普通分页）
@@ -107,4 +89,10 @@ export interface TrainFormData {
   trainTag?: string
   trainBrand?: string
   saleStatus: SaleStatus
+}
+
+// 获取车厢类型的名称
+export function getCarriageTypeName(type: number): string {
+  const types = ['商务座', '一等座', '二等座', '硬卧', '软卧', '硬座', '软座']
+  return types[type] || '未知'
 }

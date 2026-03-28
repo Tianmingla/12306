@@ -7,32 +7,34 @@ import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.math.BigDecimal;
-import java.util.Date;
-
 /**
- * 用户实体（只读，用于管理后台查询）
+ * 车厢实体（管理后台用）
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("t_user")
-public class UserDO extends BaseDO {
+@TableName("t_carriage")
+public class CarriageDO extends BaseDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 登录手机号
+     * 列车ID
      */
-    private String phone;
+    private Long trainId;
 
     /**
-     * 邮箱
+     * 车厢号
      */
-    private String email;
+    private String carriageNumber;
 
     /**
-     * 状态：0-正常, 1-禁用
+     * 车厢类型（座位类型）
      */
-    private Integer status;
+    private Integer carriageType;
+
+    /**
+     * 座位数
+     */
+    private Integer seatCount;
 }

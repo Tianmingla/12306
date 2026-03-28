@@ -248,6 +248,7 @@ CREATE TABLE IF NOT EXISTS `t_user` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `phone` varchar(20) NOT NULL COMMENT '登录手机号',
   `email` varchar(64) DEFAULT NULL,
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '状态：0-正常, 1-禁用',
   `create_time` datetime DEFAULT NULL,
   `update_time` datetime DEFAULT NULL,
   `del_flag` int NOT NULL DEFAULT '0',
@@ -339,3 +340,110 @@ CREATE TABLE IF NOT EXISTS `t_admin_user` (
 INSERT INTO `t_admin_user` (`username`, `password`, `real_name`, `role`)
 VALUES ('admin', '$2a$10$8h4PBGvFnhSKKS67jBfyc.qu.hpvKwiM8el1cyZqin3zLqzKBD0ZW', '系统管理员', 'ADMIN')
 ON DUPLICATE KEY UPDATE `username` = `username`;
+
+-- ------------------------------------------------------
+-- 角色权限管理表
+-- ------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `t_role` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `role_name` varchar(64) NOT NULL COMMENT '角色名称',
+  `role_code` varchar(32) NOT NULL COMMENT '角色编码',
+  `description` varchar(256) DEFAULT NULL COMMENT '角色描述',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0-正常, 1-禁用',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_role_code` (`role_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色表';
+
+CREATE TABLE IF NOT EXISTS `t_permission` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `permission_name` varchar(64) NOT NULL COMMENT '权限名称',
+  `permission_code` varchar(64) NOT NULL COMMENT '权限编码',
+  `resource_type` tinyint NOT NULL DEFAULT 1 COMMENT '资源类型: 1-菜单, 2-按钮, 3-API',
+  `parent_id` bigint DEFAULT 0 COMMENT '父级ID',
+  `resource_url` varchar(256) DEFAULT NULL COMMENT '资源路径',
+  `sort_order` int DEFAULT 0 COMMENT '排序',
+  `description` varchar(256) DEFAULT NULL COMMENT '权限描述',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态: 0-正常, 1-禁用',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` tinyint NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_permission_code` (`permission_code`),
+  KEY `idx_parent_id` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限表';
+
+CREATE TABLE IF NOT EXISTS `t_role_permission` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  `permission_id` bigint NOT NULL COMMENT '权限ID',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_role_permission` (`role_id`, `permission_id`),
+  KEY `idx_role_id` (`role_id`),
+  KEY `idx_permission_id` (`permission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色权限关联表';
+
+CREATE TABLE IF NOT EXISTS `t_admin_user_role` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `admin_user_id` bigint NOT NULL COMMENT '管理员ID',
+  `role_id` bigint NOT NULL COMMENT '角色ID',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_role` (`admin_user_id`, `role_id`),
+  KEY `idx_admin_user_id` (`admin_user_id`),
+  KEY `idx_role_id` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='管理员角色关联表';
+
+-- 初始化角色数据
+INSERT INTO `t_role` (`role_name`, `role_code`, `description`) VALUES
+('超级管理员', 'SUPER_ADMIN', '拥有所有权限'),
+('管理员', 'ADMIN', '拥有管理权限'),
+('运营人员', 'OPERATOR', '拥有运营相关权限')
+ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`);
+
+-- 初始化权限数据（菜单权限）
+INSERT INTO `t_permission` (`permission_name`, `permission_code`, `resource_type`, `parent_id`, `resource_url`, `sort_order`) VALUES
+('数据统计', 'dashboard', 1, 0, '/dashboard', 1),
+('车票管理', 'train', 1, 0, '/train', 2),
+('车次管理', 'train:list', 1, 0, '/train/list', 1),
+('站点管理', 'train:station', 1, 0, '/train/station', 2),
+('线路管理', 'train:route', 1, 0, '/train/route', 3),
+('订单管理', 'order', 1, 0, '/order', 3),
+('订单列表', 'order:list', 1, 0, '/order/list', 1),
+('退款管理', 'order:refund', 1, 0, '/order/refund', 2),
+('系统管理', 'system', 1, 0, '/system', 4),
+('用户管理', 'system:user', 1, 0, '/system/user', 1),
+('角色管理', 'system:role', 1, 0, '/system/role', 2),
+('操作日志', 'system:log', 1, 0, '/system/log', 3)
+ON DUPLICATE KEY UPDATE `permission_name` = VALUES(`permission_name`);
+
+-- ------------------------------------------------------
+-- 操作日志表
+-- ------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `t_operation_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `admin_user_id` bigint NOT NULL COMMENT '操作人ID',
+  `admin_username` varchar(64) NOT NULL COMMENT '操作人用户名',
+  `operation_type` varchar(32) NOT NULL COMMENT '操作类型: CREATE/UPDATE/DELETE/LOGIN/EXPORT',
+  `module` varchar(64) NOT NULL COMMENT '操作模块',
+  `description` varchar(256) DEFAULT NULL COMMENT '操作描述',
+  `request_method` varchar(10) DEFAULT NULL COMMENT '请求方法',
+  `request_url` varchar(256) DEFAULT NULL COMMENT '请求URL',
+  `request_params` text COMMENT '请求参数',
+  `response_result` text COMMENT '响应结果',
+  `ip` varchar(64) DEFAULT NULL COMMENT 'IP地址',
+  `status` tinyint NOT NULL DEFAULT 0 COMMENT '操作状态: 0-成功, 1-失败',
+  `error_msg` text COMMENT '错误信息',
+  `duration` bigint DEFAULT NULL COMMENT '执行时长(毫秒)',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_user_id` (`admin_user_id`),
+  KEY `idx_operation_type` (`operation_type`),
+  KEY `idx_module` (`module`),
+  KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';

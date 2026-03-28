@@ -8,6 +8,7 @@ import type {
   Seat,
   TrainQueryParams,
   TrainFormData,
+  CarriageSaveRequest,
 } from '@/types/train'
 
 // 获取列车列表
@@ -66,26 +67,26 @@ export function getTrainCarriages(trainId: number): Promise<Result<Carriage[]>> 
 }
 
 // 添加车厢
-export function addCarriage(data: Partial<Carriage>): Promise<Result<Carriage>> {
+export function addCarriage(data: CarriageSaveRequest): Promise<Result<string>> {
   return request.post('/admin/train/carriage', data)
 }
 
 // 更新车厢
-export function updateCarriage(id: number, data: Partial<Carriage>): Promise<Result<Carriage>> {
+export function updateCarriage(id: number, data: CarriageSaveRequest): Promise<Result<string>> {
   return request.put(`/admin/train/carriage/${id}`, data)
 }
 
 // 删除车厢
-export function deleteCarriage(id: number): Promise<Result<void>> {
+export function deleteCarriage(id: number): Promise<Result<string>> {
   return request.delete(`/admin/train/carriage/${id}`)
 }
 
 // 获取车厢座位列表
-export function getCarriageSeats(carriageId: number): Promise<Result<Seat[]>> {
-  return request.get(`/admin/train/carriage/${carriageId}/seats`)
+export function getCarriageSeats(trainId: number, carriageNumber: string): Promise<Result<Seat[]>> {
+  return request.get(`/admin/train/${trainId}/carriage/${carriageNumber}/seats`)
 }
 
-// 更新座位状态
-export function updateSeatStatus(id: number, status: number): Promise<Result<void>> {
-  return request.put(`/admin/train/seat/${id}/status`, { status })
+// 更新座位类型
+export function updateSeatType(seatId: number, seatType: number): Promise<Result<string>> {
+  return request.put(`/admin/train/seat/${seatId}/type`, { seatType })
 }

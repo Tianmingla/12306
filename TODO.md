@@ -2,7 +2,7 @@
 
 > **注意**: 修改任务状态时，请同时更新此文档
 
-## 一、前后端 API 对齐 [高优先级]
+## 一、前后端 API 对齐 [高优先级] ✅
 
 ### 1.1 后端分页策略
 - **游标分页**（分库分表场景）：用户管理、订单管理
@@ -14,17 +14,87 @@
 - [x] 列车管理：改为普通分页（pageNum/pageSize）
 - [x] 车站管理：改为普通分页（pageNum/pageSize）
 
-### 1.3 前端 API 对齐
+### 1.3 用户管理修复
+- [x] 数据库：t_user 表添加 status 字段
+- [x] 后端：UserDO 添加 status 属性
+- [x] 后端：AdminUserServiceImpl 修复 toggleUserStatus 实现
+
+### 1.4 前端 API 对齐
 - [x] 登录页面：API 方法(POST)、参数类型对齐
-- [ ] Dashboard：统计 API 对齐
+- [x] Dashboard：统计 API 对齐（移除 mock）
 - [x] 用户管理：列表(游标分页)/状态切换(PUT)/乘车人 API 对齐
 - [x] 列车管理：列表(普通分页)/售卖状态(PUT) API 对齐
 - [x] 车站管理：列表(普通分页) API 对齐
 - [x] 订单管理：列表(游标分页)/详情(GET)/退款(PUT)/取消(PUT) API 对齐
 
-### 1.4 类型定义对齐
-- [ ] 前端 types 与后端 DTO 对齐
-- [ ] 分页请求/响应结构统一（游标分页 vs 普通分页）
+### 1.5 类型定义对齐
+- [x] 前端 types 与后端 DTO 对齐
+- [x] 分页请求/响应结构统一（游标分页 vs 普通分页）
+
+---
+
+## 二、线路管理功能 [P1] ✅
+
+### 2.1 后端实现 ✅
+- [x] 创建 TrainStationDO 实体（使用现有 t_train_station 表）
+- [x] 创建 TrainStationMapper
+- [x] 创建 AdminRouteController
+- [x] 创建 AdminRouteService 接口和实现
+
+### 2.2 前端实现 ✅
+- [x] 创建 types/route.ts 类型定义
+- [x] 创建 api/route.ts API 调用
+- [x] 完善 RouteManage.vue 页面
+
+---
+
+## 三、座位配置功能 [P1] ✅
+
+### 3.1 后端实现 ✅
+- [x] AdminTrainController 添加车厢列表接口
+- [x] AdminTrainController 添加座位布局接口
+
+### 3.2 前端实现 ✅
+- [x] TrainList.vue 添加「座位配置」按钮
+- [x] 创建座位配置弹窗组件
+
+---
+
+## 四、角色管理功能 [P2] ✅
+
+### 4.1 数据库 ✅
+- [x] 创建 t_role 表
+- [x] 创建 t_permission 表
+- [x] 创建 t_role_permission 关联表
+- [x] 创建 t_admin_user_role 关联表
+
+### 4.2 后端实现 ✅
+- [x] 创建 RoleDO、PermissionDO、RolePermissionDO 实体
+- [x] 创建 AdminRoleController
+- [x] 创建 AdminRoleService
+
+### 4.3 前端实现 ✅
+- [x] 创建 types/role.ts 类型定义
+- [x] 创建 api/role.ts API 调用
+- [x] 完善 RoleManage.vue 页面
+
+---
+
+## 五、操作日志功能 [P2] ✅
+
+### 5.1 数据库 ✅
+- [x] 创建 t_operation_log 表
+
+### 5.2 后端实现 ✅
+- [x] 创建 OperationLogDO 实体
+- [x] 创建 OperationLogAspect 切面
+- [x] 创建 AdminLogController
+- [x] 创建 AdminLogService
+
+### 5.3 前端实现 ✅
+- [x] 创建 types/log.ts 类型定义
+- [x] 创建 api/log.ts API 调用
+- [x] 完善 OperationLog.vue 页面
 
 ---
 

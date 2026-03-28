@@ -7,32 +7,34 @@ import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
-import java.math.BigDecimal;
-import java.util.Date;
-
 /**
- * 用户实体（只读，用于管理后台查询）
+ * 角色实体
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("t_user")
-public class UserDO extends BaseDO {
+@TableName("t_role")
+public class RoleDO extends BaseDO {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 登录手机号
+     * 角色名称
      */
-    private String phone;
+    private String roleName;
 
     /**
-     * 邮箱
+     * 角色编码
      */
-    private String email;
+    private String roleCode;
 
     /**
-     * 状态：0-正常, 1-禁用
+     * 角色描述
+     */
+    private String description;
+
+    /**
+     * 状态: 0-正常, 1-禁用
      */
     private Integer status;
 }

@@ -86,6 +86,10 @@
               <template #icon><icon-location /></template>
               经停站
             </a-button>
+            <a-button type="text" size="small" status="success" @click="handleSeatConfig(record)">
+              <template #icon><icon-apps /></template>
+              座位配置
+            </a-button>
             <a-button type="text" size="small" status="danger" @click="handleDelete(record)">
               <template #icon><icon-delete /></template>
               删除
@@ -146,6 +150,12 @@
         </template>
       </a-table>
     </a-modal>
+
+    <!-- 座位配置弹窗 -->
+    <SeatConfigModal
+      v-model:visible="seatConfigVisible"
+      :train="currentTrain"
+    />
   </div>
 </template>
 
@@ -155,6 +165,7 @@ import { Message, Modal } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import type { Train, TrainStation, TrainQueryParams, TrainFormData } from '@/types'
 import { getTrainList, updateTrainSaleStatus } from '@/api/train'
+import SeatConfigModal from '@/components/SeatConfigModal.vue'
 import {
   IconSearch,
   IconRefresh,
@@ -162,6 +173,7 @@ import {
   IconEdit,
   IconDelete,
   IconLocation,
+  IconApps,
 } from '@arco-design/web-vue/es/icon'
 
 // 搜索表单
@@ -191,7 +203,7 @@ const columns = [
   { title: '型号', dataIndex: 'trainBrand', width: 120 },
   { title: '售卖状态', slotName: 'saleStatus', width: 120 },
   { title: '创建时间', dataIndex: 'createTime', width: 180 },
-  { title: '操作', slotName: 'actions', width: 220 },
+  { title: '操作', slotName: 'actions', width: 300 },
 ]
 
 // 表单相关
@@ -222,6 +234,10 @@ const stationColumns = [
   { title: '发车时间', dataIndex: 'departureTime', width: 120 },
   { title: '停留时间', slotName: 'stopTime', width: 100 },
 ]
+
+// 座位配置相关
+const seatConfigVisible = ref(false)
+const currentTrain = ref<Train | null>(null)
 
 // 获取列车类型名称
 const getTrainTypeName = (type: number) => {
@@ -358,6 +374,12 @@ const handleViewStations = (train: Train) => {
   // TODO: 调用真实 API 获取经停站
   stationData.value = []
   stationVisible.value = true
+}
+
+// 座位配置
+const handleSeatConfig = (train: Train) => {
+  currentTrain.value = train
+  seatConfigVisible.value = true
 }
 
 onMounted(() => {

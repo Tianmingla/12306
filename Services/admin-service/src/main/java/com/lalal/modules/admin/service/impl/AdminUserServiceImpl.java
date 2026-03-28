@@ -77,8 +77,12 @@ public class AdminUserServiceImpl implements AdminUserService {
             throw new RuntimeException("用户不存在");
         }
 
-        // 这里假设用 del_flag 作为状态标志（实际应该有独立 status 字段）
-        // 由于 t_user 表没有 status 字段，这里仅作演示
-        throw new RuntimeException("用户表无状态字段，请在 t_user 表添加 status 字段");
+        // 切换状态：0-正常, 1-禁用
+        int newStatus = (user.getStatus() == null || user.getStatus() == 0) ? 1 : 0;
+
+        LambdaUpdateWrapper<UserDO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(UserDO::getId, id)
+                .set(UserDO::getStatus, newStatus);
+        userMapper.update(null, wrapper);
     }
 }
