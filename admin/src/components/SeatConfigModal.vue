@@ -135,8 +135,8 @@ import { getCarriageTypeName } from '@/types/train'
 import { IconPlus } from '@arco-design/web-vue/es/icon'
 
 // Props
+const visible = defineModel('visible')
 const props = defineProps<{
-  visible: boolean
   train: any
 }>()
 

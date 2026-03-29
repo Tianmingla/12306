@@ -16,9 +16,13 @@ onMounted(() => {
 })
 </script>
 
-<style>
+<style lang="scss">
 #app {
   width: 100%;
   height: 100%;
+}
+.arco-table-th-title {
+  color: $text-primary;
+  font-weight: bold;
 }
 </style>
