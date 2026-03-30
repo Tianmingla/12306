@@ -358,6 +358,7 @@ const getTrainColor = (name: string) => {
     '特快': '#10B981',
     '快速': '#F59E0B',
   }
+  name=name.match(/(.*?)\(.*\)/)?.[1] || name
   return colorMap[name] || '#64748B'
 }
 
