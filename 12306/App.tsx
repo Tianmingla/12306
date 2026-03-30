@@ -9,6 +9,10 @@ import LoginModal from './components/LoginModal';
 import { AppView, SearchParams } from './types';
 import OrderDetailPage from './components/OrderDetailPage';
 import OrderHistoryPage from './components/OrderHistoryPage';
+import StationScreenPage from './components/StationScreenPage';
+import WaitlistPage from './components/WaitlistPage';
+import StationGuidePage from './components/StationGuidePage';
+import TravelGuidePage from './components/TravelGuidePage';
 import { getUserInfo, logout as userLogout } from './services/userService';
 import PassengerManageModal from './components/PassengerManageModal';
 
@@ -102,7 +106,7 @@ const App: React.FC = () => {
           </div>
 
           <SearchWidget onSearch={handleSearch} />
-          <Features />
+          <Features onNavigate={handleNavigate} />
         </>
       )}
 
@@ -134,6 +138,22 @@ const App: React.FC = () => {
           onBack={() => setCurrentView(AppView.HOME)}
           onViewDetail={handleViewOrderDetail}
         />
+      )}
+
+      {currentView === AppView.STATION_SCREEN && (
+        <StationScreenPage onBack={() => setCurrentView(AppView.HOME)} />
+      )}
+
+      {currentView === AppView.WAITLIST && (
+        <WaitlistPage onBack={() => setCurrentView(AppView.HOME)} />
+      )}
+
+      {currentView === AppView.STATION_GUIDE && (
+        <StationGuidePage onBack={() => setCurrentView(AppView.HOME)} />
+      )}
+
+      {currentView === AppView.TRAVEL_GUIDE && (
+        <TravelGuidePage onBack={() => setCurrentView(AppView.HOME)} />
       )}
 
       {/* Footer */}

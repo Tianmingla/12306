@@ -1,8 +1,13 @@
 
 import React from 'react';
-import { Coffee, ShieldCheck, Ticket, Wifi } from 'lucide-react';
+import { Coffee, ShieldCheck, Ticket, Wifi, Monitor, Clock, MapPin, BookOpen } from 'lucide-react';
+import { AppView } from '../types';
 
-const Features = () => {
+interface FeaturesProps {
+  onNavigate?: (view: AppView) => void;
+}
+
+const Features: React.FC<FeaturesProps> = ({ onNavigate }) => {
   const services = [
     { icon: <Ticket className="h-6 w-6 text-blue-600" />, title: '智能订票', desc: '智能行程规划' },
     { icon: <ShieldCheck className="h-6 w-6 text-green-600" />, title: '出行保险', desc: '全方位出行保障' },
@@ -10,8 +15,55 @@ const Features = () => {
     { icon: <Wifi className="h-6 w-6 text-purple-600" />, title: '列车Wi-Fi', desc: '高速网络全覆盖' },
   ];
 
+  const quickActions = [
+    {
+      icon: <Monitor className="h-8 w-8 text-blue-600" />,
+      title: '车站大屏',
+      desc: '实时列车正晚点信息',
+      view: AppView.STATION_SCREEN,
+      color: 'bg-blue-50 hover:bg-blue-100'
+    },
+    {
+      icon: <Clock className="h-8 w-8 text-orange-600" />,
+      title: '候补购票',
+      desc: '无票自动排队抢票',
+      view: AppView.WAITLIST,
+      color: 'bg-orange-50 hover:bg-orange-100'
+    },
+    {
+      icon: <MapPin className="h-8 w-8 text-green-600" />,
+      title: '车站引导',
+      desc: '快速定位站内设施',
+      view: AppView.STATION_GUIDE,
+      color: 'bg-green-50 hover:bg-green-100'
+    },
+    {
+      icon: <BookOpen className="h-8 w-8 text-purple-600" />,
+      title: '出行指南',
+      desc: '贴心出行攻略',
+      view: AppView.TRAVEL_GUIDE,
+      color: 'bg-purple-50 hover:bg-purple-100'
+    },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      {/* 快捷功能入口 */}
+      <h2 className="text-2xl font-bold text-gray-800 mb-8">快捷服务</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-12">
+        {quickActions.map((action, i) => (
+          <button
+            key={i}
+            onClick={() => onNavigate?.(action.view)}
+            className={`p-6 rounded-xl border border-gray-100 transition-all hover:shadow-md flex flex-col items-center text-center ${action.color}`}
+          >
+            <div className="mb-3">{action.icon}</div>
+            <h3 className="font-semibold text-gray-900">{action.title}</h3>
+            <p className="text-xs text-gray-500 mt-1">{action.desc}</p>
+          </button>
+        ))}
+      </div>
+
       <h2 className="text-2xl font-bold text-gray-800 mb-8">会员专享服务</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {services.map((s, i) => (

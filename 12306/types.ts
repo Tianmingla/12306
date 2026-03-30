@@ -36,6 +36,10 @@ export enum AppView {
   SEARCH_RESULTS = 'SEARCH_RESULTS',
   ORDER_DETAIL = 'ORDER_DETAIL',
   ORDER_HISTORY = 'ORDER_HISTORY',
+  STATION_SCREEN = 'STATION_SCREEN',
+  WAITLIST = 'WAITLIST',
+  STATION_GUIDE = 'STATION_GUIDE',
+  TRAVEL_GUIDE = 'TRAVEL_GUIDE',
 }
 
 export interface SearchParams {
@@ -215,4 +219,67 @@ export interface OrderListVO {
   status: number;
   statusText: string;
   passengerCount: number;
+}
+
+// ============= 车站大屏相关类型 =============
+
+export interface StationScreenTrain {
+  trainNumber: string;
+  trainType: number;
+  trainTypeName: string;
+  terminalStation: string;
+  departureTime: string;
+  estimatedDepartureTime: string | null;
+  delayStatus: number;
+  delayStatusText: string;
+  delayMinutes: number;
+  checkInStatus: number;
+  checkInStatusText: string;
+  waitingRoom: string;
+  checkInGate: string;
+  platform: string;
+  remainingTimeDesc: string;
+}
+
+export interface StationScreenResponse {
+  stationId: number;
+  stationName: string;
+  stationCode: string;
+  currentTime: string;
+  currentDate: string;
+  totalTrainsToday: number;
+  onTimeRate: number;
+  trains: StationScreenTrain[];
+  announcements: string[];
+}
+
+// ============= 候补购票相关类型 =============
+
+export interface WaitlistCreateRequest {
+  trainNumber: string;
+  startStation: string;
+  endStation: string;
+  travelDate: string;
+  seatTypes: number[];
+  passengerIds: number[];
+  prepayAmount: number;
+  deadline: string;
+}
+
+export interface WaitlistOrderVO {
+  id: number;
+  waitlistSn: string;
+  trainNumber: string;
+  startStation: string;
+  endStation: string;
+  travelDate: string;
+  seatTypesText: string;
+  prepayAmount: number;
+  deadline: string;
+  status: number;
+  statusText: string;
+  fulfilledOrderSn: string | null;
+  createTime: string;
+  queuePosition: number;
+  successRate: number;
 }
