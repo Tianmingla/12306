@@ -51,7 +51,12 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, onLoginClick, isLoggedIn, u
             </button>
             <a href="#" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">车票预订</a>
             <a href="#" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">会员服务</a>
-            <a href="#" className="text-gray-600 hover:text-blue-600 font-medium transition-colors">出行指南</a>
+            <button
+              onClick={() => onNavigate(AppView.TRAVEL_GUIDE)}
+              className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              出行指南
+            </button>
           </div>
 
           <div className="flex items-center space-x-4">

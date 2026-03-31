@@ -19,7 +19,6 @@ package com.lalal.modules.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.lalal.framework.log.aspectj.GlobalLogAspect;
 import com.lalal.modules.dto.response.StationScreenResponseDTO;
 import com.lalal.modules.dto.response.StationScreenTrainDTO;
 import com.lalal.modules.entity.TrainDO;
@@ -28,6 +27,7 @@ import com.lalal.modules.mapper.StationMapper;
 import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.service.StationScreenService;
+import com.lalal.modules.utils.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,21 +37,19 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * 车站大屏服务实现类
  *
  * 提供车站候车大厅大屏展示所需的实时列车信息：
- * - 正晚点状态计算
+ * - TODO 正晚点状态计算
  * - 检票状态判断
  * - 候车室/站台分配
  * - 剩余时间提示
+ * -TODO 缓存
  */
 @Slf4j
 @Service
@@ -141,8 +139,11 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         // 查询该车站作为出发站的记录
         LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TrainStationDO::getStationId, stationId);
+//        wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
+//                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
+
         wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
-                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
+                TrainStationDO::getSequence, TrainStationDO::getRunDate);
 
         List<TrainStationDO> departureTrains = trainStationMapper.selectList(wrapper);
 
@@ -160,7 +161,8 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
                 continue;
             }
 
-            LocalDateTime actualDeparture = todayStart.plusMinutes(ts.getDepartureTime().toMinuteOfDay() / 60);
+            LocalTime localTime=DateUtils.toLocalDateTime(ts.getDepartureTime()).toLocalTime();
+            LocalDateTime actualDeparture = date.atTime(localTime);;
 
             // 如果实际发车时间在当天范围内，或者跨夜（凌晨）也在次日范围内
             if ((actualDeparture.isAfter(todayStart) || actualDeparture.equals(todayStart)) &&
@@ -170,14 +172,14 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         }
 
         // 如果有跨夜车次的情况，也需要考虑
-        if (result.isEmpty() && !departureTrains.isEmpty()) {
-            // 考虑前一天末班车可能在今日凌晨到达/发车的情况
-            result = departureTrains.stream()
-                .filter(ts -> ts.getDepartureTime() != null)
-                .sorted(Comparator.comparingInt(ts -> ts.getDepartureTime().toMinuteOfDay()))
-                .limit(20)
-                .collect(Collectors.toList());
-        }
+//        if (result.isEmpty() && !departureTrains.isEmpty()) {
+//            // 考虑前一天末班车可能在今日凌晨到达/发车的情况
+//            result = departureTrains.stream()
+//                .filter(ts -> ts.getDepartureTime() != null)
+//                .sorted(Comparator.comparingInt(ts -> ts.getDepartureTime().toMinuteOfDay()))
+//                .limit(20)
+//                .collect(Collectors.toList());
+//        }
 
         return result;
     }
@@ -200,7 +202,7 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         String terminalStation = findTerminalStation(trainId, departure.getStationId());
 
         // 解析发车时间
-        LocalTime departureTime = departure.getDepartureTime();
+        LocalTime departureTime =DateUtils.toLocalDateTime(departure.getDepartureTime()).toLocalTime();
         LocalDateTime actualDepartureTime = calculateActualDepartureTime(serverNow, departureTime, sequence);
 
         // 正晚点状态计算
@@ -209,9 +211,12 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         // 检票状态计算
         CheckInStatus checkInStatus = calculateCheckInStatus(actualDepartureTime, serverNow, train.getTrainType());
 
-        // 候车室和站台分配（模拟数据，后续可从配置表读取）
+        //TODO 候车室和站台分配（模拟数据，后续可从配置表读取）
         String waitingRoom = assignWaitingRoom(sequence);
-        String platform = Optional.ofNullable(departure.getPlatform())
+        Random random=new Random();
+        Integer pre=random.nextInt(10);
+        char tail=(char)(random.nextInt(0,26)+65);
+        String platform = Optional.ofNullable(pre+tail+"")
                 .orElse(assignPlatform(sequence));
         String checkInGate = "A" + (sequence % 10) + "-" + (sequence % 5 + 1);
 

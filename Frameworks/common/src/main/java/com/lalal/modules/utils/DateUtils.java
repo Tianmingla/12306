@@ -84,7 +84,7 @@ public final class DateUtils {
     /**
      * 将 java.util.Date 转换为 LocalDateTime（使用系统默认时区）
      */
-    private static LocalDateTime toLocalDateTime(Date date) {
+    public static LocalDateTime toLocalDateTime(Date date) {
         if (date == null) {
             throw new IllegalArgumentException("Date cannot be null");
         }
