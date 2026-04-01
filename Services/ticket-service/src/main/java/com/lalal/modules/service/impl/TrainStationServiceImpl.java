@@ -50,7 +50,7 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
 
 
         return safeCacheTemplate.safeGet(
-                    CacheConstant.trainStation(trainDO.getId()),
+                    CacheConstant.trainStationDetail(trainDO.getId()),
                     ()->{
                         LambdaQueryWrapper<TrainStationDO> lambdaQueryWrapper = new LambdaQueryWrapper<TrainStationDO>()
                                 .eq(TrainStationDO::getTrainId, trainDO.getId())
