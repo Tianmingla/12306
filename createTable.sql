@@ -447,3 +447,30 @@ CREATE TABLE IF NOT EXISTS `t_operation_log` (
   KEY `idx_module` (`module`),
   KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';
+
+-- 候补购票表
+CREATE TABLE IF NOT EXISTS `t_waitlist_order` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `waitlist_sn` VARCHAR(32) NOT NULL COMMENT '候补订单号',
+    `username` VARCHAR(50) NOT NULL COMMENT '用户账号（手机号）',
+    `train_number` VARCHAR(20) NOT NULL COMMENT '车次号',
+    `start_station` VARCHAR(50) NOT NULL COMMENT '出发站',
+    `end_station` VARCHAR(50) NOT NULL COMMENT '到达站',
+    `travel_date` DATE NOT NULL COMMENT '乘车日期',
+    `seat_types` VARCHAR(50) NOT NULL COMMENT '座位类型（逗号分隔）',
+    `passenger_ids` VARCHAR(500) NOT NULL COMMENT '乘车人ID列表（逗号分隔）',
+    `prepay_amount` DECIMAL(10, 2) NOT NULL COMMENT '预支付金额',
+    `deadline` DATETIME NOT NULL COMMENT '截止时间',
+    `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0=待兑现，1=兑现中，2=已兑现，3=已取消，4=已过期',
+    `fulfilled_order_sn` VARCHAR(64) DEFAULT NULL COMMENT '兑现成功后的订单号',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `del_flag` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_waitlist_sn` (`waitlist_sn`),
+    KEY `idx_username` (`username`),
+    KEY `idx_train_date` (`train_number`, `travel_date`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='候补购票表';
+

@@ -16,5 +16,31 @@
         </foreach>
         )
     </select>
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO t_train_route_pair (
+        train_id,
+        train_number,
+        departure_station,
+        arrival_station,
+        start_time,
+        end_time,
+        start_region,
+        end_region
+        )
+
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+            #{item.trainId},
+            #{item.trainNumber},
+            #{item.departureStation},
+            #{item.arrivalStation},
+            #{item.startTime},
+            #{item.endTime},
+            #{item.startRegion},
+            #{item.endRegion}
+            )
+        </foreach>
+    </insert>
 
 </mapper>

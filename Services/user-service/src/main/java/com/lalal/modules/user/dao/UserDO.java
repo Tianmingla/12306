@@ -22,4 +22,10 @@ public class UserDO extends BaseDO {
      * 邮箱（可选）
      */
     private String email;
+
+    /**
+     *
+     * 账号状态(0正常 1封禁)
+     */
+    private Integer status;
 }

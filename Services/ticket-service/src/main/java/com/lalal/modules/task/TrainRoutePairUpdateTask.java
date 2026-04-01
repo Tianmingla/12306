@@ -9,12 +9,15 @@ import com.lalal.modules.mapper.TrainRoutePairMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 public class TrainRoutePairUpdateTask {
@@ -25,6 +28,8 @@ public class TrainRoutePairUpdateTask {
     private TrainRoutePairMapper trainRoutePairMapper;
     @Autowired
     private StationMapper stationMapper;
+    @Value("${task.manualUpdateTrainRoutePair}")
+    private String manualUpdate;
     /**
      * 每月1日凌晨2点自动更新线路扁平化表
      */
@@ -50,8 +55,18 @@ public class TrainRoutePairUpdateTask {
         // 遍历每个车次，生成所有区间线路
         for (Map.Entry<String, List<TrainStationDO>> entry : trainMap.entrySet()) {
             String trainNumber=entry.getKey();
-            List<TrainStationDO> stations = entry.getValue();
+            List<TrainStationDO> stations = entry.getValue()
+                    .stream()
+                    .collect(Collectors.collectingAndThen(
+                            Collectors.toMap(
+                                    TrainStationDO::getStationName, // 按站点名称作为 Key
+                                    Function.identity(),            // Value 是对象本身
+                                    (existing, replacement) -> existing // 冲突时保留第一个
+                            ),
+                            map -> new ArrayList<>(map.values()) // 转回 List
+                    ));
             stations.sort(Comparator.comparing(TrainStationDO::getSequence));
+
             for (int i = 0; i < stations.size() - 1; i++) {
                 for (int j = i + 1; j < stations.size(); j++) {
                     TrainRoutePairDO pair = new TrainRoutePairDO();
@@ -79,21 +94,30 @@ public class TrainRoutePairUpdateTask {
             }
         }
         // 批量插入或更新
-        // TODO: 可优化为批量 upsert
-        for (TrainRoutePairDO pair : routePairs) {
-            try {
-                trainRoutePairMapper.insert(pair);
-            }catch (Exception e){
-
+        int batchSize=10000;
+        try {
+            for (int i = 0; i < routePairs.size(); i = i + batchSize) {
+                trainRoutePairMapper.batchInsert(
+                        routePairs.subList(
+                                i,
+                                Math.min(i + batchSize, routePairs.size()
+                                )
+                        )
+                );
             }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
     /**
      * 手动触发一次更新
+     * TODO 绕过代理 绕过事务
      */
+    @PostConstruct
     public void manualUpdate() {
-        updateTrainRoutePairTable();
+        if(manualUpdate.equals("true"))
+          updateTrainRoutePairTable();
     }
 
     // TODO: 消息队列事件触发更新，待选型

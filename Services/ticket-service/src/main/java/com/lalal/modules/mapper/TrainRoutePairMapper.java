@@ -16,4 +16,10 @@ public interface TrainRoutePairMapper extends BaseMapper<TrainRoutePairDO> {
             @Param("start") List<StationDO> departureStations,
             @Param("end") List<StationDO> arrivalStations
     );
+    /**
+     * 批量插入线路对
+     * @param list 数据列表
+     * @return 影响行数
+     */
+    int batchInsert(@Param("list") List<TrainRoutePairDO> list);
 }
