@@ -157,6 +157,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             OrderDO order = findByOrderSn(outTradeNo);
             if (order != null && Objects.equals(order.getStatus(), 0)) {
                 order.setStatus(1);
+                order.setPayTime(new Date());
                 this.updateById(order);
             }
         }

@@ -281,6 +281,7 @@ CREATE TABLE `t_order` (
   `end_station` VARCHAR(64) NOT NULL COMMENT '到达站',
   `run_date` datetime NOT NULL COMMENT '乘车日期',
   `total_amount` DECIMAL(10,2) NOT NULL COMMENT '订单总金额',
+  `pay_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '支付时间',
   `status` INT NOT NULL DEFAULT 0 COMMENT '订单状态：0-待支付, 1-已支付, 2-已取消, 3-已退票',
 
   -- BaseDO 字段

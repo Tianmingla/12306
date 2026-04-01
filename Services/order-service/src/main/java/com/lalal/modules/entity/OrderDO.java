@@ -18,6 +18,7 @@ public class OrderDO extends BaseDO {
     private String orderSn;
     private String username;
     private String trainNumber;
+    private Date payTime;
     private String startStation;
     private String endStation;
     private Date runDate;
