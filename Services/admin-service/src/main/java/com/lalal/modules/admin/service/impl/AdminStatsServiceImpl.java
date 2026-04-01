@@ -14,6 +14,9 @@ import com.lalal.modules.admin.mapper.TrainMapper;
 import com.lalal.modules.admin.mapper.UserMapper;
 import com.lalal.modules.admin.service.AdminStatsService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.lalal.modules.utils.DateUtils;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.serializer.SerializationException;
@@ -24,6 +27,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -105,7 +109,13 @@ public class AdminStatsServiceImpl implements AdminStatsService {
 
         return stats;
     }
-
+    @Data
+    @AllArgsConstructor
+    private static class OrderTrendData {
+        private java.util.Date date;
+        private Long count;
+        private BigDecimal totalMoney;
+    }
     @Override
     public Map<String, Object> getOrderTrend(String startDate, String endDate, String type) {
         Map<String, Object> result = new HashMap<>();
@@ -129,26 +139,11 @@ public class AdminStatsServiceImpl implements AdminStatsService {
         }
 
         // 4. 执行查询
-//        List<Map<String, Object>> dbResults = cacheTemplate.safeGet(
-//                "admin:satus:orderTrend:"+end.format(dateFormatter),
-//                ()->{
-//                    // 构建查询
-//                    QueryWrapper<OrderDO> wrapper = new QueryWrapper<>();
-//                    wrapper.select(
-//                                    "DATE(update_time) as date",
-//                                    "COUNT(*) as count",
-//                                    "SUM(IFNULL(total_amount, 0)) as total_money")
-//                            .ge("update_time", start.atStartOfDay())
-//                            .le("update_time", end.atTime(23, 59, 59))
-//                            .groupBy("DATE(update_time)")
-//                            .orderByAsc("DATE(update_time)");
-//                    return orderMapper.selectMaps(wrapper);
-//                },
-//                new TypeReference<List<Map<String,Object>>>(){},
-//                1,
-//                TimeUnit.DAYS
-//        );
-        QueryWrapper<OrderDO> wrapper = new QueryWrapper<>();
+        List<OrderTrendData> dbResults = cacheTemplate.safeGet(
+                "admin:satus:orderTrend:"+end.format(dateFormatter),
+                ()->{
+                    // 构建查询
+                    QueryWrapper<OrderDO> wrapper = new QueryWrapper<>();
                     wrapper.select(
                                     "DATE(update_time) as date",
                                     "COUNT(*) as count",
@@ -157,20 +152,35 @@ public class AdminStatsServiceImpl implements AdminStatsService {
                             .le("update_time", end.atTime(23, 59, 59))
                             .groupBy("DATE(update_time)")
                             .orderByAsc("DATE(update_time)");
-        List<Map<String, Object>> dbResults = orderMapper.selectMaps(wrapper);
+
+                    List<Map<String,Object>> r=orderMapper.selectMaps(wrapper);
+                    return orderMapper.selectMaps(wrapper)
+                            .stream()
+                            .map(o-> {
+                                java.util.Date date=new java.util.Date(((Date) o.get("date")).getTime());
+                                return new OrderTrendData(
+                                        date,
+                                    (Long) o.get("count"),
+                                    (BigDecimal) o.get("total_money")
+                            );})
+                            .toList();
+                },
+                new TypeReference<List<OrderTrendData>>(){},
+                1,
+                TimeUnit.DAYS
+        );
 
 
         // 5. 将数据库结果“填”入全量日期容器中
-        for (Map<String, Object> row : dbResults) {
-            String dateKey = ((Date) row.get("date")).toInstant()
-                    .atZone(ZoneId.systemDefault())
+        for (OrderTrendData data : dbResults) {
+            String dateKey = DateUtils.toLocalDateTime(data.getDate())
                     .format(dateFormatter);
             if (orderMap.containsKey(dateKey)) {
-                Long count = (Long) row.get("count");
+                Long count = data.getCount();
                 orderMap.put(dateKey, count.intValue());
 
                 // 填充金额
-                BigDecimal amount = (BigDecimal) row.get("total_money");
+                BigDecimal amount = data.getTotalMoney();
                 // 如果数据库没数据，SUM可能会返回null，这里做个非空判断
                 amountMap.put(dateKey, amount != null ? amount : BigDecimal.ZERO);
             }

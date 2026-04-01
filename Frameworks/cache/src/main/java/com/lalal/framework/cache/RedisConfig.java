@@ -29,7 +29,7 @@ public class RedisConfig {
     @Bean
     public SafeCacheTemplate safeCacheTemplate(RedisTemplate redisTemplate, RedissonClient redissonClient){
         ObjectMapper mapper = new ObjectMapper();
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);//关闭带类型信息
         CacheContext ctx=CacheContext.builder()
                 .mapper(mapper)
                 .valueSerializer(new DefaultValueRedisSerializer(mapper))
