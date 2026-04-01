@@ -171,7 +171,7 @@ def get_trains_with_routes(limit: int = 1000) -> List[Dict]:
         conn.close()
 
 
-def get_users_and_passengers(user_count: int = 50000) -> List[Tuple[int, str, str]]:
+def get_users_and_passengers(user_count: int = 50000) -> List[Dict]:
     """
     获取用户及其乘车人信息。
 
@@ -187,7 +187,7 @@ def get_users_and_passengers(user_count: int = 50000) -> List[Tuple[int, str, st
     try:
         # 随机获取用户及其乘客
         cursor.execute("""
-            SELECT p.user_id, p.real_name, p.id_card_number
+            SELECT p.user_id, p.real_name, p.id_card_number , u.phone
             FROM t_passenger p
             JOIN t_user u ON p.user_id = u.id
             WHERE p.del_flag = 0 AND u.del_flag = 0
@@ -275,13 +275,14 @@ def generate_order_records(
         train_type = route['train_type'] or 2
         departure_station = route['departure_station']
         arrival_station = route['arrival_station']
-        travel_date = route['end_time'] or (datetime.now() + timedelta(days=random.randint(1, 90)))
+        travel_date = (datetime.now() + timedelta(days=random.randint(1, 90)))
 
         # 选择随机乘客
         passenger = random.choice(passengers)
-        user_id = passenger[0]
-        real_name = passenger[1]
-        id_card = passenger[2]
+        user_id = passenger["user_id"]
+        real_name = passenger["real_name"]
+        id_card = passenger["id_card_number"]
+        phone = passenger["phone"]
 
         # 随机座位类型（优先二等座、一等座）
         if random.random() < 0.6:
@@ -316,8 +317,7 @@ def generate_order_records(
 
         order = {
             'order_sn': order_sn,
-            'username': f'user_{user_id}',
-            'train_id': train_id,
+            'username': phone,
             'train_number': train_number,
             'start_station': departure_station,
             'end_station': arrival_station,
@@ -394,10 +394,10 @@ def insert_orders_batch(orders: List[Dict]) -> List[str]:
 
     sql = """
         INSERT IGNORE INTO t_order (
-            order_sn, username, train_id, train_number, start_station, end_station,
+            order_sn, username, train_number, start_station, end_station,
             run_date, total_amount, status, pay_time, create_time, update_time, del_flag
         ) VALUES (
-            %(order_sn)s, %(username)s, %(train_id)s, %(train_number)s, %(start_station)s,
+            %(order_sn)s, %(username)s, %(train_number)s, %(start_station)s,
             %(end_station)s, %(run_date)s, %(total_amount)s, %(status)s, %(pay_time)s,
             %(create_time)s, %(update_time)s, %(del_flag)s
         )
