@@ -111,8 +111,9 @@ public class AdminStatsServiceImpl implements AdminStatsService {
     }
     @Data
     @AllArgsConstructor
-    private static class OrderTrendData {
-        private java.util.Date date;
+    public static class OrderTrendData {
+        OrderTrendData(){}
+        private Date date;
         private Long count;
         private BigDecimal totalMoney;
     }
@@ -153,16 +154,13 @@ public class AdminStatsServiceImpl implements AdminStatsService {
                             .groupBy("DATE(update_time)")
                             .orderByAsc("DATE(update_time)");
 
-                    List<Map<String,Object>> r=orderMapper.selectMaps(wrapper);
                     return orderMapper.selectMaps(wrapper)
                             .stream()
-                            .map(o-> {
-                                java.util.Date date=new java.util.Date(((Date) o.get("date")).getTime());
-                                return new OrderTrendData(
-                                        date,
-                                    (Long) o.get("count"),
-                                    (BigDecimal) o.get("total_money")
-                            );})
+                            .map(o-> new OrderTrendData(
+                                    (Date) o.get("date"),
+                                (Long) o.get("count"),
+                                (BigDecimal) o.get("total_money")
+                        ))
                             .toList();
                 },
                 new TypeReference<List<OrderTrendData>>(){},
@@ -173,7 +171,9 @@ public class AdminStatsServiceImpl implements AdminStatsService {
 
         // 5. 将数据库结果“填”入全量日期容器中
         for (OrderTrendData data : dbResults) {
-            String dateKey = DateUtils.toLocalDateTime(data.getDate())
+            String dateKey = data
+                    .getDate()
+                    .toLocalDate()
                     .format(dateFormatter);
             if (orderMap.containsKey(dateKey)) {
                 Long count = data.getCount();
