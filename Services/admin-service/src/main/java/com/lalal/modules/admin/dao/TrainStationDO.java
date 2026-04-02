@@ -7,6 +7,8 @@ import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Date;
 
 /**
@@ -17,51 +19,59 @@ import java.util.Date;
 @TableName("t_train_station")
 public class TrainStationDO extends BaseDO {
 
+    /**
+     * id
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
-     * 列车ID
+     * 车次id
      */
     private Long trainId;
 
     /**
-     * 车次号
+     * 冗余字段 车次号 方便业务 减少连表
      */
     private String trainNumber;
 
     /**
-     * 车站ID
+     * 车站id
      */
     private Long stationId;
 
     /**
-     * 车站名称
+     * 同理
+     * 站台名
      */
     private String stationName;
 
     /**
-     * 站点顺序，从1开始
+     * 站点顺序
      */
     private Integer sequence;
 
     /**
      * 到站时间
      */
-    private Date arrivalTime;
+    private LocalTime arrivalTime;
 
     /**
      * 出站时间
      */
-    private Date departureTime;
+    private LocalTime departureTime;
 
     /**
-     * 停留时间（分钟）
+     * 停留时间，单位分
      */
     private Integer stopoverTime;
-
     /**
-     * 列车运行日期
+     *  运行日期
      */
-    private Date runDate;
+    private LocalDate runDate;
+    /**
+     * 到达本站经过的天数
+     */
+    private Integer arriveDayDiff;
 }
+

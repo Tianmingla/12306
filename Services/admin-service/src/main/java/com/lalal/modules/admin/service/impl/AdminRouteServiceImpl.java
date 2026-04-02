@@ -11,11 +11,15 @@ import com.lalal.modules.admin.mapper.TrainMapper;
 import com.lalal.modules.admin.mapper.TrainStationMapper;
 import com.lalal.modules.admin.service.AdminRouteService;
 import com.lalal.modules.dto.PageResult;
+import com.lalal.modules.utils.DateUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +37,7 @@ public class AdminRouteServiceImpl implements AdminRouteService {
     @Autowired
     private TrainStationMapper trainStationMapper;
 
-    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     @Override
     public PageResult<RouteDetailResponse> listRoutes(RouteQueryRequest request) {
@@ -105,17 +109,23 @@ public class AdminRouteServiceImpl implements AdminRouteService {
 
         // 设置出发时间（首站出站时间）
         if (firstStation.getDepartureTime() != null) {
-            response.setDepartureTime(TIME_FORMAT.format(firstStation.getDepartureTime()));
+            response.setDepartureTime(firstStation.getDepartureTime().format(TIME_FORMAT));
         }
 
         // 设置到达时间（末站到站时间）
         if (lastStation.getArrivalTime() != null) {
-            response.setArrivalTime(TIME_FORMAT.format(lastStation.getArrivalTime()));
+            response.setArrivalTime(lastStation.getArrivalTime().format(TIME_FORMAT));
+        }
+        int diff=0;
+        for(int i=1;i<stations.size();i++){
+            diff+=stations.get(i).getArriveDayDiff();
         }
 
         // 计算运行时长（分钟）
         if (firstStation.getDepartureTime() != null && lastStation.getArrivalTime() != null) {
-            long duration = (lastStation.getArrivalTime().getTime() - firstStation.getDepartureTime().getTime()) / (1000 * 60);
+            LocalDateTime arrivalTime =lastStation.getArrivalTime().atDate(LocalDate.now().plusDays(diff));
+            LocalDateTime departureTime=firstStation.getDepartureTime().atDate(LocalDate.now());
+            long duration = DateUtils.diffMinutes(departureTime,arrivalTime);
             response.setDuration((int) duration);
         }
 

@@ -2,6 +2,8 @@ package com.lalal.modules.admin.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Date;
 
 /**
@@ -38,12 +40,12 @@ public class TrainStationSaveRequest {
     /**
      * 到站时间
      */
-    private Date arrivalTime;
+    private LocalTime arrivalTime;
 
     /**
      * 出站时间
      */
-    private Date departureTime;
+    private LocalTime departureTime;
 
     /**
      * 停留时间（分钟）
@@ -53,5 +55,5 @@ public class TrainStationSaveRequest {
     /**
      * 运行日期
      */
-    private Date runDate;
+    private LocalDate runDate;
 }
