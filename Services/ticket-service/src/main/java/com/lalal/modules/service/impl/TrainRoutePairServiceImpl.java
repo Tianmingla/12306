@@ -24,6 +24,9 @@ import org.springframework.stereotype.Service;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -308,9 +311,12 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             int transferCount = result.getSegments().size();
             result.setTransferCount(transferCount);
 
-            Date firstDeparture = result.getSegments().get(0).getStartTime(); // 必须是 Date
+
+            LocalDateTime firstDeparture = result.getSegments().get(0).getStartTime().atDate(LocalDate.now()); // 必须是 Date
             result.setFirstDepartureTime(DateUtils.format(firstDeparture,"HH:mm"));
-            Date finalArrival = result.getSegments().get(transferCount - 1).getEndTime(); // 必须是 Date
+
+            int diffDay=result.getSegments().get(transferCount - 1).getDayDiff();
+            LocalDateTime finalArrival = result.getSegments().get(transferCount - 1).getEndTime().atDate(LocalDate.now().plusDays(diffDay)); // 必须是 Date
             result.setFinalArrivalTime(DateUtils.format(finalArrival,"HH:mm"));
             result.setTotalDurationMinutes(DateUtils.diffMinutes(firstDeparture,finalArrival));
 

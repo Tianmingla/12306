@@ -21,6 +21,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 
+import java.time.LocalTime;
 import java.util.Date;
 
 /**
@@ -60,12 +61,12 @@ public class TrainRoutePairDO extends BaseDO {
     /**
      * 出发时间
      */
-    private Date startTime;
+    private LocalTime startTime;
 
     /**
      * 结束时间
      */
-    private Date endTime;
+    private LocalTime endTime;
 
     /**
      * 起始城市
@@ -76,5 +77,10 @@ public class TrainRoutePairDO extends BaseDO {
      * 终点城市
      */
     private String endRegion;
+    /**
+     *
+     * 起始-终点跨过的天数
+     */
+    private Integer dayDiff;
 
 }

@@ -151,20 +151,26 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
      */
     private List<TrainStationDO> getDepartureTrainsForToday(Long stationId, LocalDate date) {
         // 查询该车站作为出发站的记录
-        LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TrainStationDO::getStationId, stationId)
-                .ge(TrainStationDO::getDepartureTime);
-//        wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
-//                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
-        wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
-                TrainStationDO::getSequence, TrainStationDO::getRunDate);
-        trainStationMapper.selectList(wrapper);
+        int limit=20;
         List<TrainStationDO> departureTrains = safeCacheTemplate.safeGet(
-                CacheConstant
-        )
+                CacheConstant.trainStationDetailList(stationId),
+                ()->{
+                    LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
+                    wrapper.eq(TrainStationDO::getStationId, stationId)
+                            .ge(TrainStationDO::getDepartureTime,LocalTime.now())
+                            .eq(TrainStationDO::getRunDate,date)
+                            .last("limit "+limit);
+//                      wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
+//                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
+                    wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
+                            TrainStationDO::getSequence, TrainStationDO::getRunDate);
+                    return trainStationMapper.selectList(wrapper);
+                },
+                new TypeReference<List<TrainStationDO>>(){},
+                3,
+                TimeUnit.MINUTES
 
-
-
+        );
 
         if (departureTrains.isEmpty()) {
             return departureTrains;
@@ -180,7 +186,7 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
                 continue;
             }
 
-            LocalTime localTime=DateUtils.toLocalDateTime(ts.getDepartureTime()).toLocalTime();
+            LocalTime localTime=ts.getDepartureTime();
             LocalDateTime actualDeparture = date.atTime(localTime);;
 
             // 如果实际发车时间在当天范围内，或者跨夜（凌晨）也在次日范围内
@@ -221,7 +227,7 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         String terminalStation = findTerminalStation(trainId, departure.getStationId());
 
         // 解析发车时间
-        LocalTime departureTime =DateUtils.toLocalDateTime(departure.getDepartureTime()).toLocalTime();
+        LocalTime departureTime =departure.getDepartureTime();
         LocalDateTime actualDepartureTime = calculateActualDepartureTime(serverNow, departureTime, sequence);
 
         // 正晚点状态计算

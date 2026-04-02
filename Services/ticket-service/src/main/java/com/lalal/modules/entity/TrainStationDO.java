@@ -23,6 +23,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Date;
 
@@ -84,5 +85,9 @@ public class TrainStationDO extends BaseDO {
     /**
      *  运行日期
      */
-    private Date runDate;
+    private LocalDate runDate;
+    /**
+     * 到达本站经过的天数
+     */
+    private Integer arriveDayDiff;
 }

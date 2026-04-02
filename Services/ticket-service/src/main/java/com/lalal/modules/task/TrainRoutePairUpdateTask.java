@@ -15,6 +15,8 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -68,7 +70,9 @@ public class TrainRoutePairUpdateTask {
             stations.sort(Comparator.comparing(TrainStationDO::getSequence));
 
             for (int i = 0; i < stations.size() - 1; i++) {
+                int dayDiff=0;
                 for (int j = i + 1; j < stations.size(); j++) {
+                    dayDiff+=stations.get(j).getArriveDayDiff();
                     TrainRoutePairDO pair = new TrainRoutePairDO();
                     String departureStation=stations.get(i).getStationName();
                     String arrivalStation=stations.get(j).getStationName();
@@ -81,6 +85,7 @@ public class TrainRoutePairUpdateTask {
                     pair.setArrivalStation(stations.get(j).getStationName());
                     pair.setStartTime(stations.get(i).getDepartureTime());
                     pair.setEndTime(stations.get(j).getArrivalTime());
+                    pair.setDayDiff(dayDiff);
                     pair.setStartRegion(stationDOS
                             .get(stationNameIndex
                                     .get(departureStation))

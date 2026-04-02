@@ -25,7 +25,7 @@ public class TrainSearchResponseDTO{
     private int transferCount;
 
     /**
-     * 总耗时（毫秒 or 分钟，便于前端计算）
+     * 总耗时（分钟，便于前端计算）
      */
     private long totalDurationMinutes;
 

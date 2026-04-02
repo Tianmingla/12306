@@ -98,8 +98,8 @@ const StopoverModal: React.FC<{
                      <div className={`pl-4 font-medium ${idx === 0 || idx === stops.length - 1 ? 'text-blue-600' : 'text-gray-800'}`}>
                        {stop.stationName}
                      </div>
-                     <div className="text-gray-600">{formatTime(stop.arrivalTime)}</div>
-                     <div className="text-gray-600">{formatTime(stop.departureTime)}</div>
+                     <div className="text-gray-600">{stop.arrivalTime}</div>
+                     <div className="text-gray-600">{stop.departureTime}</div>
                      <div className="text-right text-gray-400 text-xs">
                        {idx === 0 ? '始发' : (idx === stops.length - 1 ? '终点' : `${stop.stopoverTime || 0}分`)}
                      </div>

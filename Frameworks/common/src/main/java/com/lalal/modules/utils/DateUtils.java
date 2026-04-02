@@ -35,6 +35,14 @@ public final class DateUtils {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
         return toLocalDateTime(date).format(formatter);
     }
+    /**
+     * 将 Date 按指定格式格式化为字符串
+     */
+    public static String format(LocalDateTime date, String pattern) {
+        if (date == null || pattern == null || pattern.isEmpty()) return "";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+        return date.format(formatter);
+    }
 
     // ========== 时间差计算 ==========
 
@@ -56,6 +64,16 @@ public final class DateUtils {
         LocalDateTime endLdt = toLocalDateTime(end);
 
         long minutes = Duration.between(startLdt, endLdt).toMinutes();
+
+        while (minutes < 0) {
+            // 跨天处理：加 24 小时（1440 分钟）
+            minutes += 24 * 60;
+        }
+
+        return minutes;
+    }
+    public static long diffMinutes(LocalDateTime start, LocalDateTime end) {
+        long minutes = Duration.between(start, end).toMinutes();
 
         while (minutes < 0) {
             // 跨天处理：加 24 小时（1440 分钟）

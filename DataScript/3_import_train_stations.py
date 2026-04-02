@@ -135,7 +135,7 @@ def parse_time(time_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def calculate_stopover(arrival: Optional[time], departure: Optional[time],diff_day:str) -> Optional[int]:
+def calculate_stopover(arrival: Optional[time], departure: Optional[time]) -> Optional[int]:
    """
        计算停留时间（分钟）。
 
@@ -160,8 +160,8 @@ def calculate_stopover(arrival: Optional[time], departure: Optional[time],diff_d
    dt_departure = datetime.combine(base_date, departure)
 
    # 4. 处理跨天逻辑
-   if diff_day and int(diff_day) > 0:
-       dt_departure += timedelta(days=int(diff_day))
+   if dt_arrival>dt_departure:
+       dt_departure += timedelta(days=1)
 
    # 5. 计算差值
    delta = dt_departure - dt_arrival
@@ -285,7 +285,9 @@ def process_station_data(
                         depart_time = None
 
                     # 计算停留时间
-                    stopover = calculate_stopover(arrive_time, depart_time,st.get('arrive_day_diff'))
+                    stopover = calculate_stopover(arrive_time, depart_time)
+
+                    arrive_day_diff=st.get('arrive_day_diff')
 
                     # 数据清洗：检查必填字段
                     if arrive_time is None and depart_time is None:
@@ -301,6 +303,7 @@ def process_station_data(
                         'arrival_time': arrive_time,
                         'departure_time': depart_time,
                         'stopover_time': stopover,
+                        'arrive_day_diff': arrive_day_diff,
                         'run_date': datetime.strptime(DEFAULT_RUN_DATE, '%Y-%m-%d').date()
                     })
 
@@ -369,10 +372,10 @@ def import_to_database(records: List[Dict[str, Any]]) -> int:
 
     sql = """
         INSERT IGNORE INTO t_train_station (
-            train_id, train_number, station_id, station_name,
+            train_id, train_number, station_id, station_name, arrive_day_diff,
             sequence, arrival_time, departure_time, stopover_time, run_date, del_flag
         ) VALUES (
-            %(train_id)s, %(train_number)s, %(station_id)s, %(station_name)s,
+            %(train_id)s, %(train_number)s, %(station_id)s, %(station_name)s,%(arrive_day_diff)s,
             %(sequence)s, %(arrival_time)s, %(departure_time)s, %(stopover_time)s, %(run_date)s, 0
         )
     """
