@@ -23,6 +23,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 
+import java.time.LocalTime;
 import java.util.Date;
 
 /**
@@ -69,12 +70,12 @@ public class TrainStationDO extends BaseDO {
     /**
      * 到站时间
      */
-    private Date arrivalTime;
+    private LocalTime arrivalTime;
 
     /**
      * 出站时间
      */
-    private Date departureTime;
+    private LocalTime departureTime;
 
     /**
      * 停留时间，单位分

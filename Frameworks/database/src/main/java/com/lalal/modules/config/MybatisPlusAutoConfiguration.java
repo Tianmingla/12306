@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.lalal.modules.handler.LocalTimeTypeHandler;
 import com.lalal.modules.handler.MyMetaObjectHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,5 +21,4 @@ public class MybatisPlusAutoConfiguration {
     public MetaObjectHandler MyMetaObjectHandler(){
         return new MyMetaObjectHandler();
     }
-
 }

@@ -213,8 +213,8 @@ CREATE TABLE `t_train_station` (
   `station_id` bigint DEFAULT NULL COMMENT '车站ID（可后续补充）',
   `station_name` varchar(50) NOT NULL COMMENT '车站名称',
   `sequence` int NOT NULL COMMENT '站点顺序，从1开始',
-  `arrival_time` datetime DEFAULT NULL COMMENT '到站时间',
-  `departure_time` datetime DEFAULT NULL COMMENT '出站时间',
+  `arrival_time` time DEFAULT NULL COMMENT '到站时间',
+  `departure_time` time DEFAULT NULL COMMENT '出站时间',
   `stopover_time` int DEFAULT NULL COMMENT '停留时间（分钟）',
   `run_date` date NOT NULL COMMENT '列车运行日期',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -223,6 +223,7 @@ CREATE TABLE `t_train_station` (
   PRIMARY KEY (`id`),
   KEY `idx_run_date_station` (`run_date`,`station_name`),
   KEY `idx_train_number_run_date` (`train_number`,`run_date`),
+  KEY `idx_station_departure` (`station_id`,`departure_time`,`del_flag`),
   KEY `idx_query_route` (`run_date`,`station_name`,`train_number`,`sequence`),
   KEY `idx_t2_lookup` (`station_name`,`train_id`,`sequence`),
   KEY `idx_t1_lookup` (`run_date`,`station_name`,`train_id`,`sequence`,`train_number`)

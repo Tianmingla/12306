@@ -41,6 +41,8 @@ This is a 12306 railway ticketing system implementation with a microservices arc
 2. **缓存常量**: 所有缓存 Key 常量统一放在 `Frameworks/common/src/main/java/com/lalal/modules/constant/cache/CacheConstant.java`
 3. **枚举统一**: 类别、状态等应使用枚举定义，放在 `Frameworks/common/src/main/java/com/lalal/modules/constant/` 目录
 4. **API 分离**: 前端 API 调用与类型定义分离（`api/` 和 `types/` 目录）
+5. **数据库修改/增加**  记得附加修改`createTable.sql`和`/DataScript`对应的数据生成脚本
+6. **数据库查询**:  记得使用`Frameworks/cache/src/main/java/com/lalal/framework/cache/SafeCacheTemplate.java`优化数据库查询
 
 ## Build Commands
 

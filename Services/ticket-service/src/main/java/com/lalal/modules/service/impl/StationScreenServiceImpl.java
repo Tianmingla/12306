@@ -19,8 +19,12 @@ package com.lalal.modules.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.lalal.framework.cache.SafeCacheTemplate;
+import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.dto.response.StationScreenResponseDTO;
 import com.lalal.modules.dto.response.StationScreenTrainDTO;
+import com.lalal.modules.entity.StationDO;
 import com.lalal.modules.entity.TrainDO;
 import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.mapper.StationMapper;
@@ -39,6 +43,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -59,6 +64,8 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
     private final TrainStationMapper trainStationMapper;
     private final TrainMapper trainMapper;
 
+    private final SafeCacheTemplate safeCacheTemplate;
+
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -77,7 +84,14 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         // 获取车站信息
         LambdaQueryWrapper<com.lalal.modules.entity.StationDO> stationWrapper = new LambdaQueryWrapper<>();
         stationWrapper.eq(com.lalal.modules.entity.StationDO::getName, stationName);
-        com.lalal.modules.entity.StationDO stationDO = this.getOne(stationWrapper);
+
+        com.lalal.modules.entity.StationDO stationDO =safeCacheTemplate.safeGet(
+                CacheConstant.trainStationDetail(stationName),
+                () -> this.getOne(stationWrapper),
+                new TypeReference<StationDO>() {},
+                3,
+                TimeUnit.DAYS
+        );
 
         if (stationDO == null) {
             log.warn("车站不存在：{}", stationName);
@@ -138,14 +152,19 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
     private List<TrainStationDO> getDepartureTrainsForToday(Long stationId, LocalDate date) {
         // 查询该车站作为出发站的记录
         LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(TrainStationDO::getStationId, stationId);
+        wrapper.eq(TrainStationDO::getStationId, stationId)
+                .ge(TrainStationDO::getDepartureTime);
 //        wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
 //                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
-
         wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
                 TrainStationDO::getSequence, TrainStationDO::getRunDate);
+        trainStationMapper.selectList(wrapper);
+        List<TrainStationDO> departureTrains = safeCacheTemplate.safeGet(
+                CacheConstant
+        )
 
-        List<TrainStationDO> departureTrains = trainStationMapper.selectList(wrapper);
+
+
 
         if (departureTrains.isEmpty()) {
             return departureTrains;

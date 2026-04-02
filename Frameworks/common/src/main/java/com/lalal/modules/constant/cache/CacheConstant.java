@@ -92,6 +92,15 @@ public class CacheConstant {
         return String.format(TRAIN_STATION_DETAIL_KEY_TEMPLATE,trainId);
     }
     /**
+     * 构建站台详情缓存Key
+     *
+     * @param stationName     站台名
+     * @return 缓存Key字符串
+     */
+    public static String trainStationDetail(String stationName){
+        return String.format(TRAIN_STATION_DETAIL_KEY_TEMPLATE,stationName);
+    }
+    /**
      * 构建火车车次到详情映射的缓存Key
      *
      * @param trainNum     车次号

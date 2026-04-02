@@ -15,8 +15,7 @@
 用法：
     python 3_import_train_stations.py
 
-作者：Claude
-日期：2026-03-29
+
 """
 
 import os
@@ -25,7 +24,7 @@ import re
 import sys
 import logging
 from typing import Dict, List, Set, Any, Optional
-from datetime import datetime
+from datetime import datetime,time, timedelta
 import pymysql
 from pymysql.cursors import DictCursor
 
@@ -136,20 +135,40 @@ def parse_time(time_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def calculate_stopover(arrival: Optional[datetime], departure: Optional[datetime]) -> Optional[int]:
-    """
-    计算停留时间（分钟）。
+def calculate_stopover(arrival: Optional[time], departure: Optional[time],diff_day:str) -> Optional[int]:
+   """
+       计算停留时间（分钟）。
 
-    Args:
-        arrival: 到站时间
-        departure: 离站时间
+       Args:
+           arrival: 到站时间 (datetime.time)
+           departure: 离站时间 (datetime.time)
+           diff_day: 是否隔天标记。为 '0' (当天) 或 '1' (次日)。
 
-    Returns:
-        停留分钟数，或 None
-    """
-    if arrival and departure and departure > arrival:
-        return int((departure - arrival).total_seconds() // 60)
-    return None
+
+       Returns:
+           停留分钟数，或 None
+   """
+   # 1. 基础校验：必须有到站和离站时间
+   if not arrival or not departure:
+       return None
+
+   # 2. 选取一个基准日期（任意日期均可，如今天）
+   base_date = datetime.now().date()
+
+   # 3. 组合成完整的 datetime 对象
+   dt_arrival = datetime.combine(base_date, arrival)
+   dt_departure = datetime.combine(base_date, departure)
+
+   # 4. 处理跨天逻辑
+   if diff_day and int(diff_day) > 0:
+       dt_departure += timedelta(days=int(diff_day))
+
+   # 5. 计算差值
+   delta = dt_departure - dt_arrival
+
+   # 6. 转换为分钟
+   total_seconds = max(0, delta.total_seconds())
+   return int(total_seconds // 60)
 
 
 # =============================================================================
@@ -243,10 +262,20 @@ def process_station_data(
 
                     # 获取 station_id（可能不存在）
                     station_id = station_mapping.get(station_name)
+                    arrive_time= None
+                    departure_time = None
 
+                    arrive_datetime=parse_time(st.get('arrive_time'))
+                    departure_datetime=parse_time(st.get('start_time'))
                     # 解析时间
-                    arrive_time = parse_time(st.get('arrive_time'))
-                    depart_time = parse_time(st.get('start_time'))
+                    if arrive_datetime is not None:
+                        arrive_time = arrive_datetime.time()
+                    else:
+                        arrive_time = None
+                    if departure_datetime is not None:
+                        depart_time = departure_datetime.time()
+                    else:
+                        depart_time = None
 
                     # 首站：arrival_time 为 None
                     if seq == 1:
@@ -256,7 +285,7 @@ def process_station_data(
                         depart_time = None
 
                     # 计算停留时间
-                    stopover = calculate_stopover(arrive_time, depart_time)
+                    stopover = calculate_stopover(arrive_time, depart_time,st.get('arrive_day_diff'))
 
                     # 数据清洗：检查必填字段
                     if arrive_time is None and depart_time is None:
