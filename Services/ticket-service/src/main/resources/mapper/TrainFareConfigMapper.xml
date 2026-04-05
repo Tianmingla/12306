@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.lalal.modules.mapper.TrainFareConfigMapper">
+
+    <resultMap id="BaseResultMap" type="com.lalal.modules.entity.TrainFareConfigDO">
+        <id column="id" property="id"/>
+        <result column="train_id" property="trainId"/>
+        <result column="train_number" property="trainNumber"/>
+        <result column="surcharge_type" property="surchargeType"/>
+        <result column="is_peak_season" property="isPeakSeason"/>
+        <result column="effective_date" property="effectiveDate"/>
+        <result column="expire_date" property="expireDate"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="del_flag" property="delFlag"/>
+    </resultMap>
+
+    <select id="selectByTrainId" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_train_fare_config
+        WHERE train_id = #{trainId}
+          AND del_flag = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectByTrainNumber" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_train_fare_config
+        WHERE train_number = #{trainNumber}
+          AND del_flag = 0
+        LIMIT 1
+    </select>
+
+</mapper>

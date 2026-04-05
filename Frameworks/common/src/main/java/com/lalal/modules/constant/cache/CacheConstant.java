@@ -197,4 +197,54 @@ public class CacheConstant {
     public static final String  TRAIN_CARRIAGE_COUNT = "TRAIN::CARRIAGE::%s::%s";
     public static final String  TRAIN_STATION_DETAIL = "TRAIN::STATION::%s";
 
+    /* ==================== 票价相关缓存Key ==================== */
+
+    public static final String STATION_DISTANCE_KEY_TEMPLATE = "FARE::DISTANCE::%s::%s::%s";
+    public static final String TRAIN_FARE_CONFIG_KEY_TEMPLATE = "FARE::CONFIG::%s";
+    public static final String PRE_CALCULATED_FARE_KEY_TEMPLATE = "FARE::PRE::%s::%s::%s::%d";
+
+    /**
+     * 构建站间距离缓存Key
+     *
+     * @param trainId 列车ID
+     * @param depStation 出发站名称
+     * @param arrStation 到达站名称
+     * @return 缓存Key字符串
+     */
+    public static String stationDistanceKey(Long trainId, String depStation, String arrStation) {
+        Objects.requireNonNull(trainId, "trainId must not be null");
+        if (depStation == null || depStation.isEmpty() || arrStation == null || arrStation.isEmpty()) {
+            throw new IllegalArgumentException("站点名称不能为空");
+        }
+        return String.format(STATION_DISTANCE_KEY_TEMPLATE, trainId, depStation, arrStation);
+    }
+
+    /**
+     * 构建列车票价配置缓存Key
+     *
+     * @param trainId 列车ID
+     * @return 缓存Key字符串
+     */
+    public static String trainFareConfigKey(Long trainId) {
+        Objects.requireNonNull(trainId, "trainId must not be null");
+        return String.format(TRAIN_FARE_CONFIG_KEY_TEMPLATE, trainId);
+    }
+
+    /**
+     * 构建预计算票价缓存Key
+     *
+     * @param trainId 列车ID
+     * @param depStation 出发站名称
+     * @param arrStation 到达站名称
+     * @param seatType 座位类型
+     * @return 缓存Key字符串
+     */
+    public static String preCalculatedFareKey(Long trainId, String depStation, String arrStation, int seatType) {
+        Objects.requireNonNull(trainId, "trainId must not be null");
+        if (depStation == null || depStation.isEmpty() || arrStation == null || arrStation.isEmpty()) {
+            throw new IllegalArgumentException("站点名称不能为空");
+        }
+        return String.format(PRE_CALCULATED_FARE_KEY_TEMPLATE, trainId, depStation, arrStation, seatType);
+    }
+
 }

@@ -478,3 +478,44 @@ CREATE TABLE IF NOT EXISTS `t_waitlist_order` (
     KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='候补购票表';
 
+-- ------------------------------------------------------
+-- 票价计算相关表
+-- ------------------------------------------------------
+
+-- 站间距离表
+CREATE TABLE IF NOT EXISTS `t_station_distance` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `train_id` bigint NOT NULL COMMENT '列车ID',
+  `train_number` varchar(20) NOT NULL COMMENT '车次号',
+  `departure_station_id` bigint DEFAULT NULL COMMENT '出发站ID',
+  `departure_station_name` varchar(50) NOT NULL COMMENT '出发站名',
+  `arrival_station_id` bigint DEFAULT NULL COMMENT '到达站ID',
+  `arrival_station_name` varchar(50) NOT NULL COMMENT '到达站名',
+  `distance` int NOT NULL COMMENT '里程(公里)',
+  `line_name` varchar(100) DEFAULT NULL COMMENT '线路名称',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_train_stations` (`train_id`, `departure_station_name`, `arrival_station_name`),
+  KEY `idx_train_number` (`train_number`),
+  KEY `idx_stations` (`departure_station_name`, `arrival_station_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站间距离表';
+
+-- 列车票价配置表
+CREATE TABLE IF NOT EXISTS `t_train_fare_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `train_id` bigint NOT NULL COMMENT '列车ID',
+  `train_number` varchar(20) NOT NULL COMMENT '车次号',
+  `surcharge_type` tinyint NOT NULL DEFAULT 0 COMMENT '上浮类型: 0-普通车, 1-新空调50%, 2-新空调一档40%, 3-新空调二档30%, 4-高软180%, 5-高软208%',
+  `is_peak_season` tinyint NOT NULL DEFAULT 0 COMMENT '是否春运期间',
+  `effective_date` date DEFAULT NULL COMMENT '生效日期',
+  `expire_date` date DEFAULT NULL COMMENT '失效日期',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_train_config` (`train_id`),
+  KEY `idx_train_number` (`train_number`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='列车票价上浮配置表';
+

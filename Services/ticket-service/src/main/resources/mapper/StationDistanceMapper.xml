@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.lalal.modules.mapper.StationDistanceMapper">
+
+    <resultMap id="BaseResultMap" type="com.lalal.modules.entity.StationDistanceDO">
+        <id column="id" property="id"/>
+        <result column="train_id" property="trainId"/>
+        <result column="train_number" property="trainNumber"/>
+        <result column="departure_station_id" property="departureStationId"/>
+        <result column="departure_station_name" property="departureStationName"/>
+        <result column="arrival_station_id" property="arrivalStationId"/>
+        <result column="arrival_station_name" property="arrivalStationName"/>
+        <result column="distance" property="distance"/>
+        <result column="line_name" property="lineName"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="del_flag" property="delFlag"/>
+    </resultMap>
+
+    <select id="selectByTrainAndStations" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_station_distance
+        WHERE train_id = #{trainId}
+          AND departure_station_name = #{departureStationName}
+          AND arrival_station_name = #{arrivalStationName}
+          AND del_flag = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectByTrainNumberAndStations" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_station_distance
+        WHERE train_number = #{trainNumber}
+          AND departure_station_name = #{departureStationName}
+          AND arrival_station_name = #{arrivalStationName}
+          AND del_flag = 0
+        LIMIT 1
+    </select>
+
+</mapper>
