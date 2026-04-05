@@ -36,37 +36,43 @@ import java.util.stream.Collectors;
  * 事件驱动思想总结
  * 。。。。TODO
  */
-@AllArgsConstructor
 public class SafeCacheTemplate {
     private RedisTemplate<String, Object> redisTemplate;
 
     private RedissonClient redissonClient;
 
-    //这里设计错误 应该当参数传 这样变成状态机 十分难用
-    private CacheContext curContext;  //也可以把参数都放到上下文中 但这里因为代码再中途的想法 一改要改挺多的 这里其实也有点状态机的意思
+    private ValueRedisSerializer defaultValueSerializer;
+    //多线程环境 线程独有  TODO在哪里清除 java spring为线程池环境
+    private static final ThreadLocal<RedisType> redisTypeHolder = new ThreadLocal<>();
+    private ValueRedisSerializer  curValueSerializer;
 
-    //操作上下文控制 TODO 将这几个序列化器固定 而不是每次去分配 浪费性能
-    public void clearContext(){
-        curContext.setValueSerializer(new DefaultValueRedisSerializer(curContext.getMapper()));
-        curContext.setRedisType(RedisType.VALUE);
+
+    public SafeCacheTemplate(RedisTemplate<String, Object> redisTemplate,RedissonClient redissonClient,ValueRedisSerializer defaultValueSerializer){
+        this.redisTemplate=redisTemplate;
+        this.redissonClient=redissonClient;
+        this.defaultValueSerializer=defaultValueSerializer;
+        this.curValueSerializer=defaultValueSerializer;
     }
+
     public SafeCacheTemplate setDefaultValueSerializer(){
-        curContext.setValueSerializer(new DefaultValueRedisSerializer(curContext.getMapper()));
+        curValueSerializer=defaultValueSerializer;
         return this;
     }
-
+    private static void clear(){
+        redisTypeHolder.remove();
+    }
     /**
      * 函数接口配置自定义序列化器
      * @param redisSerializer
      * @return
      */
     public SafeCacheTemplate setCustomizedSerializer(ValueRedisSerializer redisSerializer){
-        curContext.setValueSerializer(redisSerializer);
+        curValueSerializer=redisSerializer;
         return this;
     }
 
     public SafeCacheTemplate setRawValueSerializer(){
-        curContext.setValueSerializer(new RawRedisSerializer());
+        curValueSerializer=new RawRedisSerializer();
         return this;
     }
     // ============ 基础缓存操作（保持兼容）============
@@ -77,9 +83,9 @@ public class SafeCacheTemplate {
             connection.openPipeline();
             //java 枚举类 维护一个递增独立值
             //在switch中 连续递增的值编译器处理是o(1)的
-            switch (curContext.getRedisType()){
+            switch (redisTypeHolder.get()){
                 case VALUE:
-                    connection.setEx(keyBytes,unit.toSeconds(timeout),curContext.getValueSerializer().serialize(value));
+                    connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.serialize(value));
                     break;
                 case HASH:
                     //TODO
@@ -89,7 +95,7 @@ public class SafeCacheTemplate {
                     int size=valueList.size();
                     byte[][] valueListBytes=new byte[size][];
                     for(int i=0;i<size;i++){
-                        valueListBytes[i]= curContext.getValueSerializer().serialize(valueList.get(i));
+                        valueListBytes[i]= curValueSerializer.serialize(valueList.get(i));
                     }
                     connection.rPush(keyBytes,valueListBytes);
                     connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
@@ -104,11 +110,11 @@ public class SafeCacheTemplate {
             connection.openPipeline();
             //java 枚举类 维护一个递增独立值
             //在switch中 连续递增的值编译器处理是o(1)的
-            switch (curContext.getRedisType()){
+            switch (redisTypeHolder.get()){
                 case VALUE:
                     for(int i=0;i<keys.size();i++){
                         byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
-                        connection.setEx(keyBytes,unit.toSeconds(timeout),curContext.getValueSerializer().serialize(values.get(i)));
+                        connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.serialize(values.get(i)));
                     }
                     break;
                 case HASH:
@@ -121,7 +127,7 @@ public class SafeCacheTemplate {
                         byte[][] valueListBytes=new byte[size][];
                         byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
                         for(int j=0;j<size;j++){
-                            valueListBytes[j]= curContext.getValueSerializer().serialize(valueList.get(j));
+                            valueListBytes[j]= curValueSerializer.serialize(valueList.get(j));
                         }
                         connection.rPush(keyBytes,valueListBytes);
                         connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
@@ -147,7 +153,7 @@ public class SafeCacheTemplate {
             if(valueBytes==null){
                 return null;
             }
-            result=curContext.getValueSerializer().deserialize(valueBytes,typeReference);
+            result=curValueSerializer.deserialize(valueBytes,typeReference);
             return result;
         });
     }
@@ -186,7 +192,7 @@ public class SafeCacheTemplate {
             if (obj == null) {
                 results.add(null);
             } else {
-                T value = curContext.getValueSerializer().deserialize((byte[]) obj, typeRef);
+                T value = curValueSerializer.deserialize((byte[]) obj, typeRef);
                 results.add(value);
             }
         }
@@ -280,7 +286,7 @@ public class SafeCacheTemplate {
                     if (bytes == null) {
                         innerList.add(null);
                     } else {
-                        T value = curContext.getValueSerializer().deserialize(bytes, typeReference);
+                        T value = curValueSerializer.deserialize(bytes, typeReference);
                         innerList.add(value);
                     }
                 }
@@ -312,7 +318,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> T safeGet(String key, Supplier<T> loader, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.VALUE);
+        redisTypeHolder.set(RedisType.VALUE);
         // 1. 先读缓存（无锁，高性能）
         T cached = (T)get(key);
         if (cached != null) {
@@ -356,6 +362,7 @@ public class SafeCacheTemplate {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
+            clear();
         }
     }
     /**
@@ -370,7 +377,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> T safeGet(String key, Supplier<T> loader,TypeReference<T> typeReference, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.VALUE);
+        redisTypeHolder.set(RedisType.VALUE);
         // 1. 先读缓存（无锁，高性能）
         T cached = get(key,typeReference);
         if (cached != null) {
@@ -414,6 +421,7 @@ public class SafeCacheTemplate {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
+            clear();
         }
     }
 
@@ -430,7 +438,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> List<T> safeBatchGet(List<String> keys, Function<List<Object[]>, List<T>> loader, List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.VALUE);
+        redisTypeHolder.set(RedisType.VALUE);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<T> cached = new ArrayList<>((List<T>) multiGet(keys));
@@ -506,6 +514,7 @@ public class SafeCacheTemplate {
             if(locked) {
                 mLock.unlock();
             }
+            clear();
         }
     }
     /**
@@ -520,7 +529,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> List<T> safeBatchGet(List<String> keys, Function<List<Object[]>, List<T>> loader, TypeReference<T> typeReference,List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.VALUE);
+        redisTypeHolder.set(RedisType.VALUE);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<T> cached = this.multiGet(keys,typeReference);
@@ -615,6 +624,7 @@ public class SafeCacheTemplate {
             if(locked) {
                 mLock.unlock();
             }
+            clear();
         }
     }
     /**
@@ -735,7 +745,7 @@ public class SafeCacheTemplate {
      */
     @Deprecated
     public <T> List<List<T>> safeBatchLGet(List<String> keys, Function<List<Object[]>, List<List<T>>> loader, List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.LIST);
+        redisTypeHolder.set(RedisType.LIST);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<List<T>> cached = new ArrayList<>(multiLGet(keys));
@@ -810,6 +820,7 @@ public class SafeCacheTemplate {
             if(locked) {
                 mLock.unlock();
             }
+            clear();
         }
     }
     /**
@@ -824,7 +835,7 @@ public class SafeCacheTemplate {
      * @return 缓存值或加载的新值
      */
     public <T> List<List<T>> safeBatchLGet(List<String> keys, Function<List<Object[]>, List<List<T>>> loader,TypeReference<T> typeReference ,List<Object[]> args, long cacheTtl, TimeUnit timeUnit) {
-        curContext.setRedisType(RedisType.LIST);
+        redisTypeHolder.set(RedisType.LIST);
         // 代码通过索引来操作 大大提高性能和减少代码量
         //第一次批量获取
         List<List<T>> cached = multiLGet(keys,typeReference);
@@ -900,6 +911,7 @@ public class SafeCacheTemplate {
             if(locked) {
                 mLock.unlock();
             }
+            clear();
         }
     }
 

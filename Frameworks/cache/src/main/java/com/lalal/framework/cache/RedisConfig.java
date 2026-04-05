@@ -11,6 +11,7 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalTimeSerializer;
 import com.lalal.framework.cache.RedisSerializer.DefaultValueRedisSerializer;
+import com.lalal.framework.cache.RedisSerializer.ValueRedisSerializer;
 import org.redisson.api.RedissonClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -76,6 +77,7 @@ public class RedisConfig {
                 .valueSerializer(new DefaultValueRedisSerializer(mapper))
                 .redisType(RedisType.VALUE)
                 .build();
-        return new SafeCacheTemplate(redisTemplate,redissonClient,ctx);
+        ValueRedisSerializer valueRedisSerializer=new DefaultValueRedisSerializer(mapper);
+        return new SafeCacheTemplate(redisTemplate,redissonClient,valueRedisSerializer);
     }
 }
