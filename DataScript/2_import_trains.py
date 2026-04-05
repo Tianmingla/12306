@@ -18,8 +18,7 @@
 用法：
     python 2_import_trains.py
 
-作者：Claude
-日期：2026-03-29
+
 """
 
 import os

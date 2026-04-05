@@ -13,8 +13,7 @@
 用法：
     python 1_import_stations.py
 
-作者：Claude
-日期：2026-03-29
+
 """
 
 import re

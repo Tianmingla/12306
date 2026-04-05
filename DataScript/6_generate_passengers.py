@@ -22,8 +22,7 @@
 用法：
     python 6_generate_passengers.py [--ratio 2.0]
 
-作者：Cluade
-日期：2026-03-29
+
 """
 
 import sys

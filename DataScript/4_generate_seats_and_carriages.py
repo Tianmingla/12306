@@ -39,8 +39,7 @@
 用法：
     python 4_generate_seats_and_carriages.py
 
-作者：Cluade
-日期：2026-03-29
+
 """
 
 import sys

@@ -20,8 +20,7 @@
 用法：
     python 5_generate_users.py [--count 1000000]
 
-作者：Cluade
-日期：2026-03-29
+
 """
 
 import sys

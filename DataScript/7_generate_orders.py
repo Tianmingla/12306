@@ -22,8 +22,7 @@
 用法：
     python 7_generate_orders.py [--count 1000000]
 
-作者：Cluade
-日期：2026-03-29
+
 """
 
 import sys
