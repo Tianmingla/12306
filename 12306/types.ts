@@ -14,6 +14,7 @@ export interface TrainTicket {
     second: number | string;
     standing: number | string;
   };
+  prices?: Record<string, number>;
   type: 'G' | 'D' | 'K' | 'Z';
 }
 
@@ -47,6 +48,10 @@ export interface SearchParams {
   to: string;
   date: string;
   onlyHighSpeed: boolean;
+  // 往返相关
+  searchType: 'oneWay' | 'roundTrip' | 'transfer';
+  returnDate?: string; // 返程日期（往返时使用）
+  midStation?: string; // 中转站（中转时使用）
 }
 
 export interface Passenger {
@@ -99,6 +104,7 @@ export interface ApiRoute {
   firstDepartureTime: string | null;
   finalArrivalTime: string | null;
   remainingTicketNumMap: Record<string, number>;
+  priceMap: Record<string, number>;
   segments: ApiSegment[];
 }
 

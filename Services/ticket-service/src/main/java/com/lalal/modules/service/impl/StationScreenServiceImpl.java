@@ -158,7 +158,7 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
                     LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
                     wrapper.eq(TrainStationDO::getStationId, stationId)
                             .ge(TrainStationDO::getDepartureTime,LocalTime.now())
-                            .eq(TrainStationDO::getRunDate,date)
+//                            .eq(TrainStationDO::getRunDate,date) test环境 先注释掉
                             .last("limit "+limit);
 //                      wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
 //                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);

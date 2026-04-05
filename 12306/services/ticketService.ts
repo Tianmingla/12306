@@ -23,33 +23,42 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
   if (!segment) return null;
 
   const seats = route.remainingTicketNumMap || {};
-
-  const isHighSpeed = segment.trainNumber.startsWith('G') || segment.trainNumber.startsWith('D');
-  const basePrice = isHighSpeed ? 553 : 156;
-  const mockPrice = basePrice + (segment.id % 50);
+  const prices = route.priceMap || {};
 
   const h = Math.floor(route.totalDurationMinutes / 60);
   const m = route.totalDurationMinutes % 60;
   const durationStr = `${h}小时${m}分`;
 
+  // For transfer routes, use first departure and last arrival stations
+  const firstSegment = route.segments[0];
+  const lastSegment = route.segments[route.segments.length - 1];
+
   return {
-    id: segment.id.toString(),
-    trainNumber: segment.trainNumber,
-    fromStation: segment.departureStation,
-    toStation: segment.arrivalStation,
-    departureTime: route.firstDepartureTime || formatTime(segment.startTime),
-    arrivalTime: route.finalArrivalTime || formatTime(segment.endTime),
+    id: route.planId || segment.id.toString(),
+    trainNumber: route.segments.length > 1
+      ? `${firstSegment.trainNumber} → ${lastSegment.trainNumber}`
+      : segment.trainNumber,
+    fromStation: firstSegment.departureStation,
+    toStation: lastSegment.arrivalStation,
+    departureTime: route.firstDepartureTime || formatTime(firstSegment.startTime),
+    arrivalTime: route.finalArrivalTime || formatTime(lastSegment.endTime),
     duration: durationStr,
-    price: mockPrice,
-    type: segment.trainNumber.startsWith('G') ? 'G' :
-          segment.trainNumber.startsWith('D') ? 'D' :
-          segment.trainNumber.startsWith('Z') ? 'Z' : 'K',
+    price: prices['二等座'] || prices['硬座'] || 0,
+    type: firstSegment.trainNumber.startsWith('G') ? 'G' :
+          firstSegment.trainNumber.startsWith('D') ? 'D' :
+          firstSegment.trainNumber.startsWith('Z') ? 'Z' : 'K',
     seatsAvailable: {
       business: seats['商务座'] ?? 0,
       first: seats['一等座'] ?? seats['软卧'] ?? 0,
       second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0,
       standing: seats['无座'] ?? 0,
-    }
+    },
+    prices: {
+      business: prices['商务座'],
+      first: prices['一等座'] || prices['软卧'],
+      second: prices['二等座'] || prices['硬卧'] || prices['硬座'],
+      standing: prices['无座'],
+    } as Record<string, number>,
   };
 };
 
@@ -59,6 +68,11 @@ export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]
     to: params.to,
     date: params.date,
   });
+
+  // Add mid station for transfer search
+  if (params.searchType === 'transfer' && params.midStation) {
+    queryParams.set('mid', params.midStation);
+  }
 
   const response = await fetch(`${API_BASE}/ticket/search?${queryParams.toString()}`, {
     headers: authHeaders()

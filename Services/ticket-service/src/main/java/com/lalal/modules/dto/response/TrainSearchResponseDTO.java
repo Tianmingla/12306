@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,10 +39,19 @@ public class TrainSearchResponseDTO{
      * 最终到达时间
      */
     private String finalArrivalTime;
+
     /**
      * 各种座位余票
      * */
     private Map<String,Integer> remainingTicketNumMap=new HashMap<>();
+
+    /**
+     * 各种座位票价
+     * Key: 座位类型名称（如"二等座"、"硬座"等）
+     * Value: 票价（元）
+     */
+    private Map<String, BigDecimal> priceMap = new HashMap<>();
+
     /**
      * 所有行程段（按顺序）
      */

@@ -6,10 +6,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.constant.cache.CacheConstant;
+import com.lalal.modules.dto.FareCalculationRequestDTO;
+import com.lalal.modules.dto.FareCalculationResultDTO;
 import com.lalal.modules.dto.response.TrainSearchResponseDTO;
 import com.lalal.modules.entity.*;
 import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.*;
+import com.lalal.modules.service.FareCalculationService;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
 import com.lalal.modules.service.TrainStationService;
@@ -22,6 +25,7 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -45,6 +49,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     SafeCacheTemplate safeCacheTemplate;
     TrainStationService trainStationService;
     RedissonClient redissonClient;
+    FareCalculationService fareCalculationService;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
         // 1. mid不为空，查找 from->mid->to
@@ -306,7 +311,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
 
 
 
-        // TODO:  填充价格等信息
+        // 填充余票和票价信息
         results.forEach((result)->{
             int transferCount = result.getSegments().size();
             result.setTransferCount(transferCount);
@@ -321,6 +326,9 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             result.setTotalDurationMinutes(DateUtils.diffMinutes(firstDeparture,finalArrival));
 
             Map<Integer,List<Integer>> tickets=new HashMap<>();
+            // 用于累计各座位类型的票价（中转时累加）
+            Map<Integer, BigDecimal> totalPriceBySeatType = new HashMap<>();
+
             //获取车次
             //获取区间
             //获取座位类型
@@ -351,7 +359,29 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                     remainingTickets.put(seatType,counts);
                     tickets.put(seatType,counts);
                 });
+
+                // 计算该段票价
+                for (Integer seatType : seatTypes) {
+                    FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
+                    fareRequest.setTrainId(trainId);
+                    fareRequest.setTrainNumber(trainNum);
+                    fareRequest.setDepartureStation(startStation);
+                    fareRequest.setArrivalStation(endStation);
+                    fareRequest.setSeatType(seatType);
+                    fareRequest.setPassengerType(0); // 默认成人票
+
+                    try {
+                        FareCalculationResultDTO fareResult = fareCalculationService.calculateFare(fareRequest);
+                        BigDecimal fare = fareResult.getTotalFare();
+                        totalPriceBySeatType.merge(seatType, fare, BigDecimal::add);
+                    } catch (Exception e) {
+                        // 票价计算失败时使用默认值
+                        totalPriceBySeatType.merge(seatType, BigDecimal.ZERO, BigDecimal::add);
+                    }
+                }
             });
+
+            // 设置余票
             for(Map.Entry<Integer, List<Integer>> ticket:tickets.entrySet()){
                 int minVal = ticket.getValue()
                         .stream()
@@ -359,6 +389,12 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                         .orElse(0);
                 result.getRemainingTicketNumMap()
                         .put(SeatType.getDescByCode(ticket.getKey()), minVal);
+            }
+
+            // 设置票价
+            for (Map.Entry<Integer, BigDecimal> priceEntry : totalPriceBySeatType.entrySet()) {
+                result.getPriceMap()
+                        .put(SeatType.getDescByCode(priceEntry.getKey()), priceEntry.getValue());
             }
         });
     }
