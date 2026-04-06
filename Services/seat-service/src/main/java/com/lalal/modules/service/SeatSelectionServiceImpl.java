@@ -66,6 +66,27 @@ public class SeatSelectionServiceImpl implements SeatSelectionService {
         );
         if (train == null) return null;
 
+        List<String> remainingTicketsKey=request
+                .getPassengers()
+                .stream()
+                .map(passenger -> CacheConstant.trainTicketRemainingKey(train.getId(),request.getDate(), SeatType.findByDesc(passenger.getSeatType()).getCode()))
+                .toList();
+        List<Integer> countsBySeatType=safeCacheTemplate.safeBatchLGet(
+                remainingTicketsKey,
+                (args)->{return null;},
+                new TypeReference<Integer>(){},
+                new ArrayList<>(),
+                1,
+                TimeUnit.DAYS
+        ).stream().map(l->l.stream()
+                        .min(Integer::compareTo)
+                        .orElse(0)
+                )
+                .toList();
+        if(countsBySeatType.contains(0)){
+            return null;
+        }
+
         // 2. 确定座位类型
         // 这里简化处理：假设一次请求中的所有乘客选择相同的座位类型
         //TODO 分组

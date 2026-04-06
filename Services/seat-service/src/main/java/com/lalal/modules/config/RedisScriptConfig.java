@@ -14,4 +14,12 @@ public class RedisScriptConfig {
         redisScript.setResultType(String.class);
         return redisScript;
     }
+
+    @Bean
+    public DefaultRedisScript<String> seatReleaseScript() {
+        DefaultRedisScript<String> redisScript = new DefaultRedisScript<>();
+        redisScript.setLocation(new ClassPathResource("lua/seat_release.lua"));
+        redisScript.setResultType(String.class);
+        return redisScript;
+    }
 }

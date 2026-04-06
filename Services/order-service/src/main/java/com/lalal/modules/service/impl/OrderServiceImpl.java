@@ -15,12 +15,15 @@ import com.lalal.modules.mapper.OrderItemMapper;
 import com.lalal.modules.mapper.OrderMapper;
 import com.lalal.modules.service.AlipayTradeService;
 import com.lalal.modules.service.OrderService;
+import com.lalal.modules.dto.SeatReleaseMessage;
+import com.lalal.modules.mq.MessageQueueService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,51 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
     private final OrderItemMapper orderItemMapper;
     private final AlipayTradeService alipayTradeService;
     private final AlipayProperties alipayProperties;
+    private final MessageQueueService messageQueueService;
+
+    private static final String SEAT_RELEASE_TOPIC = "seat-release-topic";
+
+    /**
+     * 发送座位释放消息
+     */
+    private void sendSeatReleaseMessage(OrderDO order, SeatReleaseMessage.ReleaseType releaseType) {
+        // 查询订单项获取座位信息
+        LambdaQueryWrapper<OrderItemDO> itemQw = new LambdaQueryWrapper<>();
+        itemQw.eq(OrderItemDO::getOrderSn, order.getOrderSn());
+        List<OrderItemDO> orderItems = orderItemMapper.selectList(itemQw);
+
+        if (orderItems.isEmpty()) {
+            return;
+        }
+
+        // 构建座位列表
+        List<SeatReleaseMessage.SeatItem> seats = orderItems.stream()
+                .map(item -> new SeatReleaseMessage.SeatItem(
+                        item.getCarriageNumber(),
+                        item.getSeatNumber(),
+                        item.getSeatType()
+                ))
+                .collect(Collectors.toList());
+
+        // 格式化日期
+        String dateStr = null;
+        if (order.getRunDate() != null) {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            dateStr = sdf.format(order.getRunDate());
+        }
+
+        SeatReleaseMessage message = new SeatReleaseMessage();
+        message.setOrderSn(order.getOrderSn());
+        message.setTrainNum(order.getTrainNumber());
+        message.setDate(dateStr);
+        message.setStartStation(order.getStartStation());
+        message.setEndStation(order.getEndStation());
+        message.setSeats(seats);
+        message.setReleaseType(releaseType);
+
+        // 发送消息
+        messageQueueService.send(SEAT_RELEASE_TOPIC, releaseType.name().toLowerCase(), message);
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -264,6 +312,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
 
         order.setStatus(3); // 已退票
         this.updateById(order);
+
+        // 发送座位释放消息
+        sendSeatReleaseMessage(order, SeatReleaseMessage.ReleaseType.REFUND);
     }
 
     @Override
@@ -282,5 +333,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
 
         order.setStatus(2); // 已取消
         this.updateById(order);
+
+        // 发送座位释放消息
+        sendSeatReleaseMessage(order, SeatReleaseMessage.ReleaseType.CANCEL);
     }
 }

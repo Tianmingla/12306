@@ -2,15 +2,21 @@ package com.lalal.modules.job;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.lalal.modules.dto.SeatReleaseMessage;
 import com.lalal.modules.entity.OrderDO;
+import com.lalal.modules.entity.OrderItemDO;
+import com.lalal.modules.mapper.OrderItemMapper;
 import com.lalal.modules.mapper.OrderMapper;
+import com.lalal.modules.mq.MessageQueueService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 订单超时自动取消定时任务
@@ -22,6 +28,10 @@ import java.util.List;
 public class OrderTimeoutCancelJob {
 
     private final OrderMapper orderMapper;
+    private final OrderItemMapper orderItemMapper;
+    private final MessageQueueService messageQueueService;
+
+    private static final String SEAT_RELEASE_TOPIC = "seat-release-topic";
 
     /**
      * 订单超时时间（毫秒），默认30分钟
@@ -58,7 +68,56 @@ public class OrderTimeoutCancelJob {
             int updated = orderMapper.update(null, updateWrapper);
             if (updated > 0) {
                 log.info("订单 {} 已超时取消", order.getOrderSn());
+
+                // 发送座位释放消息
+                sendSeatReleaseMessage(order);
             }
+        }
+    }
+
+    /**
+     * 发送座位释放消息
+     */
+    private void sendSeatReleaseMessage(OrderDO order) {
+        try {
+            // 查询订单项获取座位信息
+            LambdaQueryWrapper<OrderItemDO> itemQw = new LambdaQueryWrapper<>();
+            itemQw.eq(OrderItemDO::getOrderSn, order.getOrderSn());
+            List<OrderItemDO> orderItems = orderItemMapper.selectList(itemQw);
+
+            if (orderItems.isEmpty()) {
+                return;
+            }
+
+            // 构建座位列表
+            List<SeatReleaseMessage.SeatItem> seats = orderItems.stream()
+                    .map(item -> new SeatReleaseMessage.SeatItem(
+                            item.getCarriageNumber(),
+                            item.getSeatNumber(),
+                            item.getSeatType()
+                    ))
+                    .collect(Collectors.toList());
+
+            // 格式化日期
+            String dateStr = null;
+            if (order.getRunDate() != null) {
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                dateStr = sdf.format(order.getRunDate());
+            }
+
+            SeatReleaseMessage message = new SeatReleaseMessage();
+            message.setOrderSn(order.getOrderSn());
+            message.setTrainNum(order.getTrainNumber());
+            message.setDate(dateStr);
+            message.setStartStation(order.getStartStation());
+            message.setEndStation(order.getEndStation());
+            message.setSeats(seats);
+            message.setReleaseType(SeatReleaseMessage.ReleaseType.TIMEOUT);
+
+            // 发送消息
+            messageQueueService.send(SEAT_RELEASE_TOPIC, "timeout", message);
+        } catch (Exception e) {
+            log.error("发送座位释放消息失败, orderSn: {}", order.getOrderSn(), e);
         }
     }
 }
