@@ -103,8 +103,10 @@ export interface ApiRoute {
   totalDurationMinutes: number;
   firstDepartureTime: string | null;
   finalArrivalTime: string | null;
-  remainingTicketNumMap: Record<string, number>;
-  priceMap: Record<string, number>;
+  /** 每段的余票 Map，索引对应 segments */
+  remainingTicketNumMap: Record<string, number>[];
+  /** 每段的票价 Map，索引对应 segments */
+  priceMap: Record<string, number>[];
   segments: ApiSegment[];
 }
 

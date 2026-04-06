@@ -43,14 +43,14 @@ public class TrainSearchResponseDTO{
     /**
      * 各种座位余票
      * */
-    private Map<String,Integer> remainingTicketNumMap=new HashMap<>();
+    private List<Map<String,Integer>> remainingTicketNumMap=new ArrayList<>();
 
     /**
      * 各种座位票价
      * Key: 座位类型名称（如"二等座"、"硬座"等）
      * Value: 票价（元）
      */
-    private Map<String, BigDecimal> priceMap = new HashMap<>();
+    private List<Map<String, BigDecimal>> priceMap = new ArrayList<>();
 
     /**
      * 所有行程段（按顺序）

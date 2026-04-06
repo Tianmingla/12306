@@ -22,8 +22,29 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
   const segment = route.segments[0];
   if (!segment) return null;
 
-  const seats = route.remainingTicketNumMap || {};
-  const prices = route.priceMap || {};
+  // Now remainingTicketNumMap and priceMap are arrays (one per segment)
+  const seatsArray = route.remainingTicketNumMap || [];
+  const pricesArray = route.priceMap || [];
+
+  // Merge all segments' seats and prices
+  const mergedSeats: Record<string, number> = {};
+  const mergedPrices: Record<string, number> = {};
+
+  seatsArray.forEach(seats => {
+    Object.entries(seats).forEach(([key, value]) => {
+      // For remaining tickets, take the minimum across all segments
+      if (mergedSeats[key] === undefined || value < mergedSeats[key]) {
+        mergedSeats[key] = value;
+      }
+    });
+  });
+
+  pricesArray.forEach(prices => {
+    Object.entries(prices).forEach(([key, value]) => {
+      // For prices, sum across all segments
+      mergedPrices[key] = (mergedPrices[key] || 0) + (value || 0);
+    });
+  });
 
   const h = Math.floor(route.totalDurationMinutes / 60);
   const m = route.totalDurationMinutes % 60;
@@ -43,22 +64,17 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
     departureTime: route.firstDepartureTime || formatTime(firstSegment.startTime),
     arrivalTime: route.finalArrivalTime || formatTime(lastSegment.endTime),
     duration: durationStr,
-    price: prices['二等座'] || prices['硬座'] || 0,
+    price: mergedPrices['二等座'] || mergedPrices['硬座'] || 0,
     type: firstSegment.trainNumber.startsWith('G') ? 'G' :
           firstSegment.trainNumber.startsWith('D') ? 'D' :
           firstSegment.trainNumber.startsWith('Z') ? 'Z' : 'K',
     seatsAvailable: {
-      business: seats['商务座'] ?? 0,
-      first: seats['一等座'] ?? seats['软卧'] ?? 0,
-      second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0,
-      standing: seats['无座'] ?? 0,
+      business: mergedSeats['商务座'] ?? 0,
+      first: mergedSeats['一等座'] ?? mergedSeats['软卧'] ?? 0,
+      second: mergedSeats['二等座'] ?? mergedSeats['硬卧'] ?? mergedSeats['硬座'] ?? 0,
+      standing: mergedSeats['无座'] ?? 0,
     },
-    prices: {
-      business: prices['商务座'],
-      first: prices['一等座'] || prices['软卧'],
-      second: prices['二等座'] || prices['硬卧'] || prices['硬座'],
-      standing: prices['无座'],
-    } as Record<string, number>,
+    prices: mergedPrices,
   };
 };
 

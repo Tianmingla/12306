@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class TicketServiceImpl extends ServiceImpl<TicketMapper, TicketDO> implements TicketService {
+public class TicketServiceImpl implements TicketService {
 
     private final SeatServiceClient seatServiceClient;
     private final OrderServiceClient orderServiceClient;

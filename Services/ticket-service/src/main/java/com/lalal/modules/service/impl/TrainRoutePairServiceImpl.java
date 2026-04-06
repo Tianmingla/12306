@@ -258,43 +258,15 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .in("seat_type",seatTypes)
                             .groupBy("train_id","seat_type");
                     List<Map<String,Object>> objs=seatMapper.selectMaps(wrapper);
-                    //TODO 数据库索引
-                    //这里有问题
-                    QueryWrapper<TicketDO> wrapper1 = new QueryWrapper<>();
-                    wrapper1.select("train_id","seat_type", "departure_station", "arrival_station", "COUNT(*) AS count")
-                            .in("train_id", trainIds)
-                            .in("seat_type", seatTypes)
-                            .eq("travel_date", date)
-                            .groupBy("train_id", "seat_type", "departure_station", "arrival_station");
-
-                    List<Map<String,Object>> objs1=ticketMapper.selectMaps(wrapper1);
-                    for(Map<String,Object> e:objs) {
-                        String key=e.get("train_id")+"_"+e.get("seat_type");
-                        Integer idx=indexmap.get(key);
-                        int size=stationsmap.get(e.get("train_id")).size()-1;
-                        List<Integer> list=new ArrayList<>(size);
-                        for(int i=0;i<size;i++){
-                            list.add(((Long)e.get("count")).intValue());
+                    //TODO 高可用 暂时以缓存为中心 若没有说明全有票
+                    for(Map<String,Object> obj :objs){
+                        Long trainId=(Long) obj.get("train_id");
+                        Integer seatType=(Integer) obj.get("seat_type");
+                        Long count = (Long) obj.get("count");
+                        String indexKey=trainId + "_" + seatType;
+                        for(int i=0;i<stationsmap.get(trainId).size()-1;i++) {
+                            result.get(indexmap.get(indexKey)).add(count.intValue());
                         }
-                        result.set(idx,list);
-
-                    }
-
-                    for(Map<String,Object> e:objs1) {
-                        String key=e.get("train_id")+"_"+e.get("seat_type");
-                        Integer idx=indexmap.get(key);
-
-                        List<Integer> list=result.get(idx);
-                        List<String> stationNameList=stationsmap.get(e.get("train_id"));
-                        Integer i=stationNameList.indexOf(e.get("departure_station"));
-                        Integer j=stationNameList.indexOf(e.get("arrival_station"));
-                        //太麻烦了 这就是java的包装 我又不能用普通数组 不然redis序列化又出问题
-                        //如果去一步一步为了性能去重写java生态库 保证理论上的java上限 不如换语言
-                        //ticket 确定买区间A-C是只存A-C而不是存A-B B-C还
-                        for(;i<=j;i++){
-                            list.set(i,list.get(i)-((Long)e.get("count")).intValue());
-                        }
-
                     }
                     return result;
                 },
@@ -320,14 +292,19 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             LocalDateTime firstDeparture = result.getSegments().get(0).getStartTime().atDate(LocalDate.now()); // 必须是 Date
             result.setFirstDepartureTime(DateUtils.format(firstDeparture,"HH:mm"));
 
-            int diffDay=result.getSegments().get(transferCount - 1).getDayDiff();
-            LocalDateTime finalArrival = result.getSegments().get(transferCount - 1).getEndTime().atDate(LocalDate.now().plusDays(diffDay)); // 必须是 Date
+            //所有火车线路的dayDiff之和
+            int dayDiff=result.getSegments()
+                    .stream()
+                    .mapToInt(TrainRoutePairDO::getDayDiff)
+                    .sum();
+            LocalDateTime finalArrival = result.getSegments().get(transferCount - 1).getEndTime().atDate(LocalDate.now().plusDays(dayDiff)); // 必须是 Date 要算偏移
             result.setFinalArrivalTime(DateUtils.format(finalArrival,"HH:mm"));
             result.setTotalDurationMinutes(DateUtils.diffMinutes(firstDeparture,finalArrival));
 
-            Map<Integer,List<Integer>> tickets=new HashMap<>();
-            // 用于累计各座位类型的票价（中转时累加）
-            Map<Integer, BigDecimal> totalPriceBySeatType = new HashMap<>();
+            // 每段行程的列车的各个座位的价格
+            List<Map<String, BigDecimal>> totalPriceBySeatType = new ArrayList<>();
+            //每段行程的列车的各个座位的余票
+            List<Map<String,Integer>> remainingTickets=new ArrayList<>();
 
             //获取车次
             //获取区间
@@ -345,23 +322,30 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 String endStation=segment.getArrivalStation();
                 //获取区间
                 int i=stations.indexOf(startStation);
-                int j=stations.indexOf(endStation)+1;
-                HashMap<Integer,List<Integer>> remainingTickets=new HashMap<>();
+                int j=stations.indexOf(endStation);
+
+                //该段车次的各个座位种类的余票
+                HashMap<String,Integer> remainingTicket=new HashMap<>();
+
                 //判断这个区间是否再缓存存在
                 seatTypes.forEach((seatType)->{
-                    List<Integer> counts=remainingTicketmap
+                    Integer count=remainingTicketmap
                             .get(trainId+"_"+seatType)
                             .stream()
                             .skip(i)
                             .limit(j-i)
-                            .toList();
-                    //TODO 多趟列车余票计算数据结构待定
-                    remainingTickets.put(seatType,counts);
-                    tickets.put(seatType,counts);
+                            .min(Integer::compareTo)
+                            .orElse(0);
+                    remainingTicket.put(SeatType.getDescByCode(seatType),count);
                 });
+                //填充该段余票
+                remainingTickets.add(remainingTicket);
+
+                //该段车次的各个座位种类的价格
+                HashMap<String,BigDecimal> priceTicket=new HashMap<>();
 
                 // 计算该段票价
-                for (Integer seatType : seatTypes) {
+                seatTypes.forEach((seatType)->{
                     FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
                     fareRequest.setTrainId(trainId);
                     fareRequest.setTrainNumber(trainNum);
@@ -373,29 +357,20 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                     try {
                         FareCalculationResultDTO fareResult = fareCalculationService.calculateFare(fareRequest);
                         BigDecimal fare = fareResult.getTotalFare();
-                        totalPriceBySeatType.merge(seatType, fare, BigDecimal::add);
+                        priceTicket.put(SeatType.getDescByCode(seatType),fare);
                     } catch (Exception e) {
                         // 票价计算失败时使用默认值
-                        totalPriceBySeatType.merge(seatType, BigDecimal.ZERO, BigDecimal::add);
+                        priceTicket.put(SeatType.getDescByCode(seatType),BigDecimal.ZERO);
                     }
-                }
+                });
+                totalPriceBySeatType.add(priceTicket);
             });
 
             // 设置余票
-            for(Map.Entry<Integer, List<Integer>> ticket:tickets.entrySet()){
-                int minVal = ticket.getValue()
-                        .stream()
-                        .min(Integer::compareTo)
-                        .orElse(0);
-                result.getRemainingTicketNumMap()
-                        .put(SeatType.getDescByCode(ticket.getKey()), minVal);
-            }
+            result.setRemainingTicketNumMap(remainingTickets);
 
             // 设置票价
-            for (Map.Entry<Integer, BigDecimal> priceEntry : totalPriceBySeatType.entrySet()) {
-                result.getPriceMap()
-                        .put(SeatType.getDescByCode(priceEntry.getKey()), priceEntry.getValue());
-            }
+            result.setPriceMap(totalPriceBySeatType);
         });
     }
 }
