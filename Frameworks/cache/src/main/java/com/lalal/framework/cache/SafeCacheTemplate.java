@@ -43,7 +43,12 @@ public class SafeCacheTemplate {
 
     private ValueRedisSerializer defaultValueSerializer;
     //多线程环境 线程独有  TODO在哪里清除 java spring为线程池环境
-    private static final ThreadLocal<RedisType> redisTypeHolder = new ThreadLocal<>();
+    private static final ThreadLocal<RedisType> redisTypeHolder = new ThreadLocal<RedisType>() {
+        @Override
+        protected RedisType initialValue() {
+            return RedisType.VALUE; // 设置默认值
+        }
+    };;
     private ValueRedisSerializer  curValueSerializer;
 
 
