@@ -24,7 +24,7 @@ function passengerTypeLabel(t: number): string {
   }
 }
 
-const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate, onPurchaseSuccess }) => {
+const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate,seatType, onPurchaseSuccess }) => {
   const [passengers, setPassengers] = useState<PassengerApi[]>([]);
   const [passengersLoading, setPassengersLoading] = useState(false);
   const [selectedPassengers, setSelectedPassengers] = useState<string[]>([]);
@@ -78,7 +78,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
     setStep('paying');
     try {
       const IDCardCodelist = selectedPassengers.map((id) => Number(id));
-      const seatTypelist = selectedPassengers.map(() => '二等座');
+      const seatTypelist = [seatType];
       const chooseSeats = selectedSeats;
 
       const request = {
@@ -105,6 +105,15 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
       setStep('error');
     }
   };
+  const getSeatPrice = (ticket: TrainTicket, seatType: string): number => {
+      if (ticket.prices) {
+    
+        const price = ticket.prices[seatType];
+        if (price !== undefined && price > 0) return price;
+      }
+      return ticket.price || 0;
+    };
+  
 
   const togglePassenger = (id: string) => {
     setSelectedPassengers((prev) => {
@@ -128,7 +137,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
     });
   };
 
-  const totalPrice = ticket.price * selectedPassengers.length;
+  const totalPrice = getSeatPrice(ticket,seatType) * selectedPassengers.length;
   const userPhone = localStorage.getItem('userPhone') || '';
   const maskedPhone = userPhone.length >= 7
     ? `${userPhone.slice(0, 3)}****${userPhone.slice(-4)}`
@@ -163,7 +172,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
               </div>
               <div className="text-right">
                 <p className="text-xs opacity-80 mb-1">单张票价</p>
-                <p className="text-3xl font-bold">¥{ticket.price}</p>
+                <p className="text-3xl font-bold">¥{getSeatPrice(ticket,seatType)}</p>
               </div>
             </div>
           </div>

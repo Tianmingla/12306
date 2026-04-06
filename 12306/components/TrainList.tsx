@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, Filter, AlertCircle, RefreshCw, MapPin, X, ArrowRightLeft } from 'lucide-react';
-import { TrainTicket, SearchParams, FilterOptions } from '../types';
+import { Clock, ChevronDown, ChevronUp, Filter, AlertCircle, RefreshCw, MapPin, X, ArrowRightLeft, ArrowRight, Train } from 'lucide-react';
+import { TrainTicket, SearchParams, FilterOptions, TicketSegment } from '../types';
 import { searchTickets, getTrainRouteDetails } from '../services/ticketService';
 import BookingModal from './BookingModal';
 import FilterPanel from './FilterPanel';
@@ -122,6 +122,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
 
   // States for interaction
   const [selectedTicketForBooking, setSelectedTicketForBooking] = useState<TrainTicket | null>(null);
+  const [selectedSeatType, setSelectedSeatType] = useState<String | null>(null);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [stopoverInfo, setStopoverInfo] = useState<{isOpen: boolean, trainNumber: string} | null>(null);
 
@@ -194,9 +195,10 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
     setExpandedTicketId(prev => prev === id ? null : id);
   };
 
-  const handleBook = (e: React.MouseEvent, ticket: TrainTicket) => {
+  const handleBook = (e: React.MouseEvent, ticket: TrainTicket,seatType:String) => {
     e.stopPropagation();
     setSelectedTicketForBooking(ticket);
+    setSelectedSeatType(seatType);
   };
 
   // Helper to map English seat keys to Chinese labels
@@ -227,17 +229,72 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   // Get price for a specific seat type
   const getSeatPrice = (ticket: TrainTicket, seatType: string): number => {
     if (ticket.prices) {
-      const chineseKey = seatKeyToChinese[seatType];
-      const price = ticket.prices[chineseKey];
+  
+      const price = ticket.prices[seatType];
       if (price !== undefined && price > 0) return price;
     }
     return ticket.price || 0;
   };
 
+  // Get price for a segment's seat type
+  const getSegmentSeatPrice = (segment: TicketSegment, seatType: string): number => {
+    const chineseKey = seatKeyToChinese[seatType];
+    const price = segment.prices[chineseKey];
+    return price !== undefined && price > 0 ? price : 0;
+  };
+
+  // Render segment detail for transfer ticket
+  const renderSegmentDetail = (segment: TicketSegment, idx: number, totalSegments: number) => (
+    <div key={idx} className="bg-white rounded-lg border border-gray-200 p-4 mb-3">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-blue-600 font-medium">第{idx + 1}程</span>
+        <span className="text-xs text-gray-400 flex items-center">
+          <Clock className="h-3 w-3 mr-1" />
+          {segment.trainNumber}
+        </span>
+      </div>
+
+      {/* Station & Time */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="text-center">
+          <div className="text-xl font-bold text-gray-900">{segment.departureTime}</div>
+          <div className="text-sm text-gray-600">{segment.fromStation}</div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center">
+          <ArrowRight className="h-4 w-4 text-gray-400" />
+        </div>
+
+        <div className="text-center">
+          <div className="text-xl font-bold text-gray-900">{segment.arrivalTime}</div>
+          <div className="text-sm text-gray-600">{segment.toStation}</div>
+        </div>
+      </div>
+
+      {/* Seat availability & prices for this segment */}
+      <div className="space-y-2">
+        {Object.entries(segment.seatsAvailable).map(([type, count]) => (
+          <div key={type} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
+            <span className="text-gray-700">{seatMap[type] || type}</span>
+            <div className="flex items-center gap-4">
+              <span className={`font-medium ${Number(count) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                {Number(count) > 0 ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
+              </span>
+              <span className="font-bold text-orange-500 w-16 text-right">
+                ¥{getSegmentSeatPrice(segment, type)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   // Render single ticket card
   const renderTicketCard = (ticket: TrainTicket) => {
     const isExpanded = expandedTicketId === ticket.id;
     const minPrice = getMinPrice(ticket);
+    const isTransfer = (ticket.transferCount ?? 0) > 0 && ticket.segments && ticket.segments.length > 1;
 
     return (
       <div
@@ -264,6 +321,9 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
               >
                 {ticket.trainNumber}
               </span>
+              {isTransfer && (
+                <span className="text-xs text-orange-500 font-medium mt-1">中转</span>
+              )}
               <div className="w-full h-[2px] bg-gray-200 relative my-1">
                 <div className="absolute right-0 -top-1 w-2 h-2 border-t-2 border-r-2 border-gray-200 rotate-45"></div>
               </div>
@@ -281,7 +341,9 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
 
           {/* Quick Seat Preview (Collapsed Only) */}
           <div className="flex-1 hidden md:flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-500">
-             <span className="text-gray-400 text-xs">点击查看 {Object.keys(ticket.seatsAvailable).length} 个席位详情</span>
+            <span className="text-gray-400 text-xs">
+              {isTransfer ? `${ticket.segments!.length}程中转` : `点击查看 ${Object.keys(ticket.seatsAvailable).length} 个席位详情`}
+            </span>
           </div>
 
           {/* Price & Toggle Action */}
@@ -297,34 +359,48 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
           </div>
         </div>
 
-        {/* Expanded Seat Details */}
-        <div className={`bg-gray-50 border-t border-gray-100 transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-          <div className="p-4 space-y-3">
-            {/* Render rows for each seat type */}
-            {Object.entries(ticket.seatsAvailable).map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 hover:border-blue-200 transition-colors">
-                 <div className="w-1/4 font-medium text-gray-800 flex items-center">
-                   {seatMap[type] || type}
-                 </div>
-                 <div className="w-1/4 font-bold text-orange-500 text-lg">
-                   <span className="text-xs">¥</span>{getSeatPrice(ticket, type)}
-                 </div>
-                 <div className="w-1/4">
-                    <span className={`text-sm ${Number(count) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                      {Number(count) > 0 ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
-                    </span>
-                 </div>
-                 <div className="w-1/4 text-right">
-                   <button
-                     onClick={(e) => handleBook(e, ticket)}
-                     disabled={Number(count) <= 0}
-                     className="px-5 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                   >
-                     预订
-                   </button>
-                 </div>
+        {/* Expanded Details */}
+        <div className={`bg-gray-50 border-t border-gray-100 transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="p-4">
+            {isTransfer ? (
+              /* Transfer: Show each segment with details */
+              <div>
+                {ticket.segments!.map((seg, idx) => renderSegmentDetail(seg, idx, ticket.segments!.length))}
+                {/* Total price summary */}
+                <div className="flex justify-between items-center mt-2 pt-3 border-t border-gray-200">
+                  <span className="text-sm text-gray-600">全程总价</span>
+                  <span className="text-lg font-bold text-orange-500">¥{minPrice} 起</span>
+                </div>
               </div>
-            ))}
+            ) : (
+              /* Direct: Show seat types */
+              <div className="space-y-3">
+                {Object.entries(ticket.seatsAvailable).map(([type, count]) => (
+                  <div key={type} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 hover:border-blue-200 transition-colors">
+                     <div className="w-1/4 font-medium text-gray-800 flex items-center">
+                       {seatMap[type] || type}
+                     </div>
+                     <div className="w-1/4 font-bold text-orange-500 text-lg">
+                       <span className="text-xs">¥</span>{getSeatPrice(ticket, type)}
+                     </div>
+                     <div className="w-1/4">
+                        <span className={`text-sm ${Number(count) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {Number(count) > 0 ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
+                        </span>
+                     </div>
+                     <div className="w-1/4 text-right">
+                       <button
+                         onClick={(e) => handleBook(e, ticket,type)}
+                         disabled={Number(count) <= 0}
+                         className="px-5 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                       >
+                         预订
+                       </button>
+                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -465,6 +541,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
         ticket={selectedTicketForBooking} 
         onClose={() => setSelectedTicketForBooking(null)}
         travelDate={searchParams.date}
+        seatType={selectedSeatType}
         onPurchaseSuccess={onPurchaseSuccess}
       />
       

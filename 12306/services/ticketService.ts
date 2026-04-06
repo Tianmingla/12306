@@ -1,5 +1,5 @@
 
-import { SearchParams, TrainTicket, ApiResponse, ApiRoute } from '../types';
+import { SearchParams, TrainTicket, ApiResponse, ApiRoute, TicketSegment } from '../types';
 import { API_BASE, authHeaders } from './http';
 
 /**
@@ -16,65 +16,102 @@ const formatTime = (isoString: string | null): string => {
 };
 
 /**
+ * Format duration minutes to string
+ */
+const formatDuration = (minutes: number): string => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}小时${m}分`;
+};
+
+/**
+ * Get train type from train number
+ */
+const getTrainType = (trainNumber: string): 'G' | 'D' | 'K' | 'Z' => {
+  return trainNumber.startsWith('G') ? 'G' :
+         trainNumber.startsWith('D') ? 'D' :
+         trainNumber.startsWith('Z') ? 'Z' : 'K';
+};
+
+/**
+ * Map Chinese seat names to English keys
+ */
+const mapSeatsToEnglish = (seats: Record<string, number>): Record<string, number> => ({
+  business: seats['商务座'] ?? 0,
+  first: seats['一等座'] ?? seats['软卧'] ?? 0,
+  second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0,
+  standing: seats['无座'] ?? 0,
+});
+
+/**
  * Adapts backend route data to frontend TrainTicket model
  */
 const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
-  const segment = route.segments[0];
-  if (!segment) return null;
+  const firstSegment = route.segments[0];
+  if (!firstSegment) return null;
 
-  // Now remainingTicketNumMap and priceMap are arrays (one per segment)
   const seatsArray = route.remainingTicketNumMap || [];
   const pricesArray = route.priceMap || [];
+  const isTransfer = route.segments.length > 1;
 
-  // Merge all segments' seats and prices
+  // Build segment details
+  const ticketSegments: TicketSegment[] = route.segments.map((seg, idx) => {
+    const seats = seatsArray[idx] || {};
+    const prices = pricesArray[idx] || {};
+
+    // Calculate segment duration (approximate from times)
+    const depTime = seg.startTime ? formatTime(seg.startTime) : '00:00';
+    const arrTime = seg.endTime ? formatTime(seg.endTime) : '00:00';
+
+    return {
+      trainNumber: seg.trainNumber,
+      fromStation: seg.departureStation,
+      toStation: seg.arrivalStation,
+      departureTime: depTime,
+      arrivalTime: arrTime,
+      duration: '', // Will be calculated if needed
+      seatsAvailable: seats,
+      prices: prices,
+      type: getTrainType(seg.trainNumber),
+    };
+  });
+
+  // For merged seats: take minimum across all segments (limited by the tightest segment)
   const mergedSeats: Record<string, number> = {};
-  const mergedPrices: Record<string, number> = {};
-
   seatsArray.forEach(seats => {
     Object.entries(seats).forEach(([key, value]) => {
-      // For remaining tickets, take the minimum across all segments
       if (mergedSeats[key] === undefined || value < mergedSeats[key]) {
         mergedSeats[key] = value;
       }
     });
   });
 
+  // For merged prices: sum across all segments
+  const mergedPrices: Record<string, number> = {};
   pricesArray.forEach(prices => {
     Object.entries(prices).forEach(([key, value]) => {
-      // For prices, sum across all segments
       mergedPrices[key] = (mergedPrices[key] || 0) + (value || 0);
     });
   });
 
-  const h = Math.floor(route.totalDurationMinutes / 60);
-  const m = route.totalDurationMinutes % 60;
-  const durationStr = `${h}小时${m}分`;
-
-  // For transfer routes, use first departure and last arrival stations
-  const firstSegment = route.segments[0];
   const lastSegment = route.segments[route.segments.length - 1];
 
   return {
-    id: route.planId || segment.id.toString(),
-    trainNumber: route.segments.length > 1
+    id: route.planId || firstSegment.id.toString(),
+    trainNumber: isTransfer
       ? `${firstSegment.trainNumber} → ${lastSegment.trainNumber}`
-      : segment.trainNumber,
+      : firstSegment.trainNumber,
     fromStation: firstSegment.departureStation,
     toStation: lastSegment.arrivalStation,
     departureTime: route.firstDepartureTime || formatTime(firstSegment.startTime),
     arrivalTime: route.finalArrivalTime || formatTime(lastSegment.endTime),
-    duration: durationStr,
+    duration: formatDuration(route.totalDurationMinutes),
     price: mergedPrices['二等座'] || mergedPrices['硬座'] || 0,
-    type: firstSegment.trainNumber.startsWith('G') ? 'G' :
-          firstSegment.trainNumber.startsWith('D') ? 'D' :
-          firstSegment.trainNumber.startsWith('Z') ? 'Z' : 'K',
-    seatsAvailable: {
-      business: mergedSeats['商务座'] ?? 0,
-      first: mergedSeats['一等座'] ?? mergedSeats['软卧'] ?? 0,
-      second: mergedSeats['二等座'] ?? mergedSeats['硬卧'] ?? mergedSeats['硬座'] ?? 0,
-      standing: mergedSeats['无座'] ?? 0,
-    },
+    type: getTrainType(firstSegment.trainNumber),
+    seatsAvailable: mergedSeats,
     prices: mergedPrices,
+    transferCount: route.transferCount,
+    segments: ticketSegments,
   };
 };
 

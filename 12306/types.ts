@@ -8,13 +8,25 @@ export interface TrainTicket {
   arrivalTime: string;
   duration: string;
   price: number;
-  seatsAvailable: {
-    business: number | string;
-    first: number | string;
-    second: number | string;
-    standing: number | string;
-  };
+  seatsAvailable: Record<string, number>;
   prices?: Record<string, number>;
+  type: 'G' | 'D' | 'K' | 'Z';
+  /** 中转次数，0 = 直达 */
+  transferCount?: number;
+  /** 多段行程详情（中转时有值） */
+  segments?: TicketSegment[];
+}
+
+/** 单段行程信息 */
+export interface TicketSegment {
+  trainNumber: string;
+  fromStation: string;
+  toStation: string;
+  departureTime: string;
+  arrivalTime: string;
+  duration: string;
+  seatsAvailable: Record<string, number>;
+  prices: Record<string, number>;
   type: 'G' | 'D' | 'K' | 'Z';
 }
 
