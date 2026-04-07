@@ -25,7 +25,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
 
     private RocketMQTemplate rocketMQTemplate;
 
-    RocketMQMessageQueueService(RocketMQTemplate rocketMQTemplate){
+    public RocketMQMessageQueueService(RocketMQTemplate rocketMQTemplate){
         this.rocketMQTemplate=rocketMQTemplate;
     }
 

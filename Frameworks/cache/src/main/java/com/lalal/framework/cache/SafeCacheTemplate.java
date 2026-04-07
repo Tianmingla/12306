@@ -12,6 +12,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.io.IOException;
 import java.util.*;
@@ -944,7 +945,12 @@ public class SafeCacheTemplate {
 //        );
 //    }
 
-    public List<Object> executePipeline(org.springframework.data.redis.core.RedisCallback<List<Object>> callback) {
-        return redisTemplate.executePipelined(callback);
+    public <T> T execute(RedisCallback<T> callback) {
+        return redisTemplate.execute(callback);
+    }
+
+    public Boolean setIfAbsent(String key, Object value, long expireHours, TimeUnit timeUnit) {
+        return redisTemplate.opsForValue()
+                .setIfAbsent(key, value, expireHours, timeUnit);
     }
 }

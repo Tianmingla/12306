@@ -22,7 +22,7 @@ public class RocketMQConfig {
 
     @Bean
     public MessageQueueService rocketMQMessageQueueService(RocketMQTemplate rocketMQTemplate) {
-        RocketMQMessageQueueService service = new RocketMQMessageQueueService();
+        RocketMQMessageQueueService service = new RocketMQMessageQueueService(rocketMQTemplate);
         return service;
     }
 }
