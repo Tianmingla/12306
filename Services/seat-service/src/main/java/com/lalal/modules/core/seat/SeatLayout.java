@@ -3,8 +3,13 @@ package com.lalal.modules.core.seat;
 import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 布局的数据描述
+ * 索引和布局映射
+ */
 @Getter
 public class SeatLayout {
     private final int seatsPerRow;
@@ -23,10 +28,28 @@ public class SeatLayout {
         }
     }
 
+    //两个索引的是1-based
     public String getSeatNumber(int index) {
         int row = (index / seatsPerRow) + 1;
         String seatName = seatNames[index % seatsPerRow];
         return row + seatName;
+    }
+    public Integer getIndex(String seatNumber){
+        int row=Integer.parseInt(String.valueOf(seatNumber.charAt(0)));
+        int col= findIndex(seatNumber);
+        if(col==-1){
+            return null;
+        }
+        return seatsPerRow*row+col+1;
+    }
+    private int findIndex(String str) {
+        for (int i = 0; i < seatNames.length; i++) {
+            if (str.equals(seatNames[i])) {
+                return i;
+
+            }
+        }
+        return -1;
     }
 
     /**

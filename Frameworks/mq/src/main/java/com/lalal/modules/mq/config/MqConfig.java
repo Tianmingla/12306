@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 消息队列配置
  */
-@Configuration
+
 public class MqConfig {
 
     /**

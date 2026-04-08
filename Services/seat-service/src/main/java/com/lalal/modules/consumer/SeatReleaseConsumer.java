@@ -3,9 +3,11 @@ package com.lalal.modules.consumer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.constant.cache.CacheConstant;
+import com.lalal.modules.core.seat.SeatLayout;
 import com.lalal.modules.dao.TrainDO;
 import com.lalal.modules.dao.TrainStationDO;
 import com.lalal.modules.dto.SeatReleaseMessage;
+import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.mq.annotation.MessageConsumer;
@@ -126,7 +128,7 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer<SeatReleaseMessage
 
                         // 获取座位索引 (需要从座位号转换)
                         List<Integer> seatIndices = seats.stream()
-                                .map(seat -> getSeatIndex(seat.getSeatNumber()))
+                                .map(seat -> getSeatIndex(seat.getSeatNumber(),SeatType.findByCode(seatType)))
                                 .filter(idx -> idx >= 0)
                                 .collect(Collectors.toList());
 
@@ -167,32 +169,65 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer<SeatReleaseMessage
      * 将座位号转换为索引
      * 例如: "A1" -> 0, "B1" -> 1, "A2" -> 座位数_per_row + 0
      */
-    private int getSeatIndex(String seatNumber) {
+    private int getSeatIndex(String seatNumber, SeatType seatType) {
         if (seatNumber == null || seatNumber.length() < 2) {
             return -1;
         }
+        switch (seatType) {
+            case HARD_SEAT:
+                SeatLayout.BUSINESS_CLASS.getIndex(seatNumber);
+                break;
 
-        // 解析座位号，格式如 "A1", "B3", "F5" 等
-        char rowChar = seatNumber.charAt(0);
-        int col;
-        try {
-            col = Integer.parseInt(seatNumber.substring(1)) - 1; // 0-based
-        } catch (NumberFormatException e) {
-            return -1;
         }
+        int layoutIndex;
 
-        // 座位列映射 (A=0, B=1, C=2, D=3, F=4, 假设每排5个座位)
-        int colIndex;
-        switch (rowChar) {
-            case 'A': colIndex = 0; break;
-            case 'B': colIndex = 1; break;
-            case 'C': colIndex = 2; break;
-            case 'D': colIndex = 3; break;
-            case 'F': colIndex = 4; break;
-            default: return -1;
+        switch (seatType) {
+            // --- 高铁/动车 ---
+            case BUSINESS:
+                // 对应 SeatLayout.BUSINESS_CLASS (索引 0)
+                layoutIndex = SeatLayout.BUSINESS_CLASS.getIndex(seatNumber);
+                break;
+
+            case FIRST_CLASS:
+                // 对应 SeatLayout.FIRST_CLASS (索引 1)
+                layoutIndex = SeatLayout.FIRST_CLASS.getIndex(seatNumber);
+                break;
+
+            case SECOND_CLASS:
+                // 对应 SeatLayout.SECOND_CLASS (索引 2)
+                layoutIndex = SeatLayout.SECOND_CLASS.getIndex(seatNumber);
+                break;
+
+            // --- 普通列车 ---
+            case HARD_SEAT:
+                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
+                layoutIndex = SeatLayout.HARD_SEAT.getIndex(seatNumber);
+                break;
+
+            case SOFT_SEAT:
+                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
+                layoutIndex = SeatLayout.SOFT_SEAT.getIndex(seatNumber);
+                break;
+
+            case HARD_SLEEPER:
+                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
+                layoutIndex = SeatLayout.HARD_SEAT.getIndex(seatNumber);
+                break;
+
+            case SOFT_SLEEPER:
+                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
+                layoutIndex = SeatLayout.SOFT_SLEEPER.getIndex(seatNumber);
+                break;
+
+            case NO_SEAT:
+                // 无座通常不需要布局索引，或者也归类为普通布局
+                layoutIndex = -1;
+                break;
+
+            default:
+                layoutIndex = -1;
+                break;
         }
-
-        // 假设每排5个座位，计算索引
-        return col * 5 + colIndex;
+        return layoutIndex;
     }
 }
