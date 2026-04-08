@@ -35,9 +35,9 @@ import org.slf4j.LoggerFactory;
  * }
  * </pre>
  *
- * @param <T> 消息体类型
+ *
  */
-public abstract class RocketMQBaseConsumer<T> extends BaseMessageConsumer<T> implements RocketMQListener<T> {
+public abstract class RocketMQBaseConsumer extends BaseMessageConsumer implements RocketMQListener<Message> {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -46,14 +46,10 @@ public abstract class RocketMQBaseConsumer<T> extends BaseMessageConsumer<T> imp
      * 实现 RocketMQListener 接口的方法
      */
     @Override
-    public void onMessage(T message) {
+    public void onMessage(Message message) {
         try {
-            // 构建 Message 对象
-            Message msg = new Message();
-            msg.setBody(message);
-
             // 调用父类处理方法
-            boolean success = process(msg);
+            boolean success = process(message);
 
             if (!success) {
                 log.warn("消息处理返回失败，RocketMQ 将重试。消息体类型: {}",

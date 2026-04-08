@@ -39,9 +39,9 @@ import java.util.concurrent.TimeUnit;
  * }
  * </pre>
  *
- * @param <T> 消息体类型
+ *
  */
-public abstract class BaseMessageConsumer<T> {
+public abstract class BaseMessageConsumer {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -59,7 +59,7 @@ public abstract class BaseMessageConsumer<T> {
      * @return 处理结果，true-成功，false-失败（会触发重试）
      */
     public boolean process(Message message) {
-        T body = null;
+        Object body = null;
         try {
             // 0. 幂等性检查
             if (!checkIdempotent(message)) {
@@ -141,8 +141,8 @@ public abstract class BaseMessageConsumer<T> {
      * @return 解析后的消息体
      */
     @SuppressWarnings("unchecked")
-    protected T parseMessageBody(Message message) {
-        return (T) message.getBody();
+    protected Object parseMessageBody(Message message) {
+        return  message.getBody();
     }
 
     /**
@@ -153,7 +153,7 @@ public abstract class BaseMessageConsumer<T> {
      * @param body    消息体
      * @return true-继续处理，false-跳过处理
      */
-    protected boolean preProcess(Message message, T body) {
+    protected boolean preProcess(Message message, Object body) {
         // 默认实现：记录日志
         if (log.isDebugEnabled()) {
             log.debug("开始处理消息。Topic: {}, Tag: {}, MessageId: {}",
@@ -168,7 +168,7 @@ public abstract class BaseMessageConsumer<T> {
      *
      * @param body 消息体
      */
-    protected abstract void doProcess(T body);
+    protected abstract void doProcess(Object body);
 
     /**
      * 后置处理
@@ -177,7 +177,7 @@ public abstract class BaseMessageConsumer<T> {
      * @param message 消息对象
      * @param body    消息体
      */
-    protected void postProcess(Message message, T body) {
+    protected void postProcess(Message message, Object body) {
         // 默认实现：记录日志
         if (log.isDebugEnabled()) {
             log.debug("消息处理完成。Topic: {}, MessageId: {}",
@@ -192,7 +192,7 @@ public abstract class BaseMessageConsumer<T> {
      * @param body 消息体（可能为null，如果解析失败）
      * @param e    异常信息
      */
-    protected void onException(T body, Exception e) {
+    protected void onException(Object body, Exception e) {
         // 默认实现：仅记录日志，子类可重写
     }
 }

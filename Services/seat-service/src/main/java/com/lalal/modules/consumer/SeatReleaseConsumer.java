@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
     consumerGroup = "seat-release-consumer",
     selectorExpression = "*"
 )
-public class SeatReleaseConsumer extends RocketMQBaseConsumer<SeatReleaseMessage> {
+public class SeatReleaseConsumer extends RocketMQBaseConsumer {
 
     private final StringRedisTemplate redisTemplate;
     private final DefaultRedisScript<String> seatReleaseScript;
@@ -50,7 +50,8 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer<SeatReleaseMessage
     private final SafeCacheTemplate safeCacheTemplate;
 
     @Override
-    protected void doProcess(SeatReleaseMessage message) {
+    protected void doProcess(Object msg) {
+        SeatReleaseMessage message=(SeatReleaseMessage) msg;
         log.info("收到座位释放消息: orderSn={}, type={}", message.getOrderSn(), message.getReleaseType());
 
         if (message.getSeats() == null || message.getSeats().isEmpty()) {
