@@ -36,7 +36,7 @@ public class SeatLayout {
     }
     public Integer getIndex(String seatNumber){
         int row=Integer.parseInt(String.valueOf(seatNumber.charAt(0)));
-        int col= findIndex(seatNumber);
+        int col= findIndex(String.valueOf(seatNumber.charAt(1)));
         if(col==-1){
             return null;
         }
@@ -46,7 +46,6 @@ public class SeatLayout {
         for (int i = 0; i < seatNames.length; i++) {
             if (str.equals(seatNames[i])) {
                 return i;
-
             }
         }
         return -1;
