@@ -2,8 +2,10 @@ package com.lalal.modules.mq.config;
 
 import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.rocketmq.RocketMQMessageQueueService;
+import com.lalal.modules.mq.serializer.RocketMqSerializer;
 import org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.apache.rocketmq.spring.support.RocketMQMessageConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -13,6 +15,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Role;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.messaging.converter.CompositeMessageConverter;
+import org.springframework.messaging.converter.MessageConverter;
+import java.util.List;
 
 /**
  * MQ 模块自动配置类
@@ -46,6 +51,20 @@ public class MqAutoConfiguration {
         return new ConsumerRegisterProcessor();
     }
 
+    /**
+     * 配置自定义序列化器
+     *
+     */
+    @Bean
+    public RocketMQMessageConverter rocketMQMessageConverter() {
+        RocketMQMessageConverter converter = new RocketMQMessageConverter();
+        CompositeMessageConverter compositeMessageConverter = (CompositeMessageConverter) converter.getMessageConverter();
+        List<MessageConverter> messageConverterList = compositeMessageConverter.getConverters();
+
+        messageConverterList.add(0,new RocketMqSerializer());
+
+        return converter;
+    }
     /**
      * 消费者注册处理器
      */

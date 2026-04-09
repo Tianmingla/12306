@@ -17,6 +17,8 @@ import java.util.Optional;
 
 /**
  * RocketMQ 消息队列服务实现
+ * 为什么包装消息一般rocketTemplate这样的包装都会包装消息 但不会发送只会发送负载
+ * 这里发送整个包装消息是为了消费处理的时候做一些额外逻辑
  */
 public class RocketMQMessageQueueService implements MessageQueueService {
 
@@ -43,7 +45,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
     public void send(Message message) {
         String destination = buildDestination(message.getTopic(), message.getTag());
         try {
-            SendResult sendResult = rocketMQTemplate.syncSend(destination, message.getBody());
+            SendResult sendResult = rocketMQTemplate.syncSend(destination, message);
             if (sendResult.getSendStatus() != SendStatus.SEND_OK) {
                 log.error("RocketMQ send failed. MessageId: {}, SendStatus: {}",
                         message.getMessageId(), sendResult.getSendStatus());
@@ -66,7 +68,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
     @Override
     public void sendAsync(Message message, SendCallback callback) {
         String destination = buildDestination(message.getTopic(), message.getTag());
-        rocketMQTemplate.asyncSend(destination,message.getBody(),new org.apache.rocketmq.client.producer.SendCallback(){
+        rocketMQTemplate.asyncSend(destination,message,new org.apache.rocketmq.client.producer.SendCallback(){
             @Override
             public void onSuccess(SendResult sendResult) {
                 log.debug("RocketMQ async send success. MessageId: {}", message.getMessageId());
@@ -99,7 +101,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
         // 需要将延迟时间映射到对应的等级
         int delayLevel = calculateDelayLevel(delayTime);
 //        try {
-//            SendResult sendResult = rocketMQTemplate.syncSend(destination, message.getBody(),
+//            SendResult sendResult = rocketMQTemplate.syncSend(destination, message,
 //                    3000, delayLevel);
 //            log.debug("RocketMQ delay send success. MessageId: {}, DelayTime: {}ms",
 //                    message.getMessageId(), delayTime);
@@ -126,7 +128,7 @@ public class RocketMQMessageQueueService implements MessageQueueService {
         }
         try {
             SendResult sendResult = rocketMQTemplate.syncSendOrderly(destination,
-                    message.getBody(), hashKey);
+                    message, hashKey);
             log.debug("RocketMQ orderly send success. MessageId: {}, Key: {}",
                     message.getMessageId(), message.getKey());
         } catch (Exception e) {

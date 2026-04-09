@@ -15,8 +15,8 @@ public interface MessageSerializer {
     /**
      * 反序列化
      * @param bytes 字节数组
-     * @param clazz 目标类型
+     *
      * @return 对象
      */
-    <T> T deserialize(byte[] bytes, Class<T> clazz);
+    Message deserialize(byte[] bytes);
 }

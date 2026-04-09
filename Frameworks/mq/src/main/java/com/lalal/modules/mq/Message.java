@@ -1,5 +1,7 @@
 package com.lalal.modules.mq;
 
+import lombok.Data;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -8,6 +10,7 @@ import java.util.UUID;
 /**
  * 通用消息体
  */
+@Data
 public class Message implements Serializable {
 
     private static final long serialVersionUID = 1L;
@@ -41,6 +44,10 @@ public class Message implements Serializable {
      * 消息体内容
      */
     private Object body;
+    /**
+     * 类型信息
+     */
+    private String clazz;
 
     /**
      * 延迟时间（毫秒）
@@ -62,6 +69,7 @@ public class Message implements Serializable {
         this();
         this.topic = topic;
         this.body = body;
+        this.clazz=body.getClass().getName();
     }
 
     public Message(String topic, String tag, Object body) {
@@ -130,6 +138,7 @@ public class Message implements Serializable {
 
     public Message setBody(Object body) {
         this.body = body;
+        this.clazz=body.getClass().getName();
         return this;
     }
 
