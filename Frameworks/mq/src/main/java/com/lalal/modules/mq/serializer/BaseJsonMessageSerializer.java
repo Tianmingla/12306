@@ -31,7 +31,7 @@ public class BaseJsonMessageSerializer implements MessageSerializer {
         Message msg=jsonObject.toJavaObject(Message.class);
         try {
             Class<?> clazz = Class.forName(msg.getClazz());
-            Object body=jsonObject.getJSONObject("clazz").toJavaObject(clazz);
+            Object body=jsonObject.getJSONObject("body").toJavaObject(clazz);
             msg.setBody(body);
         }catch (Exception e){
             return null;
