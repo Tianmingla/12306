@@ -321,6 +321,28 @@ CREATE TABLE `t_order_item` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='火车票订单明细表';
 
 -- ------------------------------------------------------
+-- 异步购票请求跟踪表
+-- ------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `t_ticket_async_request` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `request_id` VARCHAR(64) NOT NULL COMMENT '请求唯一ID，雪花算法生成',
+  `user_id` BIGINT NOT NULL COMMENT '用户ID',
+  `train_num` VARCHAR(20) NOT NULL COMMENT '车次号',
+  `date` DATE NOT NULL COMMENT '乘车日期',
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-处理中，1-成功，2-失败，3-发送失败',
+  `order_sn` VARCHAR(64) DEFAULT NULL COMMENT '成功后的订单号',
+  `error_message` TEXT DEFAULT NULL COMMENT '失败原因',
+  `request_params` JSON DEFAULT NULL COMMENT '原始请求参数JSON（用于重试）',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_request_id` (`request_id`),
+  KEY `idx_user_train_date` (`user_id`,`train_num`,`date`),
+  KEY `idx_status_create_time` (`status`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='异步购票请求跟踪表';
+
+-- ------------------------------------------------------
 -- 运营管理人员表（与普通用户分离）
 -- ------------------------------------------------------
 

@@ -187,3 +187,24 @@ export const getTrainRouteDetails = async (trainNum: string): Promise<import('..
 
   return json.data;
 };
+
+/**
+ * 查询异步购票状态（高峰模式）
+ * 前端轮询此接口获取购票处理结果
+ */
+export const checkTicketPurchaseStatus = async (requestId: string): Promise<import('../types').AsyncTicketCheckResponse> => {
+  const response = await fetch(`${API_BASE}/ticket/check/${encodeURIComponent(requestId)}`, {
+    headers: authHeaders()
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+
+  const json = await response.json();
+  if (json.code !== 200) {
+    throw new Error(json.message || 'Unknown API error');
+  }
+
+  return json;
+};

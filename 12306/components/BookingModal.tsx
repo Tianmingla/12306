@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { TrainTicket } from '../types';
-import { X, UserPlus, Check, CreditCard, AlertCircle } from 'lucide-react';
-import { purchaseTicket } from '../services/ticketService';
+import { X, UserPlus, Check, CreditCard, AlertCircle, Clock } from 'lucide-react';
+import { purchaseTicket, checkTicketPurchaseStatus } from '../services/ticketService';
 import { listPassengers } from '../services/passengerService';
 import type { PassengerApi } from '../types';
 
@@ -29,8 +29,10 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
   const [passengersLoading, setPassengersLoading] = useState(false);
   const [selectedPassengers, setSelectedPassengers] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [step, setStep] = useState<'fill' | 'paying' | 'error'>('fill');
+  const [step, setStep] = useState<'fill' | 'paying' | 'processing' | 'error'>('fill');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [requestId, setRequestId] = useState<string>('');
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!ticket) return;
@@ -53,6 +55,47 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
       .catch(() => setPassengers([]))
       .finally(() => setPassengersLoading(false));
   }, [ticket]);
+
+  // 清理轮询
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearTimeout(pollingRef.current);
+      }
+    };
+  }, []);
+
+  // 轮询检查异步购票状态
+  const startPolling = (reqId: string) => {
+    const poll = async () => {
+      try {
+        const json = await checkTicketPurchaseStatus(reqId);
+        const status = json.data?.status;
+
+        if (status === 'SUCCESS') {
+          const orderSn = json.data?.orderSn;
+          if (orderSn) {
+            onPurchaseSuccess?.(orderSn);
+            onClose();
+          } else {
+            setErrorMessage('订单创建成功但未返回订单号');
+            setStep('error');
+          }
+        } else if (status === 'FAILED') {
+          setErrorMessage(json.data?.errorMessage || '购票失败');
+          setStep('error');
+        } else {
+          // 继续轮询，间隔 2 秒
+          pollingRef.current = setTimeout(poll, 2000);
+        }
+      } catch (error) {
+        console.error('轮询状态失败:', error);
+        // 出错后继续轮询
+        pollingRef.current = setTimeout(poll, 3000);
+      }
+    };
+    poll();
+  };
 
   if (!ticket) return null;
 
@@ -93,7 +136,19 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
       };
 
       const json = await purchaseTicket(request);
+      const status = json.data?.status;
       const orderSn = json.data?.orderSn;
+      const reqId = json.data?.requestId;
+
+      // 处理高峰模式：返回 PROCESSING 状态
+      if (status === 'PROCESSING' && reqId) {
+        setRequestId(reqId);
+        setStep('processing');
+        startPolling(reqId);
+        return;
+      }
+
+      // 同步模式成功
       if (!orderSn) {
         throw new Error('未返回订单号');
       }
@@ -272,6 +327,17 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                   <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
                   <h3 className="text-xl font-bold text-gray-800">正在创建订单…</h3>
                   <p className="text-gray-500 mt-2">请稍候</p>
+                </div>
+            )}
+
+            {step === 'processing' && (
+                <div className="flex flex-col items-center justify-center h-64">
+                  <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6">
+                    <Clock className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800">订单处理中</h3>
+                  <p className="text-gray-500 mt-2">当前排队人数较多，请耐心等待</p>
+                  <p className="text-gray-400 text-sm mt-1">请求ID: {requestId}</p>
                 </div>
             )}
 

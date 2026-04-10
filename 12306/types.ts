@@ -164,6 +164,23 @@ export interface PurchaseTicketResponse {
     orderSn: string;
     totalAmount?: string | number | null;
     ticketDTO?: TicketDTO | null;
+    /** 异步请求ID（高峰模式时返回） */
+    requestId?: string;
+  };
+  requestId: string;
+}
+
+/** 异步购票状态查询响应 */
+export interface AsyncTicketCheckResponse {
+  code: number;
+  message: string | null;
+  data: {
+    requestId: string;
+    status: 'PROCESSING' | 'SUCCESS' | 'FAILED';
+    orderSn?: string;
+    totalAmount?: string | number | null;
+    errorMessage?: string;
+    ticketDTO?: TicketDTO | null;
   };
   requestId: string;
 }

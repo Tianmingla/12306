@@ -16,5 +16,5 @@
 #
 
 com.lalal.modules.mq.config.MqAutoConfiguration
-
+org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration
 

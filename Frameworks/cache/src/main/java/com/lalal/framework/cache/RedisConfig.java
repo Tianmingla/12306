@@ -72,11 +72,10 @@ public class RedisConfig {
         );
         // 4. 将配置好的模块注册到 ObjectMapper 中
         mapper.registerModule(javaTimeModule);
-        CacheContext ctx=CacheContext.builder()
-                .mapper(mapper)
-                .valueSerializer(new DefaultValueRedisSerializer(mapper))
-                .redisType(RedisType.VALUE)
-                .build();
+
+        //直接用redisTemplate时 防止自定义和直接使用状态不一致
+        redisTemplate.setDefaultSerializer(new GenericJackson2JsonRedisSerializer(mapper));
+
         ValueRedisSerializer valueRedisSerializer=new DefaultValueRedisSerializer(mapper);
         return new SafeCacheTemplate(redisTemplate,redissonClient,valueRedisSerializer);
     }
