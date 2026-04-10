@@ -1,25 +1,18 @@
 package com.lalal.modules.service.impl;
 
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.alibaba.fastjson2.JSON;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.context.RequestContext;
-import com.lalal.modules.dto.AsyncTicketPurchaseMessage;
-import com.lalal.modules.dto.FareCalculationRequestDTO;
-import com.lalal.modules.dto.FareCalculationResultDTO;
-import com.lalal.modules.dto.SeatSelectionRequestDTO;
-import com.lalal.modules.dto.TicketDTO;
+import com.lalal.modules.dto.*;
 import com.lalal.modules.dto.request.PurchaseTicketRequestDto;
 import com.lalal.modules.dto.response.AsyncTicketCheckVO;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
 import com.lalal.modules.entity.TicketAsyncRequestDO;
-import com.lalal.modules.entity.TicketDO;
 import com.lalal.modules.entity.TrainDO;
 import com.lalal.modules.enumType.RequestStatus;
 import com.lalal.modules.enumType.ReturnCode;
-import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.TicketAsyncRequestMapper;
-import com.lalal.modules.mapper.TicketMapper;
 import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.remote.OrderServiceClient;
 import com.lalal.modules.remote.SeatServiceClient;
@@ -28,10 +21,8 @@ import com.lalal.modules.result.Result;
 import com.lalal.modules.service.FareCalculationService;
 import com.lalal.modules.service.TicketService;
 import com.lalal.modules.mq.MessageQueueService;
-import com.lalal.modules.utils.RequestUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -42,26 +33,43 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
+/**
+ * 购票服务实现 - 纯 MQ 消息驱动架构
+ *
+ * 购票流程:
+ * 1. purchase() 发送 SeatSelectionRequestMessage 到 seat-selection-topic
+ * 2. SeatSelectionConsumer (seat-service) 处理选座，发送结果到 seat-selection-result-topic
+ * 3. SeatResultProcessorConsumer (ticket-service) 计算票价，发送到 order-creation-topic
+ * 4. OrderCreationConsumer (order-service) 创建订单，发送结果到 order-creation-result-topic
+ * 5. OrderResultProcessorConsumer (ticket-service) 更新最终状态
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TicketServiceImpl implements TicketService {
 
-    private final SeatServiceClient seatServiceClient;
-    private final OrderServiceClient orderServiceClient;
     private final UserServiceClient userServiceClient;
     private final SafeCacheTemplate safeCacheTemplate;
-    private final FareCalculationService fareCalculationService;
-    private final TrainMapper trainMapper;
-    private final TicketAsyncRequestMapper ticketAsyncRequestMapper;
     private final MessageQueueService messageQueueService;
+    private final SeatServiceClient seatServiceClient;
+    private final TrainMapper trainMapper;
+    private final FareCalculationService fareCalculationService;
+    private  final  OrderServiceClient orderServiceClient;
 
     private static final String PEAK_STATUS_KEY = "traffic:peak:status";
     private static final String ASYNC_REQUEST_PREFIX = "ticket:async:req:";
+    private static final String SEAT_SELECTION_TOPIC = "seat-selection-topic";
+
+    /**
+     * 状态常量
+     */
+    private static final int STATUS_PROCESSING = 0;      // 处理中
+    private static final int STATUS_SUCCESS = 1;         // 成功
+    private static final int STATUS_FAILED = 2;          // 失败
+    private static final int STATUS_SEAT_SELECTED = 4;   // 选座成功，订单创建中
+    private static final int STATUS_ORDER_CREATING = 5;  // 订单创建中
 
     @Override
     public PurchaseTicketVO purchase(PurchaseTicketRequestDto purchaseTicketRequestDto, Long userId) {
@@ -75,27 +83,13 @@ public class TicketServiceImpl implements TicketService {
             return PurchaseTicketVO.failed("乘车人ID列表与座位类型列表不匹配");
         }
 
-        // 查询乘客信息
-        UserServiceClient.PassengersBatchRequest batchReq = new UserServiceClient.PassengersBatchRequest();
-        batchReq.setUserId(userId);
-        batchReq.setPassengerIds(purchaseTicketRequestDto.getIDCardCodelist());
-        Result<List<UserServiceClient.PassengerRemoteVO>> passengerResult = userServiceClient.batchPassengers(batchReq);
-        if (passengerResult == null
-                || passengerResult.getCode() == null
-                || !ReturnCode.success.code().equals(passengerResult.getCode())
-                || passengerResult.getData() == null
-                || passengerResult.getData().isEmpty()) {
-            return PurchaseTicketVO.failed("获取乘车人信息失败");
-        }
-        List<UserServiceClient.PassengerRemoteVO> passengers = passengerResult.getData();
-
         // 检测是否为高峰时段
         String peakStatus = safeCacheTemplate.get(PEAK_STATUS_KEY, new TypeReference<String>() {});
         boolean peakHour = "true".equals(peakStatus);
 
         if (peakHour) {
             // 高峰模式：异步处理
-            return handlePeakPurchase(purchaseTicketRequestDto, userId, passengers);
+            return handleAsyncPurchase(purchaseTicketRequestDto, userId);
         }
 
         // 低峰模式：同步处理
@@ -103,37 +97,44 @@ public class TicketServiceImpl implements TicketService {
                 purchaseTicketRequestDto.getStartStation(), purchaseTicketRequestDto.getEndStation(),
                 purchaseTicketRequestDto.getDate(), purchaseTicketRequestDto.getIDCardCodelist(),
                 purchaseTicketRequestDto.getSeatTypelist(), purchaseTicketRequestDto.getChooseSeats(),
-                purchaseTicketRequestDto.getAccount(), passengers);
+                purchaseTicketRequestDto.getAccount());
     }
 
     /**
-     * 高峰模式处理：返回 PROCESSING 状态 + requestId
-     * 不插入数据库，仅用 Redis 存储临时状态
+     * 异步购票处理：发送选座请求消息
      */
-    private PurchaseTicketVO handlePeakPurchase(PurchaseTicketRequestDto request, Long userId,
-                                                 List<UserServiceClient.PassengerRemoteVO> passengers) {
+    private PurchaseTicketVO handleAsyncPurchase(PurchaseTicketRequestDto request, Long userId) {
         String requestId = RequestContext.getRequestId();
         String asyncKey = ASYNC_REQUEST_PREFIX + requestId;
 
-        // 缓存存储初始状态对象（status=0 表示处理中）
-        TicketAsyncRequestDO initialRecord = TicketAsyncRequestDO.builder()
+        // 1. 构建数据库记录
+        TicketAsyncRequestDO record = TicketAsyncRequestDO.builder()
                 .requestId(requestId)
                 .userId(userId)
                 .trainNum(request.getTrainNum())
                 .date(java.sql.Date.valueOf(request.getDate()))
-                .status(0)
+                .status(STATUS_PROCESSING)
+                .account(StringUtils.hasText(request.getAccount()) ? request.getAccount() : "")
+                .startStation(request.getStartStation())
+                .endStation(request.getEndStation())
+                .passengerIdsJson(JSON.toJSONString(request.getIDCardCodelist()))
+                .seatTypelistJson(JSON.toJSONString(request.getSeatTypelist()))
+                .chooseSeatsJson(request.getChooseSeats() != null ? JSON.toJSONString(request.getChooseSeats()) : null)
                 .build();
 
-        boolean set = safeCacheTemplate.setIfAbsent(asyncKey, initialRecord, 30, TimeUnit.MINUTES);
+        boolean set = safeCacheTemplate.setIfAbsent(asyncKey, record, 30, TimeUnit.MINUTES);
         if (!set) {
             return PurchaseTicketVO.failed("请求处理中，请稍后查询");
         }
 
-        // 构建MQ消息
-        AsyncTicketPurchaseMessage message = new AsyncTicketPurchaseMessage();
+        // 3. 缓存初始状态
+        safeCacheTemplate.set(asyncKey, record, 30, TimeUnit.MINUTES);
+
+        // 4. 构建选座请求消息
+        SeatSelectionRequestMessage message = new SeatSelectionRequestMessage();
         message.setRequestId(requestId);
         message.setUserId(userId);
-        message.setAccount(StringUtils.hasText(request.getAccount()) ? request.getAccount() : "");
+        message.setAccount(record.getAccount());
         message.setTrainNum(request.getTrainNum());
         message.setStartStation(request.getStartStation());
         message.setEndStation(request.getEndStation());
@@ -143,14 +144,16 @@ public class TicketServiceImpl implements TicketService {
         message.setChooseSeats(request.getChooseSeats());
         message.setTimestamp(System.currentTimeMillis());
 
-        // 异步发送消息
+        // 5. 发送消息
         try {
-            messageQueueService.send("ticket-purchase-topic", "purchase", message);
-            log.info("[高峰模式] 发送异步购票消息: requestId={}, trainNum={}", requestId, request.getTrainNum());
+            messageQueueService.send(SEAT_SELECTION_TOPIC, "select", message);
+            log.info("[购票] 发送选座请求消息: requestId={}, trainNum={}", requestId, request.getTrainNum());
         } catch (Exception e) {
-            // 发送失败，清理 Redis 状态
-            safeCacheTemplate.del(asyncKey);
-            log.error("[高峰模式] 发送消息失败: requestId={}", requestId, e);
+            // 发送失败，更新状态
+            record.setStatus(STATUS_FAILED);
+            record.setErrorMessage("消息发送失败: " + e.getMessage());
+            safeCacheTemplate.set(asyncKey, record, 30, TimeUnit.MINUTES);
+            log.error("[购票] 发送消息失败: requestId={}", requestId, e);
             return PurchaseTicketVO.failed("消息发送失败，请重试");
         }
 
@@ -158,40 +161,26 @@ public class TicketServiceImpl implements TicketService {
     }
 
     /**
-     * 核心购票逻辑（同步路径 + 异步路径复用）
+     * 核心购票逻辑（内部重载，支持传入乘客列表）
      */
     @Override
     public PurchaseTicketVO processCorePurchase(Long userId, String trainNum, String startStation,
                                                  String endStation, String date, List<Long> passengerIds,
                                                  List<String> seatTypelist, List<String> chooseSeats,
                                                  String account) {
-        return processCorePurchase(userId, trainNum, startStation, endStation, date,
-                passengerIds, seatTypelist, chooseSeats, account, null);
-    }
-
-    /**
-     * 核心购票逻辑（内部重载，支持传入乘客列表）
-     */
-    private PurchaseTicketVO processCorePurchase(Long userId, String trainNum, String startStation,
-                                                  String endStation, String date, List<Long> passengerIds,
-                                                  List<String> seatTypelist, List<String> chooseSeats,
-                                                  String account,
-                                                  List<UserServiceClient.PassengerRemoteVO> passengers) {
-        // 如果传入了passengers，直接使用；否则查询
-        if (passengers == null) {
-            UserServiceClient.PassengersBatchRequest batchReq = new UserServiceClient.PassengersBatchRequest();
-            batchReq.setUserId(userId);
-            batchReq.setPassengerIds(passengerIds);
-            Result<List<UserServiceClient.PassengerRemoteVO>> passengerResult = userServiceClient.batchPassengers(batchReq);
-            if (passengerResult == null
-                    || passengerResult.getCode() == null
-                    || !ReturnCode.success.code().equals(passengerResult.getCode())
-                    || passengerResult.getData() == null
-                    || passengerResult.getData().isEmpty()) {
-                return PurchaseTicketVO.failed("获取乘车人信息失败");
-            }
-            passengers = passengerResult.getData();
+        // 查询乘客信息进行校验
+        UserServiceClient.PassengersBatchRequest batchReq = new UserServiceClient.PassengersBatchRequest();
+        batchReq.setUserId(userId);
+        batchReq.setPassengerIds(passengerIds);
+        Result<List<UserServiceClient.PassengerRemoteVO>> passengerResult = userServiceClient.batchPassengers(batchReq);
+        if (passengerResult == null
+                || passengerResult.getCode() == null
+                || !ReturnCode.success.code().equals(passengerResult.getCode())
+                || passengerResult.getData() == null
+                || passengerResult.getData().isEmpty()) {
+            return PurchaseTicketVO.failed("获取乘车人信息失败");
         }
+        List<UserServiceClient.PassengerRemoteVO> passengers = passengerResult.getData();
 
         // 1. 选座
         SeatSelectionRequestDTO seatRequest = new SeatSelectionRequestDTO();
@@ -298,13 +287,12 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public AsyncTicketCheckVO check(String requestId, Long userId) {
+        // 优先从缓存读取
         String asyncKey = ASYNC_REQUEST_PREFIX + requestId;
-
-        // 完全依赖缓存，不查数据库
         TicketAsyncRequestDO record = safeCacheTemplate.get(asyncKey, new TypeReference<TicketAsyncRequestDO>() {});
 
+
         if (record == null) {
-            // 缓存过期或请求不存在
             return AsyncTicketCheckVO.failed(requestId, "请求不存在或已过期");
         }
 
@@ -314,17 +302,20 @@ public class TicketServiceImpl implements TicketService {
         }
 
         switch (record.getStatus()) {
-            case 0:
+            case STATUS_PROCESSING:
                 return AsyncTicketCheckVO.processing(requestId);
-            case 1:
+            case STATUS_SUCCESS:
                 return AsyncTicketCheckVO.success(record.getRequestId(), record.getOrderSn(),
-                        BigDecimal.ZERO, null);
-            case 2:
+                        null, null);
+            case STATUS_FAILED:
                 return AsyncTicketCheckVO.failed(requestId, record.getErrorMessage());
-            case 3:
-                return AsyncTicketCheckVO.failed(requestId, "消息发送失败: " + record.getErrorMessage());
+            case STATUS_SEAT_SELECTED:
+            case STATUS_ORDER_CREATING:
+                // 中间状态，返回处理中
+                return AsyncTicketCheckVO.processing(requestId);
             default:
                 return AsyncTicketCheckVO.failed(requestId, "未知状态");
         }
     }
+
 }

@@ -20,7 +20,7 @@ public interface TicketService{
      * 核心购票逻辑（同步处理）
      */
     PurchaseTicketVO processCorePurchase(Long userId, String trainNum, String startStation,
-            String endStation, String date, List<Long> passengerIds, List<String> seatTypelist,
-            List<String> chooseSeats, String account);
+                                         String endStation, String date, List<Long> passengerIds, List<String> seatTypelist,
+                                         List<String> chooseSeats, String account);
 
 }

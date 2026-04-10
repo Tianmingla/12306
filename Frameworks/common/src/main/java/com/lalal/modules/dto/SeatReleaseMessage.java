@@ -19,6 +19,11 @@ public class SeatReleaseMessage implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 全局请求ID
+     */
+    private String requestId;
+
+    /**
      * 订单号
      */
     private String orderSn;
@@ -29,9 +34,19 @@ public class SeatReleaseMessage implements Serializable {
     private String trainNum;
 
     /**
-     * 运行日期 (格式: yyyy-MM-dd)
+     * 运行日期
      */
     private String date;
+
+    /**
+     * 释放原因
+     */
+    private String reason;
+
+    /**
+     * 时间戳
+     */
+    private Long timestamp;
 
     /**
      * 出发站

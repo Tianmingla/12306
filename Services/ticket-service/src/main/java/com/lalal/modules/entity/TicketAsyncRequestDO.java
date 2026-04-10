@@ -63,4 +63,34 @@ public class TicketAsyncRequestDO extends BaseDO {
      * 原始请求参数JSON（用于重试）
      */
     private String requestParams;
+
+    /**
+     * 购票账号(手机号)
+     */
+    private String account;
+
+    /**
+     * 出发站
+     */
+    private String startStation;
+
+    /**
+     * 到达站
+     */
+    private String endStation;
+
+    /**
+     * 乘车人ID列表 (JSON 序列化存储)
+     */
+    private String passengerIdsJson;
+
+    /**
+     * 座位类型列表 (JSON 序列化存储)
+     */
+    private String seatTypelistJson;
+
+    /**
+     * 选座偏好列表 (JSON 序列化存储)
+     */
+    private String chooseSeatsJson;
 }
