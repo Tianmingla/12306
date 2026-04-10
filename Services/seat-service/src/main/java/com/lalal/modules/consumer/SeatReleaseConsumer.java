@@ -107,8 +107,8 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
             }
 
             // 0-based segment indices
-            int startSeg = startSeq - 1;
-            int endSeg = endSeq - 2;
+            int startSeg = startSeq;
+            int endSeg = endSeq - 1;
             int totalSegs = stations.size() - 1;
 
             // 3. 按车厢分组处理座位
@@ -174,12 +174,6 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
         if (seatNumber == null || seatNumber.length() < 2) {
             return -1;
         }
-        switch (seatType) {
-            case HARD_SEAT:
-                SeatLayout.BUSINESS_CLASS.getIndex(seatNumber);
-                break;
-
-        }
         int layoutIndex;
 
         switch (seatType) {
@@ -201,22 +195,18 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
 
             // --- 普通列车 ---
             case HARD_SEAT:
-                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
                 layoutIndex = SeatLayout.HARD_SEAT.getIndex(seatNumber);
                 break;
 
             case SOFT_SEAT:
-                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
                 layoutIndex = SeatLayout.SOFT_SEAT.getIndex(seatNumber);
                 break;
 
             case HARD_SLEEPER:
-                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
-                layoutIndex = SeatLayout.HARD_SEAT.getIndex(seatNumber);
+                layoutIndex = SeatLayout.HARD_SLEEPER.getIndex(seatNumber);
                 break;
 
             case SOFT_SLEEPER:
-                // 对应 SeatLayout.PLAIN_LAYOUT (索引 3)
                 layoutIndex = SeatLayout.SOFT_SLEEPER.getIndex(seatNumber);
                 break;
 

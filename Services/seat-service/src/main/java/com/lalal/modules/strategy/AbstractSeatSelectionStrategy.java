@@ -67,8 +67,8 @@ public abstract class AbstractSeatSelectionStrategy implements SeatSelectionStra
         }
 
         // 0-based segment indices
-        int startSeg = startSeq - 1;
-        int endSeg = endSeq - 2; // A-B is segment 0 (seq 1 to 2)
+        int startSeg = startSeq;
+        int endSeg = endSeq - 1; // A-B is segment 0 (seq 1 to 2)
         int totalSegs = stations.size() - 1;
 
         // 2. 遍历车厢尝试选座

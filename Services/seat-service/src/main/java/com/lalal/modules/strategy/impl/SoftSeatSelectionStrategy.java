@@ -1,10 +1,10 @@
 package com.lalal.modules.strategy.impl;
 
-import com.lalal.modules.constant.SeatType;
 import com.lalal.modules.core.seat.SeatLayout;
 
 import com.lalal.modules.dao.CarriageDO;
 import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
+import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.strategy.AbstractSeatSelectionStrategy;
 import org.springframework.data.redis.core.StringRedisTemplate;

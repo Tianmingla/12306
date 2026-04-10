@@ -28,19 +28,29 @@ public class SeatLayout {
         }
     }
 
-    //两个索引的是1-based
+    //两个索引的是0-based
     public String getSeatNumber(int index) {
         int row = (index / seatsPerRow) + 1;
         String seatName = seatNames[index % seatsPerRow];
         return row + seatName;
     }
     public Integer getIndex(String seatNumber){
-        int row=Integer.parseInt(String.valueOf(seatNumber.charAt(0)));
-        int col= findIndex(String.valueOf(seatNumber.charAt(1)));
-        if(col==-1){
+        // seatNumber format: "row+seatName" (e.g., "1A", "10上")
+        // row is 1-based, need to parse all leading digits
+        int i = 0;
+        while (i < seatNumber.length() && Character.isDigit(seatNumber.charAt(i))) {
+            i++;
+        }
+        if (i == 0) {
             return null;
         }
-        return seatsPerRow*row+col+1;
+        int row = Integer.parseInt(seatNumber.substring(0, i));
+        String seatName = seatNumber.substring(i);
+        int col = findIndex(seatName);
+        if (col == -1) {
+            return null;
+        }
+        return seatsPerRow * (row - 1) + col;
     }
     private int findIndex(String str) {
         for (int i = 0; i < seatNames.length; i++) {
