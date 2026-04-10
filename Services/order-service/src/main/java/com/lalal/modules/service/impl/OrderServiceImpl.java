@@ -11,6 +11,7 @@ import com.lalal.modules.dto.response.OrderListVO;
 import com.lalal.modules.dto.response.PayOrderVO;
 import com.lalal.modules.entity.OrderDO;
 import com.lalal.modules.entity.OrderItemDO;
+import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.OrderItemMapper;
 import com.lalal.modules.mapper.OrderMapper;
 import com.lalal.modules.service.AlipayTradeService;
@@ -226,7 +227,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         v.setIdCardMasked(maskIdCard(d.getIdCard()));
         v.setCarriageNumber(d.getCarriageNumber());
         v.setSeatNumber(d.getSeatNumber());
-        v.setSeatType(d.getSeatType());
+        v.setSeatType(SeatType.getDescByCode(d.getSeatType()));
         v.setAmount(d.getAmount());
         return v;
     }

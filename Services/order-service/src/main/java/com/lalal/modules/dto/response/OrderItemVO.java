@@ -12,6 +12,6 @@ public class OrderItemVO {
     private String idCardMasked;
     private String carriageNumber;
     private String seatNumber;
-    private Integer seatType;
+    private String seatType;
     private BigDecimal amount;
 }

@@ -175,7 +175,7 @@ export interface OrderItemVO {
   idCardMasked: string;
   carriageNumber: string | null;
   seatNumber: string | null;
-  seatType: number | null;
+  seatType: string|number | null;
   amount: string | number | null;
 }
 

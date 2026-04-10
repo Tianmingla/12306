@@ -192,7 +192,7 @@ const OrderDetailPage: React.FC<OrderDetailPageProps> = ({ orderSn, onBack }) =>
                             <Armchair className="h-4 w-4 text-blue-500" />
                             {it.carriageNumber} 车厢 {it.seatNumber}
                           </span>
-                          <span className="text-gray-500">{seatTypeLabel(it.seatType)}</span>
+                          <span className="text-gray-500">{it.seatType}</span>
                           <span className="font-semibold text-orange-600">¥{formatMoney(it.amount)}</span>
                         </div>
                       </div>
