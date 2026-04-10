@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -22,7 +23,7 @@ public interface OrderServiceClient {
         private String startStation;
         private String endStation;
         private String username;
-        private Date runDate;
+        private LocalDate runDate;
         private List<OrderItemRemoteRequestDTO> items;
 
         @Data

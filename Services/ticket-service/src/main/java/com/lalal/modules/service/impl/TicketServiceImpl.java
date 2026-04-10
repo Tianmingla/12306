@@ -112,7 +112,7 @@ public class TicketServiceImpl implements TicketService {
                 .requestId(requestId)
                 .userId(userId)
                 .trainNum(request.getTrainNum())
-                .date(java.sql.Date.valueOf(request.getDate()))
+                .date(request.getDate())
                 .status(STATUS_PROCESSING)
                 .account(StringUtils.hasText(request.getAccount()) ? request.getAccount() : "")
                 .startStation(request.getStartStation())
@@ -239,7 +239,7 @@ public class TicketServiceImpl implements TicketService {
         orderRequest.setStartStation(startStation);
         orderRequest.setEndStation(endStation);
         orderRequest.setUsername(account);
-        orderRequest.setRunDate(Date.from(LocalDate.parse(date).atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        orderRequest.setRunDate(LocalDate.parse(date));
 
         List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = new ArrayList<>();
         for (int i = 0; i < selectedSeats.getItems().size(); i++) {

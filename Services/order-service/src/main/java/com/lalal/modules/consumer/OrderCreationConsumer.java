@@ -7,12 +7,16 @@ import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
 import com.lalal.modules.service.OrderService;
+import com.lalal.modules.utils.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 /**
@@ -97,7 +101,7 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
         dto.setStartStation(msg.getStartStation());
         dto.setEndStation(msg.getEndStation());
         dto.setUsername(msg.getUsername());
-        dto.setRunDate(msg.getRunDate());
+        dto.setRunDate(LocalDate.parse(msg.getRunDate()));
 
         // 转换订单项
         if (msg.getItems() != null) {

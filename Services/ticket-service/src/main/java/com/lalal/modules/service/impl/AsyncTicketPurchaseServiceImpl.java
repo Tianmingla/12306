@@ -69,7 +69,7 @@ public class AsyncTicketPurchaseServiceImpl extends ServiceImpl<TicketAsyncReque
                 .requestId(requestId)
                 .userId(message.getUserId())
                 .trainNum(message.getTrainNum())
-                .date(new Date(message.getTimestamp()))
+                .date(String.valueOf(new Date(message.getTimestamp())))
                 .status(0)
                 .requestParams(requestParams)
                 .build();

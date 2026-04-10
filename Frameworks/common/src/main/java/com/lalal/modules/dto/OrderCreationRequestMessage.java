@@ -48,7 +48,7 @@ public class OrderCreationRequestMessage implements Serializable {
     /**
      * 乘车日期
      */
-    private Date runDate;
+    private String runDate;
 
     /**
      * 订单项列表

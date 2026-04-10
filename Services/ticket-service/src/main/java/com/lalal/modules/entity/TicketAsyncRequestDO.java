@@ -42,7 +42,7 @@ public class TicketAsyncRequestDO extends BaseDO {
     /**
      * 乘车日期
      */
-    private Date date;
+    private String date;
 
     /**
      * 状态：0-处理中，1-成功，2-失败，3-发送失败

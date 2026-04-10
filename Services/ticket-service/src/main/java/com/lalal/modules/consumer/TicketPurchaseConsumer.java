@@ -102,7 +102,7 @@ public class TicketPurchaseConsumer extends RocketMQBaseConsumer {
                 .requestId(message.getRequestId())
                 .userId(message.getUserId())
                 .trainNum(message.getTrainNum())
-                .date(Date.valueOf(message.getDate()))
+                .date(message.getDate())
                 .status(status)
                 .orderSn(orderSn)
                 .errorMessage(errorMessage)

@@ -320,7 +320,7 @@ def generate_order_records(
             'train_number': train_number,
             'start_station': departure_station,
             'end_station': arrival_station,
-            'run_date': travel_date,
+            'run_date': travel_date.date(),
             'total_amount': ticket_price,
             'status': status,
             'pay_time': pay_time,

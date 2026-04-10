@@ -25,6 +25,8 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -206,7 +208,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             OrderDO order = findByOrderSn(outTradeNo);
             if (order != null && Objects.equals(order.getStatus(), 0)) {
                 order.setStatus(1);
-                order.setPayTime(new Date());
+                order.setPayTime(LocalDateTime.now());
                 this.updateById(order);
             }
         }
@@ -296,8 +298,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         }
         // 检查是否已发车
         if (order.getRunDate() != null) {
-            Date now = new Date();
-            if (order.getRunDate().before(now)) {
+            if (order.getRunDate().isBefore(LocalDate.now())) {
                 throw new IllegalStateException("列车已发车，无法退款");
             }
         }
