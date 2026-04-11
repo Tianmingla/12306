@@ -242,39 +242,1398 @@ estimated_distance = (arrival_seq - departure_seq) × 30
 ## 2. Admin 前端后台界面
 
 > 位置: `admin/`
-> 技术栈: Vue 3 + Arco Design + Vite + TypeScript
+> 技术栈: Vue 3 + Arco Design + Vite + TypeScript + Pinia
 
-*待分析...*
+### 2.1 项目概述
+
+Admin 是铁路票务系统的后台运营管理界面，为管理员提供数据管理、订单处理、用户管理等核心功能。
+
+### 2.2 技术架构
+
+#### 2.2.1 技术栈
+| 技术 | 说明 |
+|------|------|
+| Vue 3.4+ | 渐进式前端框架，使用 Composition API |
+| Arco Design Vue | 企业级 UI 组件库（深色铁路主题） |
+| Vite 5 | 新一代构建工具，快速热更新 |
+| TypeScript | 类型安全 |
+| Pinia | 状态管理 |
+| Axios | HTTP 客户端 |
+| ECharts | 数据可视化图表 |
+
+#### 2.2.2 项目目录结构
+```
+admin/
+├── src/
+│   ├── api/           # API 调用层
+│   │   ├── user.ts    # 用户管理 API
+│   │   ├── train.ts   # 车次管理 API
+│   │   ├── station.ts # 站点管理 API
+│   │   ├── order.ts   # 订单管理 API
+│   │   ├── stats.ts   # 统计 API
+│   │   └── index.ts   # API 导出汇总
+│   ├── types/         # TypeScript 类型定义
+│   │   ├── user.ts    # 用户类型
+│   │   ├── train.ts   # 车次类型
+│   │   ├── station.ts # 站点类型
+│   │   ├── order.ts   # 订单类型
+│   │   └── stats.ts   # 统计类型
+│   ├── views/         # 页面组件
+│   │   ├── login/     # 登录页
+│   │   ├── dashboard/ # 数据统计首页
+│   │   ├── train/     # 车票管理
+│   │   │   ├── TrainList.vue     # 车次列表
+│   │   │   ├── StationManage.vue  # 站点管理
+│   │   │   └── RouteManage.vue    # 线路管理
+│   │   ├── order/     # 订单管理
+│   │   │   ├── OrderList.vue      # 订单列表
+│   │   │   └── RefundManage.vue   # 退款管理
+│   │   └── system/     # 系统管理
+│   │       ├── UserManage.vue     # 用户管理
+│   │       ├── RoleManage.vue     # 角色管理
+│   │       └── OperationLog.vue   # 操作日志
+│   ├── components/    # 公共组件
+│   ├── layouts/       # 布局组件
+│   │   └── BasicLayout.vue  # 主布局（侧边栏+头部）
+│   ├── store/         # Pinia 状态管理
+│   │   ├── user.ts    # 用户状态
+│   │   └── app.ts     # 应用状态
+│   ├── router/        # 路由配置
+│   │   └── index.ts   # 路由定义+守卫
+│   ├── utils/         # 工具函数
+│   │   └── request.ts # Axios 封装
+│   └── main.ts        # 入口文件
+├── vite.config.ts     # Vite 配置
+└── package.json      # 依赖配置
+```
+
+### 2.3 核心功能模块
+
+#### 2.3.1 登录认证
+**文件**: `views/login/index.vue`
+
+**功能**:
+- 管理员用户名密码登录
+- JWT Token 存储到 localStorage
+- 路由守卫自动跳转未登录用户
+
+**流程**:
+```
+用户输入账号密码 → POST /api/admin/auth/login
+    ↓
+验证成功 → 存储 Token → 跳转 Dashboard
+验证失败 → 显示错误信息
+```
+
+#### 2.3.2 数据统计 Dashboard
+**文件**: `views/dashboard/index.vue`
+
+**功能**:
+- 今日订单量统计卡片
+- 订单状态分布饼图（ECharts）
+- 订单趋势折线图
+- 热门线路 TOP 10
+- 列车类型分布
+
+**核心接口**:
+```typescript
+// 获取统计数据
+GET /api/admin/stats/dashboard
+
+// 获取订单趋势
+GET /api/admin/stats/order-trend?startDate=&endDate=
+
+// 获取热门线路
+GET /api/admin/stats/hot-routes?limit=10
+```
+
+#### 2.3.3 用户管理
+**文件**: `views/system/UserManage.vue`
+
+**功能**:
+- 用户列表（游标分页）
+- 用户状态切换（禁用/启用）
+- 查看用户详情和乘车人列表
+- 重置用户密码
+
+**类型定义** (`types/user.ts`):
+```typescript
+interface User {
+  id: number
+  username: string
+  phone: string
+  email?: string
+  status: UserStatus  // 0-正常, 1-禁用
+  createTime: string
+  updateTime: string
+}
+
+interface Passenger {
+  id: number
+  userId: number
+  realName: string
+  idCardType: IdCardType  // 0-身份证, 1-护照, 2-港澳通行证, 3-台湾通行证
+  idCardNumber: string
+  passengerType: PassengerType  // 0-成人, 1-儿童, 2-学生, 3-残疾军人
+  phone?: string
+}
+```
+
+#### 2.3.4 订单管理
+**文件**: `views/order/OrderList.vue`
+
+**功能**:
+- 订单列表查询
+- 订单状态筛选
+- 订单详情弹窗
+- 取消订单
+- 退款处理
+
+**订单状态**:
+| 状态码 | 说明 |
+|--------|------|
+| 0 | 待支付 |
+| 1 | 已支付 |
+| 2 | 已完成 |
+| 3 | 已取消 |
+| 4 | 已退款 |
+
+#### 2.3.5 车次管理
+**文件**: `views/train/TrainList.vue`
+
+**功能**:
+- 车次列表展示
+- 售卖状态切换
+- 座位配置管理
+- 站点配置管理
+
+**座位配置** (`components/SeatConfigModal.vue`):
+- 查看车厢详情
+- 编辑座位数量
+- 保存配置
+
+#### 2.3.6 站点管理
+**文件**: `views/train/StationManage.vue`
+
+**功能**:
+- 站点列表（支持名称搜索）
+- 新增站点
+- 编辑站点信息
+- 删除站点
+
+### 2.4 API 层设计
+
+#### 2.4.1 API 封装
+**文件**: `utils/request.ts`
+
+**特性**:
+- 统一请求拦截器（添加 Token）
+- 统一响应拦截器（错误处理）
+- TypeScript 类型支持
+- 自动重试机制
+
+#### 2.4.2 统一响应格式
+```typescript
+interface Result<T> {
+  code: number      // 200-成功，其他-失败
+  message?: string
+  data?: T
+}
+
+interface PageResult<T> {
+  list: T[]         // 数据列表
+  total: number     // 总数
+  pageSize: number  // 每页大小
+  pageNum: number   // 当前页
+}
+```
+
+#### 2.4.3 API 分类
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 用户 | `api/user.ts` | 登录、信息、状态管理 |
+| 车次 | `api/train.ts` | 车次 CRUD、状态管理 |
+| 站点 | `api/station.ts` | 站点 CRUD |
+| 订单 | `api/order.ts` | 订单查询、退款 |
+| 统计 | `api/stats.ts` | Dashboard 数据 |
+
+### 2.5 状态管理
+
+#### 2.5.1 用户状态 (`store/user.ts`)
+```typescript
+interface UserState {
+  token: string | null
+  userInfo: User | null
+  isLoggedIn: boolean
+}
+```
+
+#### 2.5.2 应用状态 (`store/app.ts`)
+```typescript
+interface AppState {
+  collapsed: boolean      // 侧边栏折叠状态
+  theme: 'dark' | 'light'
+}
+```
+
+### 2.6 路由设计
+
+**路由结构**:
+```
+/login           → 登录页
+/                → 主布局
+  /dashboard     → 数据统计
+  /train
+    /list       → 车次管理
+    /station    → 站点管理
+    /route      → 线路管理
+  /order
+    /list       → 订单列表
+    /refund     → 退款管理
+  /system
+    /user       → 用户管理
+    /role       → 角色管理
+    /log        → 操作日志
+```
+
+**路由守卫**:
+- 未登录自动跳转 `/login`
+- 已登录访问 `/login` 跳转首页
+
+### 2.7 UI 主题
+
+**配色方案**:
+| 用途 | 颜色 | 说明 |
+|------|------|------|
+| 主色 | `#C41E3A` | 铁路红 |
+| 辅助色 | `#1E3A5F` | 沉稳蓝 |
+| 成功色 | `#10B981` | 绿色 |
+| 警告色 | `#F59E0B` | 橙黄色 |
+| 危险色 | `#EF4444` | 红色 |
+| 背景色 | `#0F172A` | 深色背景 |
+| 卡片色 | `#1E293B` | 卡片背景 |
+
+---
 
 ---
 
 ## 3. 12306 前端前台界面
 
 > 位置: `12306/`
-> 技术栈: React + TypeScript + Vite
+> 技术栈: React 18 + TypeScript + Vite + Tailwind CSS
 
-*待分析...*
+### 3.1 项目概述
+
+12306 是铁路票务系统的前台用户界面，为用户提供车票查询、预订、订单管理等核心功能。
+
+### 3.2 技术架构
+
+#### 3.2.1 技术栈
+| 技术 | 说明 |
+|------|------|
+| React 18 | UI 库，支持 Hooks |
+| TypeScript | 类型安全 |
+| Vite | 快速构建工具 |
+| Tailwind CSS | 原子化 CSS 框架 |
+| Lucide React | 图标库 |
+| React Router | 路由管理（本项目中使用状态驱动） |
+
+#### 3.2.2 项目目录结构
+```
+12306/
+├── components/           # React 组件
+│   ├── Navbar.tsx              # 顶部导航栏
+│   ├── SearchWidget.tsx         # 搜索组件
+│   ├── TrainList.tsx            # 车次列表
+│   ├── BookingModal.tsx         # 购票弹窗
+│   ├── LoginModal.tsx           # 登录弹窗
+│   ├── PassengerManageModal.tsx # 乘车人管理
+│   ├── OrderDetailPage.tsx     # 订单详情页
+│   ├── OrderHistoryPage.tsx     # 订单历史页
+│   ├── StationScreenPage.tsx    # 车站大屏
+│   ├── WaitlistPage.tsx         # 候补购票
+│   ├── StationGuidePage.tsx     # 车站指南
+│   ├── TravelGuidePage.tsx      # 出行指南
+│   ├── AIAssistant.tsx          # AI 助手
+│   ├── CitySelector.tsx         # 城市选择器
+│   ├── Features.tsx             # 首页功能展示
+│   └── FilterPanel.tsx          # 筛选面板
+├── services/             # API 服务层
+│   ├── http.ts                 # HTTP 封装
+│   ├── ticketService.ts        # 车票 API
+│   ├── orderService.ts         # 订单 API
+│   ├── userService.ts          # 用户 API
+│   ├── passengerService.ts     # 乘车人 API
+│   ├── stationService.ts       # 车站 API
+│   └── geminiService.ts        # AI 服务
+├── types.ts              # 全局类型定义
+├── App.tsx               # 根组件
+├── index.tsx             # 入口文件
+└── vite.config.ts        # Vite 配置
+```
+
+### 3.3 核心功能模块
+
+#### 3.3.1 首页 (App.tsx)
+**组件**: `SearchWidget`, `Features`
+
+**功能**:
+- Hero 背景展示
+- 出发地/目的地选择
+- 日期选择
+- 单程/往返/中转切换
+- 搜索执行
+
+**视图状态机** (`AppView`):
+```typescript
+enum AppView {
+  HOME = 'HOME',              // 首页
+  SEARCH_RESULTS = 'SEARCH_RESULTS',  // 搜索结果
+  ORDER_DETAIL = 'ORDER_DETAIL',      // 订单详情
+  ORDER_HISTORY = 'ORDER_HISTORY',     // 历史订单
+  STATION_SCREEN = 'STATION_SCREEN',   // 车站大屏
+  WAITLIST = 'WAITLIST',              // 候补购票
+  STATION_GUIDE = 'STATION_GUIDE',    // 车站指南
+  TRAVEL_GUIDE = 'TRAVEL_GUIDE'       // 出行指南
+}
+```
+
+#### 3.3.2 车票搜索
+**组件**: `TrainList.tsx`
+
+**功能**:
+- 显示搜索结果列表
+- 高铁/动车筛选
+- 座位类型筛选
+- 出发时间筛选
+- 中转/直达切换
+- 点击进入购票
+
+**搜索参数**:
+```typescript
+interface SearchParams {
+  from: string           // 出发地
+  to: string             // 目的地
+  date: string           // 日期 yyyy-MM-dd
+  onlyHighSpeed: boolean // 仅高铁动车
+  searchType: 'oneWay' | 'roundTrip' | 'transfer'
+  returnDate?: string    // 返程日期
+  midStation?: string    // 中转站
+}
+```
+
+#### 3.3.3 购票流程
+**组件**: `BookingModal.tsx`
+
+**流程**:
+```
+选择座位类型 → 选择乘车人 → 选座（可选）→ 提交订单
+    ↓
+同步模式: 等待结果 → 跳转支付
+高峰模式: PROCESSING → 轮询状态 → 成功跳转/失败提示
+```
+
+**购票请求**:
+```typescript
+interface PurchaseTicketRequest {
+  account: string          // 登录手机号
+  IDCardCodelist: number[] // 乘车人 ID 列表
+  seatTypelist: string[]   // 座位类型列表
+  chooseSeats?: string[]    // 偏好座位
+  trainNum: string         // 车次号
+  startStation: string     // 出发站
+  endStation: string       // 到达站
+  date: string            // 乘车日期
+}
+```
+
+**响应处理**:
+```typescript
+// 同步模式成功
+{ status: "SUCCESS", orderSn: "xxx" }
+
+// 高峰模式（异步）
+{ status: "PROCESSING", requestId: "xxx" }
+```
+
+#### 3.3.4 高峰异步购票
+**组件**: `BookingModal.tsx`
+
+**轮询机制**:
+```typescript
+const startPolling = (reqId: string) => {
+  const poll = async () => {
+    const json = await checkTicketPurchaseStatus(reqId);
+    if (json.data?.status === 'SUCCESS') {
+      onPurchaseSuccess(json.data.orderSn);
+    } else if (json.data?.status === 'FAILED') {
+      showError(json.data.errorMessage);
+    } else {
+      // 每 2 秒轮询
+      setTimeout(poll, 2000);
+    }
+  };
+  poll();
+};
+```
+
+**状态查询响应**:
+```typescript
+interface AsyncTicketCheckResponse {
+  data: {
+    requestId: string
+    status: 'PROCESSING' | 'SUCCESS' | 'FAILED'
+    orderSn?: string
+    errorMessage?: string
+  }
+}
+```
+
+#### 3.3.5 订单管理
+**组件**: `OrderDetailPage.tsx`, `OrderHistoryPage.tsx`
+
+**功能**:
+- 订单详情展示
+- 支付宝支付
+- 取消订单
+- 退款申请
+
+**订单状态**:
+| 状态 | 说明 |
+|------|------|
+| 0 | 待支付 |
+| 1 | 已支付 |
+| 2 | 已完成 |
+| 3 | 已取消 |
+| 4 | 已退款 |
+
+#### 3.3.6 乘车人管理
+**组件**: `PassengerManageModal.tsx`
+
+**功能**:
+- 查看乘车人列表
+- 新增乘车人
+- 编辑乘车人信息
+- 删除乘车人
+- 设置默认乘车人
+
+#### 3.3.7 其他功能页面
+| 页面 | 组件 | 功能 |
+|------|------|------|
+| 车站大屏 | `StationScreenPage.tsx` | 显示车站列车信息 |
+| 候补购票 | `WaitlistPage.tsx` | 候补车票申请 |
+| 车站指南 | `StationGuidePage.tsx` | 车站楼层/设施导览 |
+| 出行指南 | `TravelGuidePage.tsx` | 乘车须知/规定 |
+| AI 助手 | `AIAssistant.tsx` | 智能客服问答 |
+
+### 3.4 API 层设计
+
+#### 3.4.1 HTTP 封装 (`services/http.ts`)
+```typescript
+const API_BASE = 'http://localhost:8080/api';
+
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+```
+
+#### 3.4.2 服务分类
+
+| 服务 | 文件 | 功能 |
+|------|------|------|
+| 车票 | `ticketService.ts` | 搜索、购票、状态查询 |
+| 订单 | `orderService.ts` | 详情、支付、退款、取消 |
+| 用户 | `userService.ts` | 登录、信息 |
+| 乘车人 | `passengerService.ts` | CRUD |
+| 车站 | `stationService.ts` | 车站搜索 |
+
+### 3.5 类型定义 (`types.ts`)
+
+#### 3.5.1 车票相关
+```typescript
+interface TrainTicket {
+  id: string
+  trainNumber: string
+  fromStation: string
+  toStation: string
+  departureTime: string
+  arrivalTime: string
+  duration: string
+  price: number
+  seatsAvailable: Record<string, number>  // { '商务座': 10, '二等座': 50 }
+  prices?: Record<string, number>
+  type: 'G' | 'D' | 'K' | 'Z'
+  transferCount?: number
+  segments?: TicketSegment[]
+}
+```
+
+#### 3.5.2 用户相关
+```typescript
+interface UserInfoResponse {
+  phone: string
+  userId: string
+  role: string
+}
+
+interface PassengerApi {
+  id: number
+  realName: string
+  idCardType: number
+  idCardNumber: string
+  passengerType: number
+  phone?: string | null
+}
+```
+
+### 3.6 状态管理
+
+本项目采用 **React Context + localStorage** 模式：
+
+| 状态 | 存储位置 | 说明 |
+|------|----------|------|
+| Token | localStorage | JWT 认证令牌 |
+| 用户手机号 | localStorage | 显示用户名 |
+| 当前视图 | React State | AppView 枚举 |
+| 搜索参数 | React State | 页面间传递 |
+
+---
 
 ---
 
 ## 4. Frameworks 后端框架模块
 
 > 位置: `Frameworks/`
-> 语言: Java (Spring Boot)
+> 架构: Spring Boot Starter + 自定义框架
 
-*待分析...*
+### 4.1 模块概述
+
+Frameworks 目录包含项目的公共框架模块，为各个微服务提供基础设施支持。
+
+### 4.2 模块结构
+
+```
+Frameworks/
+├── common/        # 公共模块（DTO、枚举、工具类、Result封装）
+├── database/      # 数据库模块（MyBatis-Plus配置、实体基类）
+├── cache/        # 缓存模块（Redis封装、防缓存击穿）
+├── log/          # 日志模块（切面监控）
+├── Idempotent/   # 幂等性模块（分布式幂等控制）
+└── mq/           # 消息队列模块（MQ封装）
+```
+
+---
+
+### 4.3 common 公共模块
+
+#### 4.3.1 统一响应封装 (`result/Result.java`)
+
+**功能**: 所有 API 响应统一封装为 `Result<T>` 结构
+
+```java
+@Data
+public class Result<T> implements Serializable {
+    private String message;
+    private T data;
+    private String requestId;  // 分布式追踪ID
+    private Integer code;
+
+    public static <T> Result<T> success(T data) { ... }
+    public static <T> Result<T> fail(String message, Integer code) { ... }
+}
+```
+
+**响应码定义** (`enumType/ReturnCode.java`):
+```java
+public enum ReturnCode {
+    success(200, "success"),
+    fail(500, "系统异常"),
+    param_error(400, "参数错误"),
+    unauthorized(401, "未授权"),
+    forbidden(403, "禁止访问"),
+    not_found(404, "资源不存在"),
+    // ... 更多状态码
+}
+```
+
+#### 4.3.2 请求上下文 (`context/RequestContext.java`)
+
+**功能**: ThreadLocal 存储当前请求上下文信息
+
+```java
+public class RequestContext {
+    public static String getRequestId()  // 获取请求追踪ID
+    public static Long getUserId()        // 获取当前用户ID
+    public static void setUserId(Long userId)  // 设置用户ID
+}
+```
+
+#### 4.3.3 缓存 Key 常量 (`constant/cache/CacheConstant.java`)
+
+**功能**: 统一管理所有 Redis 缓存 Key 命名规范
+
+| Key 模板 | 用途 |
+|----------|------|
+| `TICKET::REMAINING::{trainId}::{date}::{seatType}` | 火车余票 |
+| `TICKET::DETAIL::{trainId}::{date}::{carriageNumber}` | 余票详情 |
+| `TRAIN::ROUTE::{start}::{end}` | 火车路线 |
+| `USER::DETAIL::{id}` | 用户详情 |
+| `FARE::DISTANCE::{trainId}::{dep}::{arr}` | 站间距离 |
+
+#### 4.3.4 座位类型枚举 (`enumType/train/SeatType.java`)
+
+```java
+public enum SeatType {
+    HARD_SEAT(0, "硬座"),
+    SECOND_CLASS(1, "二等座"),
+    FIRST_CLASS(2, "一等座"),
+    BUSINESS(3, "商务座"),
+    SOFT_SEAT(4, "软座"),
+    HARD_SLEEPER(5, "硬卧"),
+    SOFT_SLEEPER(6, "软卧"),
+    NO_SEAT(7, "无座");
+
+    public static SeatType findByCode(int code) { ... }
+}
+```
+
+#### 4.3.5 工具类
+
+| 类 | 功能 |
+|----|------|
+| `DateUtils` | 日期时间工具 |
+| `RequestUtil` | 请求工具 |
+| `UUIDGenerator` | UUID 生成器 |
+| `RequestIdGenerator` | 请求ID生成器 |
+
+---
+
+### 4.4 cache 缓存模块
+
+#### 4.4.1 SafeCacheTemplate (`cache/SafeCacheTemplate.java`)
+
+**设计目标**:
+1. **防缓存击穿**: 分布式锁保证只有一个线程加载数据
+2. **防缓存雪崩**: 支持 TTL 随机化
+3. **自定义序列化**: 关闭 `@class` 类型信息，避免缓存失效
+
+#### 4.4.2 核心方法
+
+```java
+public class SafeCacheTemplate {
+    // 基础操作
+    void set(String key, Object value, long timeout, TimeUnit unit)
+    <T> T get(String key, TypeReference<T> typeReference)
+
+    // 安全加载（防击穿）
+    <T> T safeGet(String key, Supplier<T> loader,
+                   TypeReference<T> typeReference,
+                   long cacheTtl, TimeUnit timeUnit)
+
+    // 批量操作
+    <T> List<T> multiGet(List<String> keys, TypeReference<T> typeReference)
+    <T> List<List<T>> multiLGet(List<String> keys, TypeReference<T> typeReference)
+
+    // 分布式锁
+    Boolean setIfAbsent(String key, Object value, long expireHours, TimeUnit timeUnit)
+}
+```
+
+#### 4.4.3 使用示例
+
+```java
+// 普通缓存
+safeCacheTemplate.set("user:1", user, 30, TimeUnit.MINUTES);
+User user = safeCacheTemplate.get("user:1", new TypeReference<User>() {});
+
+// 安全加载（防止缓存击穿）
+User user = safeCacheTemplate.safeGet(
+    "user:1",
+    () -> userMapper.selectById(1),
+    new TypeReference<User>() {},
+    30,
+    TimeUnit.MINUTES
+);
+
+// 分布式锁（幂等性）
+Boolean locked = safeCacheTemplate.setIfAbsent(
+    "lock:purchase:" + requestId,
+    "1",
+    30,
+    TimeUnit.SECONDS
+);
+```
+
+#### 4.4.4 Redis 序列化器
+
+| 序列化器 | 说明 |
+|----------|------|
+| `DefaultValueRedisSerializer` | 默认 JSON 序列化 |
+| `RawRedisSerializer` | 原始字节序列化 |
+
+---
+
+### 4.5 Idempotent 幂等性模块
+
+#### 4.5.1 幂等性注解 (`Idempotent.java`)
+
+**功能**: 基于 Redis + Redisson 分布式锁实现接口幂等性
+
+```java
+@Idempotent(
+    key = "${header.X-User-Id}-${#dto.trainNum}-${#dto.date}",
+    expire = 300,
+    message = "购票请求正在处理中，请勿重复提交",
+    cacheResult = true
+)
+@PostMapping("/purchase")
+public Result<PurchaseTicketVO> purchaseTicket(...) { ... }
+```
+
+**注解参数**:
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `key` | 幂等键（SpEL 表达式） | 类名:方法名:参数哈希 |
+| `expire` | 过期时间（秒） | 300 |
+| `cacheResult` | 是否缓存返回结果 | false |
+| `message` | 重复请求提示 | "请勿重复提交" |
+
+#### 4.5.2 幂等性切面 (`IdempotentAspect.java`)
+
+**执行流程**:
+1. 解析 SpEL 表达式生成 Key
+2. Redis SETNX 尝试获取锁
+3. 执行目标方法
+4. 可选缓存返回结果
+5. 释放锁（可选）
+
+---
+
+### 4.6 mq 消息队列模块
+
+#### 4.6.1 MQ 服务接口 (`MessageQueueService.java`)
+
+**功能**: 抽象 MQ 操作，支持多种实现（当前为 RocketMQ）
+
+```java
+public interface MessageQueueService {
+    // 同步发送
+    void send(String topic, Object message)
+    void send(String topic, String tag, Object message)
+
+    // 异步发送
+    void sendAsync(String topic, Object message, SendCallback callback)
+
+    // 延迟消息
+    void sendDelay(String topic, Object message, long delayTime)
+
+    // 顺序消息
+    void sendOrderly(String topic, String key, Object message)
+}
+```
+
+#### 4.6.2 消息体封装 (`Message.java`)
+
+```java
+@Data
+public class Message implements Serializable {
+    private String topic;      // 主题
+    private String tag;        // 标签
+    private String keys;       // 消息键
+    private Object body;       // 消息体
+    private Map<String, Object> headers;  // 扩展头
+    private Long timestamp;    // 时间戳
+}
+```
+
+#### 4.6.3 消费者基类 (`BaseMessageConsumer.java`)
+
+**功能**: 提供幂等性处理基础能力
+
+```java
+public abstract class BaseMessageConsumer {
+    // 处理消息，返回是否成功
+    protected boolean process(Message message) {
+        // 1. 幂等性检查
+        // 2. 调用子类处理逻辑
+        // 3. 返回处理结果
+    }
+
+    // 子类实现具体处理逻辑
+    protected abstract void doProcess(Object msg);
+}
+```
+
+#### 4.6.4 RocketMQ 实现
+
+**配置** (`RocketMQProperties.java`):
+```yaml
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    group: default-producer-group
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 2
+```
+
+**消费者注解**:
+```java
+@MessageConsumer(
+    topic = "ticket-purchase-topic",
+    tag = "purchase",
+    consumerGroup = "ticket-purchase-consumer"
+)
+public class TicketPurchaseConsumer extends RocketMQBaseConsumer {
+    @Override
+    protected void doProcess(Object msg) {
+        // 处理购票逻辑
+    }
+}
+```
+
+---
+
+### 4.7 log 日志模块
+
+#### 4.7.1 日志监控注解 (`LogMonitor.java`)
+
+**功能**: 切面记录方法调用日志
+
+```java
+@LogMonitor
+public void processOrder(Order order) { ... }
+```
+
+#### 4.7.2 日志切面 (`LogMonitorAspect.java`)
+
+**输出格式**:
+```
+[LogMonitor] com.xxx.OrderService.processOrder | args={...} | result={...} | cost=125ms
+```
+
+---
+
+### 4.8 database 数据库模块
+
+#### 4.8.1 实体基类 (`BaseDO.java`)
+
+**功能**: 所有实体继承基类，自动管理创建/更新时间
+
+```java
+@Data
+public class BaseDO {
+    private Long id;
+    private Integer delFlag;  // 删除标记
+    private LocalDateTime createTime;
+    private LocalDateTime updateTime;
+}
+```
+
+#### 4.8.2 MyBatis-Plus 配置
+
+**功能**:
+- 自动填充创建/更新时间
+- 逻辑删除支持
+- 分页插件
+
+---
 
 ---
 
 ## 5. Services 微服务模块
 
 > 位置: `Services/`
-> 架构: Spring Cloud 微服务
+> 架构: Spring Cloud 微服务 + OpenFeign
 
-*待分析...*
+### 5.1 服务架构概览
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│                    12306/  admin/  (Browser)                   │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │ HTTP
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Gateway Service (8080)                        │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐ │
+│  │ TrafficMonitorFilter │ │ JwtAuthFilter  │  │ RequestIdFilter│ │
+│  │ QPS > 100 时标记   │  │ 令牌验证      │  │ 请求ID注入     │ │
+│  │ traffic:peak:status │  │               │  │                │ │
+│  └──────────────────┘  └──────────────────┘  └────────────────┘ │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │ Route
+     ┌────────────────────────────┼────────────────────────────┐
+     │                            │                            │
+     ▼                            ▼                            ▼
+┌─────────┐               ┌──────────────┐              ┌──────────┐
+│  User   │               │   Ticket    │              │  Seat    │
+│ Service │               │   Service   │              │  Service │
+│ (8084)  │               │   (8081)   │              │  (8082)  │
+└─────────┘               └──────┬───────┘              └──────────┘
+     ▲                          │
+     │ OpenFeign                 │ OpenFeign
+     │                   ┌───────┴───────┐
+     │                   ▼               ▼
+     │            ┌──────────┐     ┌──────────┐
+     │            │  Order   │     │   MQ    │
+     │            │ Service  │     │ (Rocket) │
+     │            │ (8083)   │     └──────────┘
+     │            └──────────┘
+     │                 ▲
+     │                 │
+     └─────────────────┘
+          OpenFeign
+```
+
+### 5.2 服务端口映射
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| gateway-service | 8080 | API 网关，统一入口 |
+| ticket-service | 8081 | 车票服务（核心） |
+| seat-service | 8082 | 座位服务 |
+| order-service | 8083 | 订单服务 |
+| user-service | 8084 | 用户服务 |
+| admin-service | 8085 | 后台管理服务 |
+
+---
+
+### 5.3 Gateway Service (网关服务)
+
+**入口类**: `GatewayApplication.java`
+
+#### 5.3.1 流量监控过滤器 (`TrafficMonitorFilter`)
+
+**功能**: 实时统计 QPS，超过阈值时标记高峰状态
+
+**工作流程**:
+```
+1. 每秒计数器 +1，Key: traffic:count:{timestamp}
+2. 若 count > 100，设置 traffic:peak:status = true (TTL=5s)
+3. 购票接口读取该状态决定走同步/异步路径
+```
+
+**配置** (`application.yml`):
+```yaml
+traffic:
+  peak-threshold: 100  # QPS 阈值
+  monitor-interval: 1s
+```
+
+#### 5.3.2 路由配置
+
+| 路径 | 目标服务 |
+|------|----------|
+| `/api/user/**` | user-service |
+| `/api/ticket/**` | ticket-service |
+| `/api/seat/**` | seat-service |
+| `/api/order/**` | order-service |
+| `/api/admin/**` | admin-service |
+
+#### 5.3.3 JWT 认证过滤器 (`JwtAuthenticationFilter`)
+
+**功能**: 验证用户 Token，注入 `X-User-Id`、`X-User-Name` 请求头
+
+---
+
+### 5.4 Ticket Service (车票服务)
+
+**入口类**: `TicketApplication.java`
+
+#### 5.4.1 核心功能
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/ticket/search` | 车票搜索 |
+| `POST /api/ticket/purchase` | 购票 |
+| `GET /api/ticket/check/{requestId}` | 查询异步购票状态 |
+
+#### 5.4.2 高峰购票流程
+
+```
+┌─────────┐                      ┌──────────┐
+│ Gateway │                      │  Redis   │
+│ 检测QPS │─────────────────────►│ peak=true│
+└────┬────┘                      └──────────┘
+     │
+     ▼
+┌─────────────────────────────────────────┐
+│         TicketService.purchase()          │
+│  读取 traffic:peak:status               │
+│           │                             │
+│           ├─► false: 同步处理(OpenFeign)│
+│           │                             │
+│           └─► true: 异步处理(MQ)         │
+└───────────────┬─────────────────────────┘
+                │
+                ▼
+         ┌─────────────┐
+         │ Redis SETNX │
+         │ status=0    │
+         └──────┬──────┘
+                │ 成功
+                ▼
+         ┌─────────────┐
+         │ MQ 发送消息 │
+         └──────┬──────┘
+                │
+                ▼
+         ┌─────────────┐
+         │  返回前端   │
+         │ PROCESSING  │
+         │ requestId   │
+         └─────────────┘
+```
+
+#### 5.4.3 购票核心流程 (`processCorePurchase`)
+
+```java
+public PurchaseTicketVO processCorePurchase(...) {
+    // 1. 查询乘客信息
+    List<Passenger> passengers = userServiceClient.batchPassengers(...);
+
+    // 2. 座位选择
+    TicketDTO selectedSeats = seatServiceClient.select(seatRequest);
+
+    // 3. 获取列车信息
+    TrainDO train = trainMapper.selectOne(...);
+
+    // 4. 计算票价
+    List<FareCalculationResultDTO> fares =
+        fareCalculationService.batchCalculateFare(...);
+
+    // 5. 创建订单
+    String orderSn = orderServiceClient.create(orderRequest);
+
+    return PurchaseTicketVO.success(orderSn);
+}
+```
+
+#### 5.4.4 异步购票消费者 (`TicketPurchaseConsumer`)
+
+**Topic**: `ticket-purchase-topic`
+**Tag**: `purchase`
+
+**处理流程**:
+1. 从缓存读取请求状态
+2. 校验参数
+3. 调用 `processCorePurchase()` 处理购票
+4. 更新缓存结果
+
+---
+
+### 5.5 Seat Service (座位服务)
+
+**入口类**: `SeatApplication.java`
+
+#### 5.5.1 核心接口
+
+| 接口 | 说明 |
+|------|------|
+| `POST /api/seat/select` | 座位选择 |
+
+#### 5.5.2 座位选择服务 (`SeatSelectionService`)
+
+**输入**:
+```java
+SeatSelectionRequestDTO {
+    String trainNum;
+    String startStation;
+    String endStation;
+    LocalDate date;
+    List<PassengerDTO> passengers;  // {id, seatType, seatPreference}
+}
+```
+
+**输出**:
+```java
+TicketDTO {
+    List<TicketItem> items;  // {passengerId, carriageNum, seatNum, seatType}
+}
+```
+
+---
+
+### 5.6 Order Service (订单服务)
+
+**入口类**: `OrderApplication.java`
+
+#### 5.6.1 核心接口
+
+| 接口 | 说明 |
+|------|------|
+| `POST /api/order/create` | 创建订单 |
+| `GET /api/order/detail/{orderSn}` | 订单详情 |
+| `GET /api/order/list` | 订单列表 |
+| `POST /api/order/pay` | 发起支付 |
+| `POST /api/order/refund/{orderSn}` | 退款 |
+| `POST /api/order/cancel/{orderSn}` | 取消订单 |
+
+#### 5.6.2 订单状态
+
+| 状态 | 说明 |
+|------|------|
+| 0 | 待支付 |
+| 1 | 已支付 |
+| 2 | 已完成 |
+| 3 | 已取消 |
+| 4 | 已退款 |
+
+#### 5.6.3 支付宝集成
+
+**功能**: 沙箱环境支付
+
+**流程**:
+```
+POST /order/pay → 生成支付表单 → 前端提交表单 → 支付宝回调
+                                        │
+                                        ▼
+                               POST /order/alipay/notify
+```
+
+---
+
+### 5.7 User Service (用户服务)
+
+**入口类**: `UserServiceApplication.java`
+
+#### 5.7.1 核心接口
+
+| 接口 | 说明 |
+|------|------|
+| `POST /api/user/sms/send` | 发送短信验证码 |
+| `POST /api/user/sms/login` | 短信登录 |
+| `GET /api/user/passengers` | 获取乘车人列表 |
+| `POST /api/user/passengers` | 添加乘车人 |
+| `PUT /api/user/passengers/{id}` | 更新乘车人 |
+| `DELETE /api/user/passengers/{id}` | 删除乘车人 |
+
+---
+
+### 5.8 Admin Service (后台管理服务)
+
+**入口类**: `AdminServiceApplication.java`
+
+#### 5.8.1 核心接口
+
+| 模块 | 接口 | 说明 |
+|------|------|------|
+| 认证 | `POST /api/admin/auth/login` | 管理员登录 |
+| 认证 | `GET /api/admin/auth/info` | 管理员信息 |
+| 用户 | `GET /api/admin/user/list` | 用户列表 |
+| 用户 | `PUT /api/admin/user/{id}/status` | 切换用户状态 |
+| 车次 | `GET /api/admin/train/list` | 车次列表 |
+| 车次 | `PUT /api/admin/train/{id}/sale-status` | 更新售卖状态 |
+| 订单 | `GET /api/admin/order/list` | 订单列表 |
+| 统计 | `GET /api/admin/stats/dashboard` | Dashboard 统计 |
+
+#### 5.8.2 技术特点
+
+- **独立认证**: 使用 `t_admin_user` 表，与普通用户分离
+- **直连数据库**: 低流量场景，直接访问 DB，不通过 Feign 调用
+- **游标分页**: `lastId + pageSize` 方式
+
+---
 
 ---
 
 ## 6. 项目整体总结
 
-*待完成...*
+### 6.1 系统架构图
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              客户端层                                        │
+│  ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐        │
+│  │   Web 用户端    │     │   Web 管理端    │     │   移动端(预留)   │        │
+│  │  12306 (React) │     │  admin (Vue3)   │     │   (H5/小程序)   │        │
+│  └────────┬────────┘     └────────┬────────┘     └────────┬────────┘        │
+└───────────┼───────────────────────┼───────────────────────┼──────────────────┘
+            │                       │                       │
+            ▼                       ▼                       ▼
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                              网关层 (8080)                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │流量监控过滤器 │  │JWT认证过滤器 │  │请求ID过滤器 │  │ 路由分发器   │    │
+│  │QPS>100标记   │  │Token验证    │  │追踪ID注入   │  │ 路由到后端   │    │
+│  │peak=true     │  │用户ID注入    │  │             │  │              │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+└───────────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+        ▼                           ▼                           ▼
+┌───────────────┐         ┌───────────────┐           ┌───────────────┐
+│ Ticket Service│◄────────│  Seat Service │           │ Order Service │
+│    (8081)     │ Feign   │    (8082)     │           │    (8083)     │
+│               │────────►│               │           │               │
+│ - 购票搜索    │         │ - 座位选择    │           │ - 订单创建    │
+│ - 购票处理    │         │ - 座位锁定    │           │ - 支付集成    │
+│ - 高峰异步化  │         │ - 座位释放    │           │ - 退款处理    │
+└───────┬───────┘         └───────────────┘           └───────┬───────┘
+        │                                                       │
+        │              ┌───────────────┐                       │
+        │              │   User Service│                       │
+        └─────────────►│    (8084)    │◄───────────────────────┘
+                       │               │       Feign
+                       │ - 用户认证    │
+                       │ - 乘车人管理 │
+                       └───────────────┘
+                                    │
+                                    ▼
+                       ┌───────────────────────┐
+                       │      MQ (RocketMQ)     │
+                       │  ticket-purchase-topic │
+                       │  seat-release-topic    │
+                       └───────────────────────┘
+                                    │
+                                    ▼
+                       ┌───────────────────────┐
+                       │   Ticket Service        │
+                       │  (Consumer 消费者)    │
+                       │                       │
+                       │ - 异步处理购票        │
+                       │ - 座位释放            │
+                       └───────────────────────┘
+```
+
+### 6.2 技术栈总结
+
+#### 6.2.1 后端技术栈
+
+| 类别 | 技术 | 说明 |
+|------|------|------|
+| 框架 | Spring Boot 3.0.7 | 基础框架 |
+| 微服务 | Spring Cloud | 服务治理 |
+| 服务调用 | OpenFeign | 声明式 HTTP 客户端 |
+| 数据库 | MySQL 8.0 | 关系型数据库 |
+| ORM | MyBatis-Plus | 数据库访问层 |
+| 缓存 | Redis | 高性能缓存 |
+| 分布式锁 | Redisson | Redis 客户端 |
+| 消息队列 | RocketMQ | 削峰填谷 |
+| 认证 | JWT | 无状态认证 |
+| 构建 | Maven | 依赖管理 |
+
+#### 6.2.2 前端技术栈
+
+| 类别 | 用户端 (12306) | 管理端 (admin) |
+|------|----------------|----------------|
+| 框架 | React 18 | Vue 3 |
+| 语言 | TypeScript | TypeScript |
+| 构建 | Vite | Vite |
+| UI库 | Tailwind CSS | Arco Design |
+| 图标 | Lucide React | Element Plus Icons |
+| 图表 | - | ECharts |
+| 状态管理 | React Context | Pinia |
+
+### 6.3 功能模块总结
+
+| 模块 | 功能 | 技术亮点 |
+|------|------|----------|
+| 车票搜索 | 出发地/目的地/日期查询 | 中转方案计算 |
+| 座位选择 | 自动/手动选座 | Redis 位图存储 |
+| 票价计算 | 多维度计价 | 距离×单价×折扣 |
+| 订单管理 | 创建/支付/退款/取消 | 支付宝沙箱集成 |
+| 高峰购票 | 流量削峰 | Redis+MQ 异步化 |
+| 用户管理 | 短信登录/乘车人 | JWT Token |
+| 后台管理 | 数据统计/用户管理 | 游标分页 |
+
+### 6.4 数据库设计
+
+#### 6.4.1 核心表结构
+
+| 表名 | 说明 | 记录量(示例) |
+|------|------|-------------|
+| `t_station` | 车站信息 | ~3,300 |
+| `t_train` | 列车信息 | ~10,000 |
+| `t_train_station` | 列车经停站 | ~95,000 |
+| `t_carriage` | 车厢信息 | ~64,000 |
+| `t_seat` | 座位信息 | ~4,900,000 |
+| `t_user` | 用户账号 | ~1,000,000 |
+| `t_passenger` | 乘车人 | ~2,000,000 |
+| `t_order` | 订单主表 | ~1,000,000 |
+| `t_order_item` | 订单明细 | ~2,500,000 |
+
+#### 6.4.2 索引设计
+
+**复合索引示例**:
+```sql
+-- 车票查询
+KEY `t_ticket_detail` (id, train_id, travel_date, carriage_number, seat_type, del_flag)
+
+-- 订单查询
+KEY `idx_username` (username)
+KEY `idx_run_date` (run_date)
+
+-- 座位查询
+KEY `idx_count` (train_id, seat_type, del_flag)
+```
+
+### 6.5 缓存设计
+
+#### 6.5.1 缓存 Key 规范
+
+```
+TICKET::REMAINING::{trainId}::{date}::{seatType}   # 余票数量
+TICKET::DETAIL::{trainId}::{date}::{carriageNum}  # 余票详情
+TRAIN::ROUTE::{startRegion}::{endRegion}           # 路线缓存
+USER::DETAIL::{userId}                            # 用户信息
+REQUEST::{requestId}                               # 请求追踪
+traffic:peak:status                               # 高峰状态
+```
+
+#### 6.5.2 缓存策略
+
+| 场景 | TTL | 更新策略 |
+|------|-----|----------|
+| 余票数量 | 5分钟 | 主动更新 |
+| 路线缓存 | 1天 | 主动更新 |
+| 用户信息 | 30分钟 | LRU |
+| 高峰状态 | 5秒 | 自动过期 |
+
+### 6.6 项目启动指南
+
+#### 6.6.1 环境要求
+
+- JDK 17+
+- Node.js 18+
+- MySQL 8.0
+- Redis 6.0+
+- RocketMQ 4.9+
+- Nacos (可选，服务注册)
+
+#### 6.6.2 启动顺序
+
+1. **启动基础设施**: MySQL → Redis → RocketMQ
+2. **编译后端**: `mvn clean install -DskipTests`
+3. **启动服务**: 按端口顺序 gateway → user → seat → ticket → order → admin
+4. **启动前端**: `cd 12306 && npm install && npm run dev`
+
+#### 6.6.3 默认端口
+
+| 服务 | 端口 | 访问地址 |
+|------|------|----------|
+| Gateway | 8080 | http://localhost:8080 |
+| Ticket | 8081 | - |
+| Seat | 8082 | - |
+| Order | 8083 | - |
+| User | 8084 | - |
+| Admin | 8085 | http://localhost:5174 |
+| 12306前端 | 5173 | http://localhost:5173 |
+
+### 6.7 项目亮点
+
+1. **高性能**: Redis + 异步化应对高并发
+2. **可扩展**: 微服务架构便于水平扩展
+3. **高可用**: MQ 削峰保证系统稳定
+4. **安全**: JWT + 幂等性防止重复提交
+5. **可观测**: 请求追踪 ID 贯穿全链路
+6. **规范化**: 统一响应格式、统一异常处理
+
+---
