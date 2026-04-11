@@ -1,342 +1,406 @@
-# 12306 项目 TODO 清单
+# 12306 铁路票务系统 - 开发计划
 
-> **注意**: 修改任务状态时，请同时更新此文档
-
-## 一、前后端 API 对齐 [高优先级] ✅
-
-### 1.1 后端分页策略
-- **游标分页**（分库分表场景）：用户管理、订单管理
-- **普通分页**（数据量小）：列车管理、车站管理
-
-### 1.2 后端分页查询改造
-- [x] 用户管理：保持游标分页（lastId/pageSize）
-- [x] 订单管理：保持游标分页（lastId/pageSize）
-- [x] 列车管理：改为普通分页（pageNum/pageSize）
-- [x] 车站管理：改为普通分页（pageNum/pageSize）
-
-### 1.3 用户管理修复
-- [x] 数据库：t_user 表添加 status 字段
-- [x] 后端：UserDO 添加 status 属性
-- [x] 后端：AdminUserServiceImpl 修复 toggleUserStatus 实现
-
-### 1.4 前端 API 对齐
-- [x] 登录页面：API 方法(POST)、参数类型对齐
-- [x] Dashboard：统计 API 对齐（移除 mock）
-- [x] 用户管理：列表(游标分页)/状态切换(PUT)/乘车人 API 对齐
-- [x] 列车管理：列表(普通分页)/售卖状态(PUT) API 对齐
-- [x] 车站管理：列表(普通分页) API 对齐
-- [x] 订单管理：列表(游标分页)/详情(GET)/退款(PUT)/取消(PUT) API 对齐
-
-### 1.5 类型定义对齐
-- [x] 前端 types 与后端 DTO 对齐
-- [x] 分页请求/响应结构统一（游标分页 vs 普通分页）
+> 基于 Spring Cloud 微服务架构的高性能铁路票务系统
 
 ---
 
-## 二、线路管理功能 [P1] ✅
+## 项目概述
 
-### 2.1 后端实现 ✅
-- [x] 创建 TrainStationDO 实体（使用现有 t_train_station 表）
-- [x] 创建 TrainStationMapper
-- [x] 创建 AdminRouteController
-- [x] 创建 AdminRouteService 接口和实现
+本项目是一个完整的铁路票务系统，包含用户端（React）、管理端（Vue3）、后端微服务（Spring Cloud）以及数据脚本（Python）。
 
-### 2.2 前端实现 ✅
-- [x] 创建 types/route.ts 类型定义
-- [x] 创建 api/route.ts API 调用
-- [x] 完善 RouteManage.vue 页面
+### 技术栈
 
----
+| 层级 | 技术 |
+|------|------|
+| 后端 | Spring Boot 3.0.7 + Spring Cloud, MyBatis-Plus |
+| 中间件 | Redis + Redisson, RocketMQ, Nacos |
+| 前端 | React 18 + TypeScript, Vue 3 + Arco Design |
+| 数据库 | MySQL 8.0 |
 
-## 三、座位配置功能 [P1] ✅
+### 已有功能
 
-### 3.1 后端实现 ✅
-- [x] AdminTrainController 添加车厢列表接口
-- [x] AdminTrainController 添加座位布局接口
-
-### 3.2 前端实现 ✅
-- [x] TrainList.vue 添加「座位配置」按钮
-- [x] 创建座位配置弹窗组件
+- [x] 用户注册登录（手机号+验证码）
+- [x] 车票查询（按区间、日期）
+- [x] 座位选择（手动/自动，支持多种座位类型）
+- [x] 订单管理（创建、支付、取消、退款）
+- [x] 后台管理（数据统计、用户/订单/车次管理）
+- [x] 高峰异步购票（Redis + RocketMQ 削峰）
+- [x] 分布式锁与幂等性保护
 
 ---
 
-## 四、角色管理功能 [P2] ✅
+## 功能开发计划
 
-### 4.1 数据库 ✅
-- [x] 创建 t_role 表
-- [x] 创建 t_permission 表
-- [x] 创建 t_role_permission 关联表
-- [x] 创建 t_admin_user_role 关联表
+### 一、核心功能完善
 
-### 4.2 后端实现 ✅
-- [x] 创建 RoleDO、PermissionDO、RolePermissionDO 实体
-- [x] 创建 AdminRoleController
-- [x] 创建 AdminRoleService
+| 优先级 | 功能 | 描述 | 状态 |
+|--------|------|------|------|
+| P0 | 电子客票 | 生成乘车二维码，支持扫码核销 | 待开发 |
+| P1 | 改签功能 | 改签到其他车次，支持差价计算 | 待开发 |
+| P1 | 候补购票优化 | 候补队列排序，超售时自动候补 | 待开发 |
+| P2 | 中转换乘优化 | 智能换乘推荐，最优路径规划 | 待开发 |
+| P2 | 会员积分体系 | 积分兑换、会员等级折扣 | 待开发 |
+| P3 | 行程提醒 | 发车前短信/推送提醒 | 待开发 |
 
-### 4.3 前端实现 ✅
-- [x] 创建 types/role.ts 类型定义
-- [x] 创建 api/role.ts API 调用
-- [x] 完善 RoleManage.vue 页面
+### 二、工程化完善
 
----
-
-## 五、操作日志功能 [P2] ✅
-
-### 5.1 数据库 ✅
-- [x] 创建 t_operation_log 表
-
-### 5.2 后端实现 ✅
-- [x] 创建 OperationLogDO 实体
-- [x] 创建 OperationLogAspect 切面
-- [x] 创建 AdminLogController
-- [x] 创建 AdminLogService
-
-### 5.3 前端实现 ✅
-- [x] 创建 types/log.ts 类型定义
-- [x] 创建 api/log.ts API 调用
-- [x] 完善 OperationLog.vue 页面
+| 优先级 | 功能 | 描述 | 状态 |
+|--------|------|------|------|
+| P0 | Docker 部署 | docker-compose 一键启动 | 待开发 |
+| P1 | 服务监控 | Prometheus + Grafana | 待开发 |
+| P1 | 链路追踪 | SkyWalking / Jaeger | 待开发 |
+| P2 | 接口限流 | Sentinel | 待开发 |
+| P2 | 熔断降级 | Resilience4j | 待开发 |
 
 ---
 
-## 二、MQ 消息队列模块 [低优先级]
+## 亮点功能
 
-### 1.1 通用接口设计 ✅
-- [x] 设计通用的消息队列抽象接口，支持多种MQ实现
-- [x] 定义消息体通用结构
-- [x] 定义消息监听器通用接口
-- [x] 定义消息序列化/反序列化接口
+### 亮点一：基于深度学习的票额智能分配
 
-### 1.2 RocketMQ 实现 ✅
-- [x] 添加 RocketMQ 依赖
-- [x] 实现 RocketMQ 消息发送服务
-- [x] 实现 RocketMQ 配置类
-- [x] 实现延迟消息支持
-- [x] 实现顺序消息支持
-- [x] 实现 RocketMQ 消息消费服务（使用注解方式）
+> 利用深度学习预测每个车次、每个区间的最优票额分配，解决春运期间票务资源分配不合理的问题
 
-### 1.3 消息队列功能
-- [x] 消息发送重试机制（RocketMQ内置）
-- [x] 消息幂等性处理（结合Idempotent模块，`BaseMessageConsumer` 内置）
-- [ ] 死信队列处理
-- [ ] 消息追踪机制
+#### 1.1 问题背景
 
-### 1.4 使用示例
+春运期间，12306面临的核心问题不是"票不够"，而是"票怎么分才合理"。热门车次在放票瞬间售罄，但部分区段实际乘坐率很低，造成资源浪费。
 
-#### 1.4.1 发送消息
+#### 1.2 实现思路
 
-```java
-@Autowired
-private MessageQueueService messageQueueService;
-
-// 简单发送
-messageQueueService.send("order-topic", orderData);
-
-// 带Tag发送
-messageQueueService.send("order-topic", "create", orderData);
-
-// 发送延迟消息（30秒后）
-messageQueueService.sendDelay("order-topic", orderData, 30000);
-
-// 发送顺序消息
-messageQueueService.sendOrderly("order-topic", "orderId-123", orderData);
-
-// 使用Message对象
-Message message = new Message("order-topic", "create", orderData);
-message.addHeader("trace-id", RequestIdGenerator.getRequestId());
-messageQueueService.send(message);
+```
+数据收集 → 数据清洗 → 特征工程 → 模型训练 → 模型部署 → 业务集成
 ```
 
-#### 1.4.2 消费消息
+```mermaid
+flowchart LR
+    subgraph Data[数据层]
+        O[历史订单数据] --> E[数据清洗]
+        S[车次信息] --> E
+        T[时间特征] --> E
+    end
 
-**方式一：使用 `@MessageConsumer` 注解 + 继承 `RocketMQBaseConsumer`（推荐）**
+    subgraph Feature[特征工程]
+        E --> F[特征构建]
+        F --> R[历史上座率]
+        F --> D[节假日特征]
+        F --> W[天气特征]
+    end
 
-```java
-@Component
-@MessageConsumer(
-    topic = "order-topic",
-    tag = "create",
-    consumerGroup = "order-consumer-group",
-    consumeMode = ConsumeMode.CONCURRENTLY
-)
-@RocketMQMessageListener(
-    topic = "order-topic",
-    consumerGroup = "order-consumer-group",
-    selectorExpression = "create"
-)
-public class OrderCreateConsumer extends RocketMQBaseConsumer<OrderDTO> {
+    subgraph Model[模型层]
+        F --> LSTM[LSTM预测模型]
+        LSTM --> P[预测上座率]
+    end
 
-    @Override
-    protected void doProcess(OrderDTO order) {
-        // 处理订单逻辑
-        log.info("Received order: {}", order);
-    }
+    subgraph Application[应用层]
+        P --> G[票额分配策略]
+        G --> Q[动态调整票额]
+    end
+```
+
+#### 1.3 技术方案
+
+**数据收集**
+```
+来源:
+1. 历史订单数据 (t_order, t_order_item)
+2. 列车经停站数据 (t_train_station)
+3. 节假日日历 (法定节假日、调休)
+4. 天气数据 (可选, 公开API)
+```
+
+**特征工程**
+```
+输入特征:
+- 车次ID (one-hot)
+- 日期 (day of week, 是否节假日)
+- 出发区间 (起点-终点)
+- 历史同期上座率
+- 距离春节天数
+- 出发地/目的地热度
+
+输出:
+- 预测上座率 (0.0 - 1.0)
+```
+
+**模型选择**
+```
+候选模型:
+1. LSTM (适合时序数据)
+2. XGBoost (表格数据, 快速baseline)
+3. Transformer (最新方法)
+
+推荐: 先用XGBoost做baseline, 再尝试LSTM
+```
+
+#### 1.4 实施步骤
+
+```
+Phase 1: 数据准备 (Python)
+├── 清洗历史订单数据
+├── 构建特征工程脚本
+└── 数据集划分 (训练/验证/测试)
+
+Phase 2: 模型训练 (Python + PyTorch/TensorFlow)
+├── XGBoost baseline
+├── LSTM 时序模型
+└── 模型评估与对比
+
+Phase 3: 模型部署
+├── 导出模型 (ONNX/Pickle)
+├── Flask/FastAPI 提供推理接口
+└── ticket-service 调用预测服务
+
+Phase 4: 业务集成
+├── 根据预测结果调整余票显示
+└── 可视化对比 (预测 vs 实际)
+```
+
+#### 1.5 论文写作重点
+
+> 作为本科论文，不聚焦模型本身的创新，而是展示完整的 ML Pipeline
+
+```
+重点一: 数据收集与清洗
+├── 数据来源说明
+├── 数据质量问题 (缺失值、异常值)
+└── 清洗方法
+
+重点二: 特征工程
+├── 特征选择依据
+├── 特征重要性分析
+└── 特征工程代码展示
+
+重点三: 模型训练流程
+├── 训练/验证/测试集划分
+├── 超参数选择
+└── 训练曲线展示
+
+重点四: 结果分析
+├── 预测效果指标 (MAE, RMSE)
+├── 预测 vs 实际对比
+└── 误差分析
+```
+
+#### 1.6 资源需求
+
+| 资源 | 说明 |
+|------|------|
+| GPU | 可选，XGBoost不需要GPU |
+| 数据量 | 历史订单数据即可 |
+| 框架 | PyTorch / TensorFlow / XGBoost |
+
+#### 1.7 文档产出
+
+- [ ] 数据收集与清洗文档
+- [ ] 特征工程说明文档
+- [ ] 模型训练报告
+- [ ] API接口文档
+- [ ] 预测效果对比分析
+
+---
+
+### 亮点二：Shader 渲染 UI 美化
+
+> 利用 WebGL/Canvas Shader 美化关键 UI 组件，提升视觉效果，展示图形学知识
+
+#### 2.1 可应用场景
+
+| 位置 | 效果 | 技术 | 难度 |
+|------|------|------|------|
+| 首页背景 | 粒子动画/流动线条 | Three.js Shader | 中 |
+| 座位图 | 玻璃拟态 + 发光效果 | CSS + Canvas | 低 |
+| 加载动画 | Shader 进度条 | Three.js Shader | 中 |
+| 支付成功 | 粒子爆发效果 | Canvas | 低 |
+| 车票卡片 | 渐变 + 扫描线 | CSS Shader | 低 |
+| 地图区域 | 波纹扩散 | Canvas | 低 |
+
+#### 2.2 技术方案
+
+**方案 A: Three.js (推荐用于复杂效果)**
+```javascript
+import * as THREE from 'three';
+
+// 流动线条背景 - Fragment Shader
+const shaderMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        time: { value: 0 },
+        color1: { value: new THREE.Color('#1a1a2e') },
+        color2: { value: new THREE.Color('#16213e') },
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform float time;
+        uniform vec3 color1;
+        uniform vec3 color2;
+        varying vec2 vUv;
+
+        void main() {
+            float wave = sin(vUv.x * 10.0 + time) * 0.5 + 0.5;
+            vec3 color = mix(color1, color2, wave);
+            gl_FragColor = vec4(color, 1.0);
+        }
+    `,
+});
+```
+
+**方案 B: 纯 Canvas 2D Shader**
+```
+适用于简单效果:
+- 波纹扩散
+- 渐变背景
+```
+
+**方案 C: CSS 增强 (快速实现)**
+```css
+/* 玻璃拟态 */
+.glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 发光效果 */
+.glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
 }
 ```
 
-**方式二：继承 `RocketMQMessageConsumer`（传统方式）**
+#### 2.3 具体效果建议
 
-```java
-@Component
-@RocketMQMessageListener(
-    topic = "order-topic",
-    consumerGroup = "order-consumer-group",
-    selectorExpression = "create"
-)
-public class OrderConsumer extends RocketMQMessageConsumer<OrderDTO> {
+**高频用户触达区（重点实现）**
 
-    @Override
-    protected boolean handleMessage(Message message) {
-        OrderDTO order = (OrderDTO) message.getBody();
-        // 处理订单逻辑
-        log.info("Received order: {}", order);
-        return true;
-    }
+```
+1. 首页 Hero 区域
+   └── 粒子流动 + 铁路线路动画
+   └── 科技感铁路主题背景
 
-    @Override
-    public String getTopic() {
-        return "order-topic";
-    }
+2. 座位选择弹窗
+   ├── 玻璃拟态背景 (backdrop-filter)
+   ├── 座位悬停发光 (CSS filter)
+   └── 选中座位波纹扩散
 
-    @Override
-    public String getTag() {
-        return "create";
-    }
+3. 车票卡片
+   ├── 金属质感渐变
+   ├── 条形码扫描线效果
+   └── 翻页动效
+
+4. 支付成功页
+   └── 粒子爆发庆祝动效
+```
+
+**Shader 代码示例 - 发光脉冲效果**
+```glsl
+// 座位选中发光效果
+uniform float time;
+uniform float glow; // 0.0 - 1.0
+
+void main() {
+    vec3 baseColor = vec3(0.2, 0.6, 1.0);
+    float pulse = sin(time * 3.0) * 0.3 + 0.7;
+    vec3 glowColor = baseColor * pulse * (1.0 + glow);
+    gl_FragColor = vec4(glowColor, 1.0);
 }
 ```
 
-#### 1.4.3 配置文件 (application.yml)
+#### 2.4 实施建议
 
-```yaml
-rocketmq:
-  name-server: 127.0.0.1:9876
-  producer:
-    group: default-producer-group
-    send-message-timeout: 3000
-    retry-times-when-send-failed: 2
-  consumer:
-    group: default-consumer-group
+```
+建议顺序:
+1. 先实现 CSS 效果 (快速见效, 1-2天)
+   ├── 玻璃拟态
+   ├── 渐变背景
+   └── CSS 动画
+
+2. 再实现 Canvas 效果 (3-5天)
+   ├── 粒子背景
+   ├── 波纹扩散
+   └── 座位图特效
+
+3. 最后实现 Three.js 效果 (5-7天)
+   ├── 复杂粒子动画
+   └── 车票卡片 Shader
 ```
 
-## 二、幂等性模块 Idempotent [低优先级]
+#### 2.5 论文展示点
 
-### 2.1 幂等性注解完善 ✅
-- [x] 完善 Idempotent 注解，支持多种幂等键来源
-  - [x] SpEL 表达式支持
-  - [x] Header 参数支持
-  - [x] 请求体参数支持
-- [x] 支持返回结果缓存
-
-### 2.2 幂等性切面实现 ✅
-- [x] 使用 Redisson 分布式锁实现
-- [x] 完善幂等性校验逻辑
-- [x] 添加自定义异常处理
-- [x] 添加幂等性结果缓存
-
-### 2.3 幂等性应用 ✅
-- [x] 购票接口添加幂等性注解（`PurchaseTicketController.purchaseTicket`）
-- [x] 订单创建接口添加幂等性注解（`OrderController.create`）
-- [x] 支付回调接口添加幂等性注解（`OrderController.alipayNotify`）
-
-### 2.4 使用示例
-
-```java
-@RestController
-@RequestMapping("/order")
-public class OrderController {
-
-    // 使用默认key规则（类名:方法名:参数哈希）
-    @Idempotent(expire = 300, message = "请勿重复提交订单")
-    @PostMapping("/create")
-    public Result<Order> createOrder(@RequestBody OrderDTO dto) {
-        // ...
-    }
-
-    // 使用参数作为key
-    @Idempotent(key = "${orderId}", expire = 600, message = "订单正在处理中")
-    @PostMapping("/pay/{orderId}")
-    public Result<String> payOrder(@PathVariable String orderId) {
-        // ...
-    }
-
-    // 使用SpEL表达式
-    @Idempotent(key = "${#dto.userId}-${#dto.productId}", cacheResult = true)
-    @PostMapping("/purchase")
-    public Result<PurchaseResult> purchase(@RequestBody PurchaseDTO dto) {
-        // 相同的userId+productId组合会返回上次的计算结果
-        return Result.success(calculatePrice(dto));
-    }
-
-    // 使用请求头
-    @Idempotent(key = "${header.request-id}", cacheResult = true, expire = 3600)
-    @GetMapping("/query")
-    public Result<Order> queryOrder() {
-        // 使用请求头中的request-id作为幂等键
-    }
-}
 ```
+1. Shader 原理说明
+   ├── 顶点着色器 vs 片元着色器
+   ├── uniforms vs varyings
+   └── GLSL 语法基础
 
-## 三、缓存模块 Cache
-- [x] SafeCacheTemplate 基础实现完成
-- [x] 分布式锁支持（Redisson 已在 Idempotent 模块中使用）
-- [ ] 完善缓存序列化器配置（RawRedisSerializer）
-- [ ] 添加观察者/拦截器扩展机制
+2. 效果实现过程
+   ├── 需求分析
+   ├── Shader 代码编写
+   └── 效果调优
 
-## 四、其他任务
-- [x] 整理 Frameworks 模块的 spring-boot-starter 自动配置
-  - [x] common 模块自动配置
-  - [x] database 模块自动配置
-  - [x] cache 模块自动配置
-  - [x] mq 模块自动配置
-- [x] 更新各服务的 pom.xml 依赖
+3. 性能考虑
+   ├── 60fps 优化
+   ├── 移动端适配
+   └── WebGL 降级方案
+```
 
 ---
 
-## 任务进度说明
+## 开发优先级建议
 
-### MQ 模块设计思路
+### 短期目标（1-2周）
 
 ```
-MessageQueue (接口)
-├── RocketMQMessageQueue (实现)
-├── RabbitMQMessageQueue (预留)
-└── KafkaMessageQueue (预留)
+1. Docker 部署
+   └── 方便答辩演示，一键启动所有服务
 
-Message (消息体)
-├── headers (Map<String, Object>)
-├── body (Object)
-└── topic (String)
-
-MessageListener (监听器接口)
-├── onMessage(Message message)
-└── onError(Throwable error)
+2. Shader UI 美化 (Phase 1)
+   └── CSS 玻璃拟态 + 座位图特效
 ```
 
-### 幂等性模块设计思路
+### 中期目标（3-4周）
 
-使用 Redis SET NX EX 实现分布式锁：
-- 如果 key 不存在，设置成功（首次请求）
-- 如果 key 存在，说明重复请求，返回缓存的响应或抛出异常
-- 使用 SpEL 表达式解析幂等键来源
+```
+3. 深度学习票额预测 (Phase 1-2)
+   └── 数据收集 + 模型训练
+
+4. 电子客票
+   └── 完善核心业务流程
+```
+
+### 长期目标（5-6周）
+
+```
+5. 深度学习模型部署 (Phase 3-4)
+   └── API 服务 + 业务集成
+
+6. Shader UI 美化 (Phase 2-3)
+   └── Three.js 复杂效果
+```
 
 ---
 
-## 六、前台功能补全 ✅
+## 文档产出清单
 
-### 6.1 常用查询模块
-- [x] **车站大屏功能**
-  - [x] 后端：ticket-service 添加车站大屏接口（正晚点、检票状态）
-  - [x] 前端：车站大屏页面组件（玻璃效果 UI）
-  - [ ] TODO(低优先级)：雨天水滴玻璃效果
+| 文档 | 章节归属 | 状态 |
+|------|----------|------|
+| 系统接口文档 | - | 待更新 |
+| 部署文档 (Docker) | - | 待开发 |
+| 深度学习数据清洗报告 | 3.4/5.3 | 待开发 |
+| 深度学习模型训练报告 | 5.3 | 待开发 |
+| Shader 效果实现文档 | 5.5 | 待开发 |
 
-### 6.2 候补购票模块
-- [x] 后端：order-service 添加候补购票接口
-- [x] 前端：候补购票页面组件
+---
 
-### 6.3 车站引导模块
-- [x] 前端：车站引导页面（模拟数据，后续可对接后端）
+## 参考资料
 
-### 6.4 出行指南模块
-- [x] 前端：出行指南页面
+### 深度学习
+- LSTM 时序预测: https://pytorch.org/tutorials/beginner/nlp/sequence_models_tutorial.html
+- XGBoost: https://xgboost.readthedocs.io/
+- ONNX 模型部署: https://onnxruntime.ai/
 
-### 6.5 Agent 客服
-- [ ] TODO(低优先级)：等待用户提供详细需求
+### Shader/WebGL
+- Three.js Shaders: https://threejs.org/examples/?q=shader
+- The Book of Shaders: https://thebookofshaders.com/
+- GLSL Functions: https://iquilezles.org/articles/functions/
