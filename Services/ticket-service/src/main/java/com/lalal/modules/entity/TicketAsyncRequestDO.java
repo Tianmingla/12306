@@ -93,4 +93,9 @@ public class TicketAsyncRequestDO extends BaseDO {
      * 选座偏好列表 (JSON 序列化存储)
      */
     private String chooseSeatsJson;
+
+    /**
+     * 消息来源：NORMAL（普通购票）/ WAITLIST（候补订单）
+     */
+    private String source;
 }

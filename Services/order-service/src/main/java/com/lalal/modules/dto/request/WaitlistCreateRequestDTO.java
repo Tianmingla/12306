@@ -23,6 +23,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -58,7 +59,7 @@ public class WaitlistCreateRequestDTO {
     /**
      * 乘车日期
      */
-    private Date travelDate;
+    private LocalDate travelDate;
 
     /**
      * 座位类型列表

@@ -120,6 +120,7 @@ public class TicketServiceImpl implements TicketService {
                 .passengerIdsJson(JSON.toJSONString(request.getIDCardCodelist()))
                 .seatTypelistJson(JSON.toJSONString(request.getSeatTypelist()))
                 .chooseSeatsJson(request.getChooseSeats() != null ? JSON.toJSONString(request.getChooseSeats()) : null)
+                .source("NORMAL")  // 普通购票
                 .build();
 
         boolean set = safeCacheTemplate.setIfAbsent(asyncKey, record, 30, TimeUnit.MINUTES);

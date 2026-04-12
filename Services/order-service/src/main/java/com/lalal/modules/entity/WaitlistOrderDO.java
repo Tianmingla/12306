@@ -24,6 +24,7 @@ import com.lalal.modules.base.BaseDO;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 
 /**
@@ -70,7 +71,7 @@ public class WaitlistOrderDO extends BaseDO {
     /**
      * 乘车日期
      */
-    private Date travelDate;
+    private LocalDate travelDate;
 
     /**
      * 座位类型（可多选，逗号分隔）

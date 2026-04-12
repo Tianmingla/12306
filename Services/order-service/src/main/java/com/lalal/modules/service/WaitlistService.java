@@ -19,6 +19,7 @@ package com.lalal.modules.service;
 
 import com.lalal.modules.dto.request.WaitlistCreateRequestDTO;
 import com.lalal.modules.dto.response.WaitlistOrderVO;
+import com.lalal.modules.entity.WaitlistOrderDO;
 
 import java.util.List;
 
@@ -64,4 +65,29 @@ public interface WaitlistService {
      * 检查并兑现候补订单（定时任务调用）
      */
     void checkAndFulfillWaitlistOrders();
+
+    /**
+     * 根据候补订单号查询
+     */
+    WaitlistOrderDO findByWaitlistSn(String waitlistSn);
+
+    /**
+     * 更新候补订单状态
+     */
+    void updateWaitlistStatus(String waitlistSn, Integer status);
+
+    /**
+     * 更新候补订单状态和订单号
+     */
+    void updateWaitlistStatus(String waitlistSn, Integer status, String orderSn);
+
+    /**
+     * 重新计算优先级
+     */
+    void recalculatePriority(WaitlistOrderDO order);
+
+    /**
+     * 失败惩罚：降低优先级
+     */
+    void recalculatePriorityWithPenalty(WaitlistOrderDO order);
 }

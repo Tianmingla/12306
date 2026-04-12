@@ -72,4 +72,14 @@ public class SeatSelectionRequestMessage implements Serializable {
      * 时间戳
      */
     private Long timestamp;
+
+    /**
+     * 消息来源：NORMAL（普通购票）/ WAITLIST（候补订单）
+     */
+    private String source;
+
+    /**
+     * 候补订单号（source=WAITLIST时必填）
+     */
+    private String waitlistSn;
 }

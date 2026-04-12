@@ -50,6 +50,14 @@ public interface MessageQueueService {
     void sendDelay(String topic, Object message, long delayTime);
 
     /**
+     * 发送延迟消息
+     * @param topic 主题
+     * @param message 消息内容
+     * @param delayTime 延迟时间（毫秒）
+     */
+    void sendDelay(String topic, String tag,Object message, long delayTime);
+
+    /**
      * 发送延迟消息（使用Message对象）
      * @param message 消息对象
      * @param delayTime 延迟时间（毫秒）
