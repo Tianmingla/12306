@@ -1374,6 +1374,10 @@ TicketDTO {
 | `POST /api/order/pay` | 发起支付 |
 | `POST /api/order/refund/{orderSn}` | 退款 |
 | `POST /api/order/cancel/{orderSn}` | 取消订单 |
+| `POST /api/waitlist/create` | 创建候补订单 |
+| `GET /api/waitlist/list` | 获取候补订单列表 |
+| `GET /api/waitlist/detail/{waitlistSn}` | 候补订单详情 |
+| `DELETE /api/waitlist/cancel/{waitlistSn}` | 取消候补订单 |
 
 #### 5.6.2 订单状态
 
@@ -1385,17 +1389,252 @@ TicketDTO {
 | 3 | 已取消 |
 | 4 | 已退款 |
 
-#### 5.6.3 支付宝集成
+#### 5.6.3 候补订单状态
 
-**功能**: 沙箱环境支付
+| 状态 | 说明 |
+|------|------|
+| 0 | 待兑现（排队中） |
+| 1 | 兑现中（已锁定座位，创建订单中） |
+| 2 | 已兑现（成功出票） |
+| 3 | 已取消（用户主动取消） |
+| 4 | 已过期（超过截止时间） |
 
-**流程**:
+#### 5.6.4 候补优先级计算规则
+
+候补订单采用 Redis ZSet 实现优先级队列，分数越高越优先：
+
 ```
-POST /order/pay → 生成支付表单 → 前端提交表单 → 支付宝回调
-                                        │
-                                        ▼
-                               POST /order/alipay/notify
+总分 = 时间因子 - 队列拥堵惩罚
+
+时间因子 = -创建时间戳 / 1,000,000,000（越早候补分数越高）
+队列拥堵惩罚 = MIN(当前队列人数 × 0.1, 20)（最多扣20分）
+失败惩罚 = 每次失败固定扣10分
 ```
+
+**简化策略**（当前版本）：
+- VIP加成：暂不启用（固定0分）
+- 历史购票加成：暂不启用（固定0分）
+- 乘客类型加成：暂不启用（固定成人0分）
+
+#### 5.6.5 候补订单处理流程
+
+候补订单采用 MQ 异步消息驱动架构，完整流程如下：
+
+```
+用户提交候补
+    ↓
+[Redis ZSet 入队] ← 计算优先级
+    ↓
+[waitlist-check-topic] ──→ WaitlistCheckConsumer (order-service)
+    ↓ (有票)
+[seat-selection-topic] ──→ SeatSelectionConsumer (seat-service)
+    ↓ (选座成功)
+[seat-selection-result-topic] ──→ OrderResultProcessorConsumer (ticket-service)
+    ↓ (计算票价)
+[order-creation-topic] ──→ OrderCreationConsumer (order-service)
+    ↓ (创建订单)
+[order-creation-result-topic] ──→ WaitlistResultConsumer (order-service)
+    ↓
+┌──────────────┴──────────────┐
+│ 成功：状态=已兑现，移除队列   │
+│ 失败：状态=待兑现，惩罚-10分  │
+└─────────────────────────────┘
+```
+
+**关键特性**：
+1. **幂等性保护**：每个请求携带 `requestId`，Redis SETNX 防止重复处理
+2. **状态持久化**：候补订单状态流转实时同步数据库
+3. **优先级惩罚**：每次失败降低 10 分，重新排队
+4. **超时处理**：定时任务扫描过期订单（超过截止时间未兑现）
+5. **来源标识**：通过 `source=WAITLIST` 标记，区别于普通购票
+
+#### 5.6.6 核心消费者
+
+##### 5.6.6.1 WaitlistCheckConsumer（候补检查消费者）
+
+**监听 Topic**: `waitlist-check-topic`（Tag: `check`）
+
+**功能**：
+1. 幂等性检查（Redis SETNX，TTL 30分钟）
+2. 查询候补订单，校验状态（仅处理"待兑现"状态）
+3. 检查截止时间，过期订单标记为已过期
+4. 更新状态为"兑现中"
+5. 检查余票（优先查 Redis 余票缓存，无缓存则保守返回无票）
+6. **有票**：发送选座请求到 `seat-selection-topic`
+7. **无票**：回滚状态为"待兑现"，重新计算优先级
+
+**Redis 缓存 Key**：
+```
+TICKET:REMAINING::{trainNumber}::{travelDate}::{seatType}
+```
+
+##### 5.6.6.2 WaitlistResultConsumer（候补结果消费者）
+
+**监听 Topic**: `order-creation-result-topic`（Tag: `*`）
+
+**功能**：
+1. 从 `TicketAsyncRequestDO` 缓存中提取 `waitlistSn`
+2. 查询候补订单，幂等性保护（状态终态跳过）
+3. **订单成功**：
+   - 状态更新为"已兑现"(2)
+   - 记录订单号 `fulfilledOrderSn`
+   - 从 Redis ZSet 队列移除
+4. **订单失败**：
+   - 状态回滚为"待兑现"(0)
+   - 优先级惩罚 -10 分
+   - 触发重新排队
+
+##### 5.6.6.3 定时任务：`checkAndFulfillWaitlistOrders`
+
+**触发方式**：`@Scheduled(cron = "0 */5 * * * ?")`（每5分钟执行）
+
+**处理逻辑**：
+1. 扫描所有"待兑现"且未过期的候补订单
+2. 对每个订单发送检查消息到 `waitlist-check-topic`（延迟5秒）
+3. 扫描并处理过期订单（状态更新为"已过期"）
+
+#### 5.6.7 Redis 数据结构
+
+**候补优先级队列（ZSet）**：
+```
+Key: WAITLIST:QUEUE::{trainNumber}::{travelDate}
+Member: waitlistSn
+Score: priority（ BigDecimal 转换为 double，分数越高越优先）
+```
+
+**候补订单详情（Hash）**：
+```
+Key: WAITLIST:DETAIL::{waitlistSn}
+Fields: status, trainNumber, startStation, endStation, travelDate,
+        seatTypes, passengerIds, priority, deadline, fulfilledOrderSn
+```
+
+**幂等性锁（String）**：
+```
+Key: WAITLIST:MSGID::{requestId}
+Value: PROCESSING
+TTL: 30分钟
+```
+
+**异步请求跟踪（Hash）**：
+```
+Key: ticket:async:req:{requestId}
+Fields: requestId, userId, trainNum, date, status,
+        waitlistSn（候补订单号）, source（NORMAL/WAITLIST）
+```
+
+#### 5.6.8 候补订单实体
+
+**数据表**: `t_waitlist_order`
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 主键 |
+| `waitlist_sn` | 候补订单号（WL开头） |
+| `username` | 用户名 |
+| `train_number` | 车次号 |
+| `start_station` | 出发站 |
+| `end_station` | 到达站 |
+| `travel_date` | 乘车日期 |
+| `seat_types` | 座位类型列表（逗号分隔） |
+| `passenger_ids` | 乘车人ID列表（逗号分隔） |
+| `prepay_amount` | 预付款金额 |
+| `deadline` | 候补截止时间 |
+| `status` | 状态（0-待兑现，1-兑现中，2-已兑现，3-已取消，4-已过期） |
+| `fulfilled_order_sn` | 兑现后的订单号 |
+| `priority_score` | 优先级分数 |
+| `retry_count` | 失败重试次数 |
+| `create_time` | 创建时间 |
+| `update_time` | 更新时间 |
+
+#### 5.6.9 MQ Topic 汇总
+
+| Topic | Tag | 生产者 | 消费者 | 用途 |
+|-------|-----|--------|--------|------|
+| `waitlist-check-topic` | `check` | WaitlistService | WaitlistCheckConsumer | 候补检查请求 |
+| `seat-selection-topic` | `select` | WaitlistCheckConsumer | SeatSelectionConsumer | 选座请求 |
+| `seat-selection-result-topic` | `*` | SeatSelectionConsumer | OrderResultProcessorConsumer | 选座结果 |
+| `order-creation-topic` | `create` | OrderResultProcessorConsumer | OrderCreationConsumer | 订单创建请求 |
+| `order-creation-result-topic` | `*` | OrderCreationConsumer | WaitlistResultConsumer（候补）<br/>OrderResultProcessorConsumer（普通） | 订单创建结果 |
+
+#### 5.6.10 候补订单 API 示例
+
+**创建候补订单**：
+```http
+POST /api/waitlist/create
+Content-Type: application/json
+
+{
+  "account": "13800138000",
+  "trainNumber": "G1234",
+  "startStation": "北京南",
+  "endStation": "上海虹桥",
+  "travelDate": "2026-04-20",
+  "seatTypes": ["1", "2"],
+  "passengerIds": [1001, 1002],
+  "prepayAmount": 200.00,
+  "deadline": "2026-04-20T10:00:00"
+}
+```
+
+**响应**：
+```json
+{
+  "code": 200,
+  "data": {
+    "waitlistSn": "WLABCDEF12345678"
+  }
+}
+```
+
+**查询候补列表**：
+```http
+GET /api/waitlist/list?username=13800138000
+```
+
+**取消候补**：
+```http
+DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
+```
+
+#### 5.6.11 候补订单审计日志
+
+**数据表**: `t_waitlist_log`
+
+记录候补订单的关键状态变更：
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 主键 |
+| `waitlist_sn` | 候补订单号 |
+| `action` | 操作类型（CREATE/CANCEL/EXPIRE/SUCCESS/FAIL） |
+| `from_status` | 原状态 |
+| `to_status` | 新状态 |
+| `reason` | 变更原因 |
+| `operator` | 操作人（SYSTEM/用户账号） |
+| `create_time` | 记录时间 |
+
+#### 5.6.12 与普通购票的差异
+
+| 维度 | 普通购票 | 候补订单 |
+|------|----------|----------|
+| 处理模式 | 高峰时异步 MQ | 始终异步 MQ |
+| 座位锁定 | 30分钟 | 10分钟（更快释放） |
+| 无票处理 | 直接失败 | 继续排队，自动重试 |
+| 失败惩罚 | 无 | 优先级 -10 分 |
+| 截止时间 | 无 | 有（发车前一定时间） |
+| 队列管理 | 无 | Redis ZSet 优先级队列 |
+| 来源标识 | `NORMAL` | `WAITLIST` |
+
+#### 5.6.13 待优化方向
+
+1. **VIP 等级加成**：接入用户服务，查询 VIP 等级并计算加成
+2. **历史购票加成**：统计用户历史订单数量，给予忠诚度加分
+3. **乘客类型加成**：查询 `t_passenger` 表，学生/儿童/残疾军人加分
+4. **动态惩罚系数**：根据失败次数调整惩罚力度
+5. **智能预测**：基于退票率、历史数据预测兑现成功率
+6. **死信队列**：多次重试失败的消息转入死信队列人工处理
+7. **消息追踪**：集成 SkyWalking 或自建消息追踪系统
 
 ---
 
