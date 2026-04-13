@@ -3,9 +3,7 @@ package com.lalal.modules.consumer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.dto.OrderCreationResultMessage;
-import com.lalal.modules.dto.WaitlistFulfillResultMessage;
 import com.lalal.modules.entity.TicketAsyncRequestDO;
-import com.lalal.modules.mapper.TicketAsyncRequestMapper;
 import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
@@ -16,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.TimeUnit;
 
 /**
  * 候补兑现结果消费者

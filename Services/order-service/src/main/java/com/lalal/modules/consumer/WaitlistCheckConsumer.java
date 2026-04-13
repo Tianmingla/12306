@@ -1,6 +1,8 @@
 package com.lalal.modules.consumer;
 
+import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.constant.cache.WaitlistCacheConstant;
+import com.lalal.modules.dto.SeatSelectionRequestMessage;
 import com.lalal.modules.dto.WaitlistCheckMessage;
 import com.lalal.modules.dto.WaitlistCheckResultMessage;
 import com.lalal.modules.enumType.RequestStatus;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 候补检查消费者
@@ -27,7 +30,6 @@ import java.util.Date;
  * 3. 有票：发送选座请求到 seat-selection-topic
  * 4. 无票：更新状态回"待兑现"，重新计算优先级
  *
- * @author Claude
  */
 @Component
 @Slf4j
@@ -42,7 +44,7 @@ import java.util.Date;
         consumerGroup = "waitlist-check-consumer",
         selectorExpression = "check"
 )
-public class WaitlistCheckConsumer extends RocketMQBaseConsumer<WaitlistCheckMessage> {
+public class WaitlistCheckConsumer extends RocketMQBaseConsumer {
 
     private final WaitlistService waitlistService;
     private final SafeCacheTemplate safeCacheTemplate;
@@ -52,7 +54,8 @@ public class WaitlistCheckConsumer extends RocketMQBaseConsumer<WaitlistCheckMes
     private static final String WAITLIST_CHECK_RESULT_TOPIC = "waitlist-check-result-topic";
 
     @Override
-    protected void doProcess(WaitlistCheckMessage message) {
+    protected void doProcess(Object msg) {
+        WaitlistCheckMessage message= (WaitlistCheckMessage) msg;
         String requestId = message.getRequestId();
         String waitlistSn = message.getWaitlistSn();
 
@@ -138,6 +141,9 @@ public class WaitlistCheckConsumer extends RocketMQBaseConsumer<WaitlistCheckMes
     private Integer checkTicketAvailability(WaitlistCheckMessage msg) {
         // 方式1：查询 Redis 余票缓存
         // Key 格式：TICKET:REMAINING::trainNum::date::seatType
+        List<String> cacheKeys=msg.getSeatTypes()
+                .stream()
+                .map(CacheConstant.trainTicketRemainingKey(msg.get));
         for (Integer seatType : msg.getSeatTypes()) {
             String cacheKey = String.format(
                     "TICKET:REMAINING::%s::%s::%d",
@@ -163,7 +169,7 @@ public class WaitlistCheckConsumer extends RocketMQBaseConsumer<WaitlistCheckMes
      */
     private void sendSeatSelectionRequest(WaitlistCheckMessage msg) {
         // 构建 SeatSelectionRequestMessage（复用购票流程）
-        var seatMsg = new com.lalal.modules.dto.SeatSelectionRequestMessage();
+        SeatSelectionRequestMessage seatMsg = new SeatSelectionRequestMessage();
         seatMsg.setRequestId(msg.getRequestId());
         seatMsg.setUserId(msg.getUserId());
         seatMsg.setAccount(msg.getUsername());

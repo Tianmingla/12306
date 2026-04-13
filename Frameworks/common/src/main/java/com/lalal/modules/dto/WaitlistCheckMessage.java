@@ -65,6 +65,10 @@ public class WaitlistCheckMessage implements Serializable {
      * 座位类型列表
      */
     private List<Integer> seatTypes;
+    /**
+     * 乘车人id
+     */
+    private List<Long> passengerIds;
 
     /**
      * 优先级（1-100，越大越优先）

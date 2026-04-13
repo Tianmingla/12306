@@ -56,6 +56,11 @@ public class MqConfig {
         }
 
         @Override
+        public void sendDelay(String topic, String tag, Object message, long delayTime) {
+
+        }
+
+        @Override
         public void sendDelay(com.lalal.modules.mq.Message message, long delayTime) {
             throw new UnsupportedOperationException("No MQ implementation found. Please configure a concrete MQ implementation.");
         }

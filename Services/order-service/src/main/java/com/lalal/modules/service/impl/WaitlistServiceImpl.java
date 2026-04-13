@@ -3,9 +3,11 @@ package com.lalal.modules.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lalal.framework.idempotent.Idempotent;
 import com.lalal.modules.constant.cache.WaitlistCacheConstant;
+import com.lalal.modules.context.RequestContext;
 import com.lalal.modules.dto.request.WaitlistCreateRequestDTO;
 import com.lalal.modules.dto.response.WaitlistOrderVO;
 import com.lalal.modules.entity.WaitlistOrderDO;
+import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.WaitlistOrderMapper;
 import com.lalal.modules.service.PriorityCalculator;
 import com.lalal.modules.service.WaitlistQueueService;
@@ -24,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -97,7 +100,7 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
      * 发送候补检查消息
      */
     private void sendCheckMessage(WaitlistOrderDO order) {
-        String requestId = java.util.UUID.randomUUID().toString().replace("-", "");
+        String requestId = RequestContext.getRequestId();
 
         WaitlistCheckMessage msg = WaitlistCheckMessage.builder()
                 .requestId(requestId)
@@ -108,9 +111,10 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
                 .startStation(order.getStartStation())
                 .endStation(order.getEndStation())
                 .travelDate(order.getTravelDate().toString())
-                .seatTypes(parseSeatTypes(order.getSeatTypes()))
+                .seatTypes(parseStr(order.getSeatTypes(),Integer::parseInt))
                 .priority(getQueuePosition(order.getWaitlistSn(),
                         order.getTrainNumber(), order.getTravelDate()).intValue())
+                .passengerIds(parseStr(order.getPassengerIds(), Long::parseLong))
                 .deadline(order.getDeadline())
                 .prepayAmount(order.getPrepayAmount())
                 .timestamp(System.currentTimeMillis())
@@ -334,15 +338,15 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
         return order;
     }
 
-    private java.util.List<Integer> parseSeatTypes(String seatTypesStr) {
-        if (seatTypesStr == null || seatTypesStr.trim().isEmpty()) {
+    private <T> java.util.List<T> parseStr(String str, Function<String,T> callback) {
+        if (str == null || str.trim().isEmpty()) {
             return List.of();
         }
-        String[] parts = seatTypesStr.split(",");
-        java.util.List<Integer> result = new java.util.ArrayList<>(parts.length);
+        String[] parts = str.split(",");
+        java.util.List<T> result = new java.util.ArrayList<>(parts.length);
         for (String part : parts) {
             try {
-                result.add(Integer.parseInt(part.trim()));
+                result.add(callback.apply(part));
             } catch (NumberFormatException e) {
                 // ignore
             }
@@ -416,16 +420,7 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
     }
 
     private String getSeatTypeName(int seatType) {
-        return switch (seatType) {
-            case 0 -> "硬座";
-            case 1 -> "二等座";
-            case 2 -> "一等座";
-            case 3 -> "商务座";
-            case 4 -> "软座";
-            case 5 -> "硬卧";
-            case 6 -> "软卧";
-            default -> "其他";
-        };
+        return SeatType.getDescByCode(seatType);
     }
 
     private String getStatusText(Integer status) {
