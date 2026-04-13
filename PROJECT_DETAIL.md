@@ -1418,22 +1418,22 @@ TicketDTO {
 
 #### 5.6.5 候补订单处理流程
 
-候补订单采用 MQ 异步消息驱动架构，完整流程如下：
+候补订单采用**事件驱动架构**，仅在退票或新增座位时触发兑现流程：
 
 ```
 用户提交候补
     ↓
 [Redis ZSet 入队] ← 计算优先级
     ↓
-[waitlist-check-topic] ──→ WaitlistCheckConsumer (order-service)
-    ↓ (有票)
+    等待事件触发（退票/新增座位）
+    ↓
+[waitlist-fulfill-topic] ──→ WaitlistFulfillConsumer (order-service)
+    ↓ (ZPOPMAX 取出最高优先级)
 [seat-selection-topic] ──→ SeatSelectionConsumer (seat-service)
-    ↓ (选座成功)
-[seat-selection-result-topic] ──→ OrderResultProcessorConsumer (ticket-service)
-    ↓ (计算票价)
+    ↓ (选座成功/失败)
+[seat-selection-result-topic] ──→ WaitlistSeatResultConsumer (order-service)
+    ↓ (成功：创建订单)
 [order-creation-topic] ──→ OrderCreationConsumer (order-service)
-    ↓ (创建订单)
-[order-creation-result-topic] ──→ WaitlistResultConsumer (order-service)
     ↓
 ┌──────────────┴──────────────┐
 │ 成功：状态=已兑现，移除队列   │
@@ -1442,56 +1442,49 @@ TicketDTO {
 ```
 
 **关键特性**：
-1. **幂等性保护**：每个请求携带 `requestId`，Redis SETNX 防止重复处理
-2. **状态持久化**：候补订单状态流转实时同步数据库
-3. **优先级惩罚**：每次失败降低 10 分，重新排队
-4. **超时处理**：定时任务扫描过期订单（超过截止时间未兑现）
-5. **来源标识**：通过 `source=WAITLIST` 标记，区别于普通购票
+1. **事件驱动**：仅在退票/新增座位时触发，不使用轮询
+2. **ZPOPMAX 原子出队**：Redis ZSet 保证最高优先级订单优先兑现
+3. **幂等性保护**：每个请求携带 `requestId`，Redis SETNX 防止重复处理
+4. **状态持久化**：候补订单状态流转实时同步数据库
+5. **优先级惩罚**：每次失败降低 10 分，重新排队
+6. **来源标识**：通过 `source=WAITLIST` 标记，区别于普通购票
 
 #### 5.6.6 核心消费者
 
-##### 5.6.6.1 WaitlistCheckConsumer（候补检查消费者）
+##### 5.6.6.1 WaitlistFulfillConsumer（候补兑现消费者）
 
-**监听 Topic**: `waitlist-check-topic`（Tag: `check`）
+**监听 Topic**: `waitlist-fulfill-topic`（Tag: `fulfill`）
+
+**触发时机**：
+- 用户退票时 → `SeatReleaseConsumer` 发送兑现消息
+- 新增车次/座位时 → 发送兑现消息
 
 **功能**：
-1. 幂等性检查（Redis SETNX，TTL 30分钟）
-2. 查询候补订单，校验状态（仅处理"待兑现"状态）
+1. 从 Redis ZSet 队列出队（ZPOPMAX 原子弹出最高优先级订单）
+2. 查询候补订单，状态检查（仅处理"待兑现"状态）
 3. 检查截止时间，过期订单标记为已过期
 4. 更新状态为"兑现中"
-5. 检查余票（优先查 Redis 余票缓存，无缓存则保守返回无票）
-6. **有票**：发送选座请求到 `seat-selection-topic`
-7. **无票**：回滚状态为"待兑现"，重新计算优先级
+5. 发送选座请求到 `seat-selection-topic`
 
-**Redis 缓存 Key**：
+**Redis 操作**：
+```java
+// ZPOPMAX 原子弹出最高分数的成员
+Set<ZSetOperations.TypedTuple<String>> popped = redisTemplate.opsForZSet().popMax(key, 1);
 ```
-TICKET:REMAINING::{trainNumber}::{travelDate}::{seatType}
-```
 
-##### 5.6.6.2 WaitlistResultConsumer（候补结果消费者）
+##### 5.6.6.2 WaitlistSeatResultConsumer（候补选座结果消费者）
 
-**监听 Topic**: `order-creation-result-topic`（Tag: `*`）
+**监听 Topic**: `seat-selection-result-topic`（Tag: `*`）
 
 **功能**：
-1. 从 `TicketAsyncRequestDO` 缓存中提取 `waitlistSn`
-2. 查询候补订单，幂等性保护（状态终态跳过）
-3. **订单成功**：
-   - 状态更新为"已兑现"(2)
-   - 记录订单号 `fulfilledOrderSn`
-   - 从 Redis ZSet 队列移除
-4. **订单失败**：
-   - 状态回滚为"待兑现"(0)
-   - 优先级惩罚 -10 分
+1. 查询候补订单，校验状态（仅处理"兑现中"状态）
+2. **选座成功**：
+   - 发送订单创建请求到 `order-creation-topic`
+   - 订单创建成功后，状态更新为"已兑现"，移除队列
+3. **选座失败**：
+   - 状态回滚为"待兑现"
+   - 优先级惩罚 -10 分，重新入队
    - 触发重新排队
-
-##### 5.6.6.3 定时任务：`checkAndFulfillWaitlistOrders`
-
-**触发方式**：`@Scheduled(cron = "0 */5 * * * ?")`（每5分钟执行）
-
-**处理逻辑**：
-1. 扫描所有"待兑现"且未过期的候补订单
-2. 对每个订单发送检查消息到 `waitlist-check-topic`（延迟5秒）
-3. 扫描并处理过期订单（状态更新为"已过期"）
 
 #### 5.6.7 Redis 数据结构
 
@@ -1551,11 +1544,11 @@ Fields: requestId, userId, trainNum, date, status,
 
 | Topic | Tag | 生产者 | 消费者 | 用途 |
 |-------|-----|--------|--------|------|
-| `waitlist-check-topic` | `check` | WaitlistService | WaitlistCheckConsumer | 候补检查请求 |
-| `seat-selection-topic` | `select` | WaitlistCheckConsumer | SeatSelectionConsumer | 选座请求 |
-| `seat-selection-result-topic` | `*` | SeatSelectionConsumer | OrderResultProcessorConsumer | 选座结果 |
-| `order-creation-topic` | `create` | OrderResultProcessorConsumer | OrderCreationConsumer | 订单创建请求 |
-| `order-creation-result-topic` | `*` | OrderCreationConsumer | WaitlistResultConsumer（候补）<br/>OrderResultProcessorConsumer（普通） | 订单创建结果 |
+| `waitlist-fulfill-topic` | `fulfill` | SeatReleaseConsumer | WaitlistFulfillConsumer | 候补兑现触发 |
+| `seat-selection-topic` | `select` | WaitlistFulfillConsumer | SeatSelectionConsumer | 选座请求 |
+| `seat-selection-result-topic` | `*` | SeatSelectionConsumer | WaitlistSeatResultConsumer | 选座结果 |
+| `order-creation-topic` | `create` | WaitlistSeatResultConsumer | OrderCreationConsumer | 订单创建请求 |
+| `seat-release-topic` | `*` | OrderService | SeatReleaseConsumer | 座位释放（触发候补） |
 
 #### 5.6.10 候补订单 API 示例
 
@@ -1618,12 +1611,13 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 
 | 维度 | 普通购票 | 候补订单 |
 |------|----------|----------|
-| 处理模式 | 高峰时异步 MQ | 始终异步 MQ |
+| 处理模式 | 高峰时异步 MQ | 事件驱动 MQ（退票/新增座位触发） |
+| 触发方式 | 用户主动下单 | 自动兑现 |
 | 座位锁定 | 30分钟 | 10分钟（更快释放） |
-| 无票处理 | 直接失败 | 继续排队，自动重试 |
+| 无票处理 | 直接失败 | 继续排队，等待下次触发 |
 | 失败惩罚 | 无 | 优先级 -10 分 |
 | 截止时间 | 无 | 有（发车前一定时间） |
-| 队列管理 | 无 | Redis ZSet 优先级队列 |
+| 队列管理 | 无 | Redis ZSet 优先级队列（ZPOPMAX 出队） |
 | 来源标识 | `NORMAL` | `WAITLIST` |
 
 #### 5.6.13 待优化方向
@@ -1635,6 +1629,7 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 5. **智能预测**：基于退票率、历史数据预测兑现成功率
 6. **死信队列**：多次重试失败的消息转入死信队列人工处理
 7. **消息追踪**：集成 SkyWalking 或自建消息追踪系统
+8. **新增车次触发**：新增加车次/座位时，自动发送候补兑现消息
 
 ---
 

@@ -92,9 +92,11 @@
   - 5.2 票价计算模块 (多因素定价模型、核心类设计)
   - 5.3 订单管理模块 (订单状态机、创建/退款流程)
   - 5.4 用户认证模块 (JWT认证流程、幂等性保护)
-  - 5.5 异步购票处理模块 (异步流程、消息消费者实现)
+  - 5.5 候补订单模块 (事件驱动架构、ZSet优先级队列、MQ处理链路、WaitlistFulfillConsumer/SeatResultConsumer/OrderCreationConsumer)
+  - 5.6 异步购票处理模块 (异步流程、消息消费者实现)
 - Mermaid图表: 6个 (类图、流程图、时序图、状态图)
 - 字数统计: 约4000字
+- **更新**: 候补订单架构从轮询改为事件驱动，移除 WaitlistCheckConsumer，新增 WaitlistFulfillConsumer 和 WaitlistSeatResultConsumer
 
 ### 第6章 测试部分 (2026-04-11)
 - [x] 完成状态
