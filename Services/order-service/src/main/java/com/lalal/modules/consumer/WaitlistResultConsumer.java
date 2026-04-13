@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
         consumerGroup = "waitlist-result-consumer",
         selectorExpression = "*"
 )
-public class WaitlistResultConsumer extends RocketMQBaseConsumer<OrderCreationResultMessage> {
+public class WaitlistResultConsumer extends RocketMQBaseConsumer {
 
     private final WaitlistService waitlistService;
     private final WaitlistQueueService waitlistQueueService;
@@ -50,7 +50,8 @@ public class WaitlistResultConsumer extends RocketMQBaseConsumer<OrderCreationRe
     private static final String WAITLIST_FULFILLMENT_RESULT_TOPIC = "waitlist-fulfillment-result-topic";
 
     @Override
-    protected void doProcess(OrderCreationResultMessage orderResult) {
+    protected void doProcess(Object msg) {
+        OrderCreationResultMessage orderResult=(OrderCreationResultMessage)msg;
         String requestId = orderResult.getRequestId();
 
         log.info("[候补结果] 处理: requestId={}, success={}, orderSn={}",

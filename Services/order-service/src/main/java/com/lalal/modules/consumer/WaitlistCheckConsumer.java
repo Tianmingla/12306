@@ -1,5 +1,6 @@
 package com.lalal.modules.consumer;
 
+import com.lalal.modules.constant.cache.WaitlistCacheConstant;
 import com.lalal.modules.dto.WaitlistCheckMessage;
 import com.lalal.modules.dto.WaitlistCheckResultMessage;
 import com.lalal.modules.enumType.RequestStatus;
