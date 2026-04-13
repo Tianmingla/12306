@@ -3,6 +3,7 @@ package com.lalal.modules.dto;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -46,7 +47,7 @@ public class AsyncTicketPurchaseMessage implements Serializable {
     /**
      * 乘车日期 yyyy-MM-dd
      */
-    private String date;
+    private LocalDate date;
 
     /**
      * 乘车人ID列表

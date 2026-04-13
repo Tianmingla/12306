@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -36,7 +37,7 @@ public class SeatReleaseMessage implements Serializable {
     /**
      * 运行日期
      */
-    private String date;
+    private LocalDate date;
 
     /**
      * 释放原因

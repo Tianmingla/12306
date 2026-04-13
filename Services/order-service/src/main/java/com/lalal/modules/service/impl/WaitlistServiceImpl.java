@@ -3,7 +3,6 @@ package com.lalal.modules.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lalal.framework.idempotent.Idempotent;
 import com.lalal.modules.constant.cache.WaitlistCacheConstant;
-import com.lalal.modules.context.RequestContext;
 import com.lalal.modules.dto.request.WaitlistCreateRequestDTO;
 import com.lalal.modules.dto.response.WaitlistOrderVO;
 import com.lalal.modules.entity.WaitlistOrderDO;
@@ -12,7 +11,6 @@ import com.lalal.modules.mapper.WaitlistOrderMapper;
 import com.lalal.modules.service.PriorityCalculator;
 import com.lalal.modules.service.WaitlistQueueService;
 import com.lalal.modules.service.WaitlistService;
-import com.lalal.modules.dto.WaitlistCheckMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,23 +18,23 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 候补服务实现（增强版 - MQ驱动）
+ * 候补服务实现（事件驱动架构）
  *
  * <p>核心流程：
- * 1. 创建候补订单 → 计算优先级 → 入队 → 发送检查消息
- * 2. 定时任务扫描待兑现订单 → 发送检查消息
- * 3. WaitlistCheckConsumer 检查余票 → 有票则触发选座 → 创建订单
- * 4. WaitlistResultConsumer 处理结果 → 更新状态
+ * 1. 创建候补订单 → 计算优先级 → 入队 Redis ZSet
+ * 2. 退票/新增座位时 → WaitlistFulfillConsumer 触发兑现流程
+ * 3. ZPOPMAX 取出最高优先级订单 → 发送选座请求
+ * 4. 选座成功后 → WaitlistSeatResultConsumer → 创建订单
+ *
+ * <p>不再使用轮询检查，而是事件驱动：
+ * - WaitlistFulfillConsumer: 监听 waitlist-fulfill-topic，兑现候补
+ * - WaitlistSeatResultConsumer: 监听 seat-selection-result-topic，处理结果
  */
 @Slf4j
 @Service
@@ -49,80 +47,37 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
     private final PriorityCalculator priorityCalculator;
     private final StringRedisTemplate stringRedisTemplate;
     private final com.lalal.framework.cache.SafeCacheTemplate safeCacheTemplate;
-    private final com.lalal.modules.mq.MessageQueueService messageQueueService;
 
-    private static final String WAITLIST_CHECK_TOPIC = "waitlist-check-topic";
     private static final String DEDUP_KEY_PREFIX = "WAITLIST:CREATE::";
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     @Idempotent(
-            key =DEDUP_KEY_PREFIX+"${#request.account}:${#request.trainNumber}:${#request.travelDate}",
+            key = DEDUP_KEY_PREFIX + "${#request.account}:${#request.trainNumber}:${#request.travelDate}",
             message = "您已提交过候补订单，请勿重复提交",
             expire = 300
     )
     public String createWaitlist(WaitlistCreateRequestDTO request) {
-
-        // 构建候补订单
+        // 1. 生成候补订单号
         String waitlistSn = generateWaitlistSn();
         WaitlistOrderDO order = buildOrder(request, waitlistSn);
         this.save(order);
 
-        // 计算初始优先级
+        // 2. 计算初始优先级
         Long userOrderCount = getUserOrderCount(request.getAccount());
-        Long queueSize = waitlistQueueService.getQueueSize(
+        Long queueSize = waitlistQueueService.size(
                 request.getTrainNumber(),
-                request.getTravelDate().toString(),
-                null);
+                request.getTravelDate().toString());
         Integer vipLevel = getUserVipLevel(request.getAccount());
 
         BigDecimal priority = priorityCalculator.calculatePriority(
                 order, vipLevel, userOrderCount, queueSize);
 
-        // 4. 入队
+        // 3. 入队 Redis ZSet
         waitlistQueueService.enqueue(order, priority);
-
-        // 5. 缓存幂等键（TTL = 截止时间 - 当前时间）
-//        long ttlMinutes = Duration.between(
-//                LocalDateTime.now(),
-//                request.getDeadline().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-//        ).toMinutes();
-//        safeCacheTemplate.set(dedupKey, waitlistSn, Math.max(ttlMinutes, 1), java.util.concurrent.TimeUnit.MINUTES);
-
-        // 6. 发送候补检查消息（延迟5秒，避免与创建事务冲突）
-        sendCheckMessage(order);
 
         log.info("[候补订单] 创建成功: waitlistSn={}, priority={}", waitlistSn, priority);
         return waitlistSn;
-    }
-
-    /**
-     * 发送候补检查消息
-     */
-    private void sendCheckMessage(WaitlistOrderDO order) {
-        String requestId = RequestContext.getRequestId();
-
-        WaitlistCheckMessage msg = WaitlistCheckMessage.builder()
-                .requestId(requestId)
-                .waitlistSn(order.getWaitlistSn())
-                .username(order.getUsername())
-                .userId(getUserIdByUsername(order.getUsername()))
-                .trainNumber(order.getTrainNumber())
-                .startStation(order.getStartStation())
-                .endStation(order.getEndStation())
-                .travelDate(order.getTravelDate().toString())
-                .seatTypes(parseStr(order.getSeatTypes(),Integer::parseInt))
-                .priority(getQueuePosition(order.getWaitlistSn(),
-                        order.getTrainNumber(), order.getTravelDate()).intValue())
-                .passengerIds(parseStr(order.getPassengerIds(), Long::parseLong))
-                .deadline(order.getDeadline())
-                .prepayAmount(order.getPrepayAmount())
-                .timestamp(System.currentTimeMillis())
-                .source("WAITLIST")
-                .build();
-
-        // 延迟5秒发送
-        messageQueueService.sendDelay(WAITLIST_CHECK_TOPIC, "check", msg, 5000);
     }
 
     @Override
@@ -187,28 +142,8 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void checkAndFulfillWaitlistOrders() {
-        log.debug("[候补订单] 开始批量扫描待兑现订单...");
-
-        var wrapper = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<WaitlistOrderDO>();
-        wrapper.eq(WaitlistOrderDO::getStatus, 0); // 待兑现
-        wrapper.gt(WaitlistOrderDO::getDeadline, new Date());
-        wrapper.orderByAsc(WaitlistOrderDO::getCreateTime); // 先到先得
-
-        List<WaitlistOrderDO> pendingOrders = this.list(wrapper);
-
-        for (WaitlistOrderDO order : pendingOrders) {
-            try {
-                // 发送检查消息（幂等性由消费者保证）
-                sendCheckMessage(order);
-            } catch (Exception e) {
-                log.error("[候补订单] 发送检查消息失败: waitlistSn={}", order.getWaitlistSn(), e);
-            }
-        }
-
-        // 处理过期订单
-        handleExpiredOrders();
-
-        log.debug("[候补订单] 批量扫描完成，共 {} 个订单", pendingOrders.size());
+        // 保留接口但不再使用，不再轮询检查
+        log.debug("[候补订单] checkAndFulfillWaitlistOrders 已废弃，使用事件驱动架构");
     }
 
     @Override
@@ -265,8 +200,8 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
     @Transactional(rollbackFor = Exception.class)
     public void recalculatePriority(WaitlistOrderDO order) {
         Long userOrderCount = getUserOrderCount(order.getUsername());
-        Long queueSize = waitlistQueueService.getQueueSize(
-                order.getTrainNumber(), order.getTravelDate().toString(), null);
+        Long queueSize = waitlistQueueService.size(
+                order.getTrainNumber(), order.getTravelDate().toString());
         Integer vipLevel = getUserVipLevel(order.getUsername());
 
         BigDecimal priority = priorityCalculator.calculatePriority(
@@ -285,9 +220,10 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
     @Transactional(rollbackFor = Exception.class)
     public void recalculatePriorityWithPenalty(WaitlistOrderDO order) {
         // 简化：失败一次直接降低固定分数10分
-        String key = WaitlistCacheConstant.waitlistQueueKey(
-                order.getTrainNumber(), order.getTravelDate().toString(), null);
-        Double currentScore = stringRedisTemplate.opsForZSet().score(key, order.getWaitlistSn());
+        Double currentScore = waitlistQueueService.getScore(
+                order.getWaitlistSn(),
+                order.getTrainNumber(),
+                order.getTravelDate().toString());
         if (currentScore != null) {
             BigDecimal newPriority = BigDecimal.valueOf(currentScore - 10);
             waitlistQueueService.updatePriority(
@@ -298,6 +234,18 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
             log.info("[候补订单] 优先级惩罚: waitlistSn={}, old={}, new={}",
                     order.getWaitlistSn(), currentScore, newPriority);
         }
+    }
+
+    /**
+     * 计算优先级（供外部调用）
+     */
+    public BigDecimal calculatePriority(WaitlistOrderDO order) {
+        Long userOrderCount = getUserOrderCount(order.getUsername());
+        Long queueSize = waitlistQueueService.size(
+                order.getTrainNumber(), order.getTravelDate().toString());
+        Integer vipLevel = getUserVipLevel(order.getUsername());
+
+        return priorityCalculator.calculatePriority(order, vipLevel, userOrderCount, queueSize);
     }
 
     /**
@@ -338,22 +286,6 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
         return order;
     }
 
-    private <T> java.util.List<T> parseStr(String str, Function<String,T> callback) {
-        if (str == null || str.trim().isEmpty()) {
-            return List.of();
-        }
-        String[] parts = str.split(",");
-        java.util.List<T> result = new java.util.ArrayList<>(parts.length);
-        for (String part : parts) {
-            try {
-                result.add(callback.apply(part));
-            } catch (NumberFormatException e) {
-                // ignore
-            }
-        }
-        return result;
-    }
-
     private Long getQueuePosition(String waitlistSn, String trainNumber, java.time.LocalDate travelDate) {
         return waitlistQueueService.getQueuePosition(waitlistSn, trainNumber, travelDate.toString());
     }
@@ -365,16 +297,6 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
 
     private Integer getUserVipLevel(String username) {
         // 简化：所有人同一等级，固定返回0（普通用户）
-        return 0;
-    }
-
-    private Long getUserIdByUsername(String username) {
-        // 简化：返回固定用户ID（实际应从t_user表查询）
-        return 1L;
-    }
-
-    private Integer getFailureCount(String waitlistSn) {
-        // 简化：暂不查询失败次数，固定返回0
         return 0;
     }
 
@@ -411,7 +333,8 @@ public class WaitlistServiceImpl extends ServiceImpl<WaitlistOrderMapper, Waitli
             try {
                 int seatType = Integer.parseInt(type.trim());
                 sb.append(getSeatTypeName(seatType)).append("、");
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (sb.length() > 0) {
             sb.setLength(sb.length() - 1);

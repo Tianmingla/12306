@@ -24,6 +24,11 @@ public class SeatSelectionResultMessage implements Serializable {
     private String requestId;
 
     /**
+     * 候补订单号（候补订单选座时使用）
+     */
+    private String waitlistSn;
+
+    /**
      * 选座是否成功
      */
     private boolean success;

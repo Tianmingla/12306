@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
  * 1. 普通购票：订单成功 → 更新缓存；订单失败 → 发送座位释放消息
  * 2. 候补订单：订单成功/失败 → 发送 WaitlistFulfillResultMessage 到 waitlist-fulfillment-result-topic
  *
- * @author Claude
+ *
  */
 @Component
 @Slf4j

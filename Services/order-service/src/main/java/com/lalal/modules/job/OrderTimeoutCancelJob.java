@@ -98,17 +98,11 @@ public class OrderTimeoutCancelJob {
                     ))
                     .collect(Collectors.toList());
 
-            // 格式化日期
-            String dateStr = null;
-            if (order.getRunDate() != null) {
-                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-                dateStr = sdf.format(order.getRunDate());
-            }
 
             SeatReleaseMessage message = new SeatReleaseMessage();
             message.setOrderSn(order.getOrderSn());
             message.setTrainNum(order.getTrainNumber());
-            message.setDate(dateStr);
+            message.setDate(order.getRunDate());
             message.setStartStation(order.getStartStation());
             message.setEndStation(order.getEndStation());
             message.setSeats(seats);

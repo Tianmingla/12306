@@ -14,6 +14,7 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.springframework.stereotype.Component;
 
 import java.sql.Date;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -68,7 +69,7 @@ public class TicketPurchaseConsumer extends RocketMQBaseConsumer {
                     message.getTrainNum(),
                     message.getStartStation(),
                     message.getEndStation(),
-                    message.getDate(),
+                    message.getDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
                     message.getPassengerIds(),
                     message.getSeatTypelist(),
                     message.getChooseSeats(),

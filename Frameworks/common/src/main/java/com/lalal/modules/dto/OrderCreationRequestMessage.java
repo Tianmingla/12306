@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 
@@ -24,6 +25,11 @@ public class OrderCreationRequestMessage implements Serializable {
      * 全局请求ID
      */
     private String requestId;
+
+    /**
+     * 候补订单号（候补订单创建时使用）
+     */
+    private String waitlistSn;
 
     /**
      * 车次号
@@ -48,7 +54,7 @@ public class OrderCreationRequestMessage implements Serializable {
     /**
      * 乘车日期
      */
-    private String runDate;
+    private LocalDate runDate;
 
     /**
      * 订单项列表

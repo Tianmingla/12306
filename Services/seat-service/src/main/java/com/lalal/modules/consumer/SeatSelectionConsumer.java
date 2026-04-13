@@ -84,7 +84,7 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
                 } else {
                     // 普通购票无票：直接失败
                     log.warn("[座位选择] 无可用座位: requestId={}", requestId);
-                    sendFailureResult(requestId, "座位选择失败: 无可用座位");
+                    sendFailureResult(requestId, message.getWaitlistSn(), "座位选择失败: 无可用座位");
                     return;
                 }
             }
@@ -92,6 +92,7 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
             // 发送成功结果
             SeatSelectionResultMessage resultMsg = new SeatSelectionResultMessage();
             resultMsg.setRequestId(requestId);
+            resultMsg.setWaitlistSn(message.getWaitlistSn()); // 候补订单号
             resultMsg.setSuccess(true);
             resultMsg.setSelectedSeats(selectedSeats.getItems().stream()
                     .map(item -> {
@@ -112,14 +113,15 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
 
         } catch (Exception e) {
             log.error("[座位选择] 处理异常: requestId={}", requestId, e);
-            sendFailureResult(requestId, "座位选择异常: " + e.getMessage());
+            sendFailureResult(requestId, message.getWaitlistSn(), "座位选择异常: " + e.getMessage());
             throw e; // 触发 MQ 重试
         }
     }
 
-    private void sendFailureResult(String requestId, String errorMsg) {
+    private void sendFailureResult(String requestId, String waitlistSn, String errorMsg) {
         SeatSelectionResultMessage result = new SeatSelectionResultMessage();
         result.setRequestId(requestId);
+        result.setWaitlistSn(waitlistSn);
         result.setSuccess(false);
         result.setErrorMessage(errorMsg);
         result.setTimestamp(System.currentTimeMillis());

@@ -7,6 +7,8 @@ import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
 import com.lalal.modules.service.OrderService;
+import com.lalal.modules.service.WaitlistService;
+import com.lalal.modules.service.WaitlistQueueService;
 import com.lalal.modules.utils.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +19,7 @@ import java.math.BigDecimal;
 import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +44,8 @@ import java.util.stream.Collectors;
 public class OrderCreationConsumer extends RocketMQBaseConsumer {
 
     private final OrderService orderService;
+    private final WaitlistService waitlistService;
+    private final WaitlistQueueService waitlistQueueService;
     private final MessageQueueService messageQueueService;
 
     private static final String ORDER_CREATION_RESULT_TOPIC = "order-creation-result-topic";
@@ -50,7 +55,8 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
         OrderCreationRequestMessage message = (OrderCreationRequestMessage) msg;
         String requestId = message.getRequestId();
 
-        log.info("[订单创建] 收到消息: requestId={}, trainNum={}", requestId, message.getTrainNum());
+        log.info("[订单创建] 收到消息: requestId={}, trainNum={}, waitlistSn={}",
+                requestId, message.getTrainNum(), message.getWaitlistSn());
 
         try {
             // 转换为 OrderCreateRequestDTO
@@ -73,6 +79,16 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
             resultMsg.setTimestamp(System.currentTimeMillis());
 
             messageQueueService.send(ORDER_CREATION_RESULT_TOPIC, "result", resultMsg);
+
+            // 候补订单：更新状态为已兑现
+            if (message.getWaitlistSn() != null && !message.getWaitlistSn().isBlank()) {
+                waitlistService.updateWaitlistStatus(message.getWaitlistSn(), 2, orderSn);
+                // 从队列移除
+                waitlistQueueService.remove(message.getWaitlistSn(),
+                        message.getTrainNum(), message.getRunDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+                log.info("[订单创建] 候补订单已兑现: waitlistSn={}, orderSn={}",
+                        message.getWaitlistSn(), orderSn);
+            }
 
             log.info("[订单创建] 订单创建成功: requestId={}, orderSn={}", requestId, orderSn);
 
@@ -101,7 +117,7 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
         dto.setStartStation(msg.getStartStation());
         dto.setEndStation(msg.getEndStation());
         dto.setUsername(msg.getUsername());
-        dto.setRunDate(LocalDate.parse(msg.getRunDate()));
+        dto.setRunDate(msg.getRunDate());
 
         // 转换订单项
         if (msg.getItems() != null) {

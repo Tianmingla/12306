@@ -7,9 +7,11 @@ import com.lalal.modules.core.seat.SeatLayout;
 import com.lalal.modules.dao.TrainDO;
 import com.lalal.modules.dao.TrainStationDO;
 import com.lalal.modules.dto.SeatReleaseMessage;
+import com.lalal.modules.dto.WaitlistFulfillMessage;
 import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
+import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,6 +22,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -48,6 +52,9 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
     private final TrainMapper trainMapper;
     private final TrainStationMapper trainStationMapper;
     private final SafeCacheTemplate safeCacheTemplate;
+    private final MessageQueueService messageQueueService;
+
+    private static final String WAITLIST_FULFILL_TOPIC = "waitlist-fulfill-topic";
 
     @Override
     protected void doProcess(Object msg) {
@@ -122,10 +129,11 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
                         String carriageNumber = parts[0];
                         Integer seatType = Integer.parseInt(parts[1]);
 
+                        DateTimeFormatter formatter=DateTimeFormatter.ofPattern("yyyy-MM-dd");
                         String detailKey = CacheConstant.trainTicketDetailKey(
-                                train.getId(), message.getDate(), carriageNumber);
+                                train.getId(), message.getDate().format(formatter), carriageNumber);
                         String remainingKey = CacheConstant.trainTicketRemainingKey(
-                                train.getId(), message.getDate(), seatType);
+                                train.getId(), message.getDate().format(formatter), seatType);
 
                         // 获取座位索引 (需要从座位号转换)
                         List<Integer> seatIndices = seats.stream()
@@ -159,6 +167,9 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
                     });
 
             log.info("座位释放完成: orderSn={}", message.getOrderSn());
+
+            // 触发候补兑现流程
+            triggerWaitlistFulfillment(message);
 
         } catch (Exception e) {
             log.error("处理座位释放消息异常: orderSn={}", message.getOrderSn(), e);
@@ -220,5 +231,34 @@ public class SeatReleaseConsumer extends RocketMQBaseConsumer {
                 break;
         }
         return layoutIndex;
+    }
+
+    /**
+     * 触发候补兑现流程
+     * 当有座位释放时（退票/取消），发送消息触发候补队列检查
+     */
+    private void triggerWaitlistFulfillment(SeatReleaseMessage message) {
+        if (message.getTrainNum() == null || message.getDate() == null) {
+            return;
+        }
+
+        // 遍历释放的座位，按座位类型触发候补
+        message.getSeats().stream()
+                .map(SeatReleaseMessage.SeatItem::getSeatType)
+                .distinct()
+                .forEach(seatType -> {
+                    WaitlistFulfillMessage fulfillMsg = WaitlistFulfillMessage.builder()
+                            .trainNumber(message.getTrainNum())
+                            .travelDate(message.getDate())
+                            .seatType(seatType)
+                            .source(message.getReleaseType().name())
+                            .timestamp(System.currentTimeMillis())
+                            .build();
+
+                    messageQueueService.send(WAITLIST_FULFILL_TOPIC, "fulfill", fulfillMsg);
+
+                    log.info("[座位释放] 触发候补兑现: trainNum={}, date={}, seatType={}",
+                            message.getTrainNum(), message.getDate(), seatType);
+                });
     }
 }

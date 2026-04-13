@@ -29,6 +29,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -112,7 +113,7 @@ public class TicketServiceImpl implements TicketService {
                 .requestId(requestId)
                 .userId(userId)
                 .trainNum(request.getTrainNum())
-                .date(request.getDate())
+                .date(LocalDate.parse(request.getDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd")))
                 .status(STATUS_PROCESSING)
                 .account(StringUtils.hasText(request.getAccount()) ? request.getAccount() : "")
                 .startStation(request.getStartStation())
