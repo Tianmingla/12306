@@ -83,7 +83,7 @@ public class SafeCacheTemplate {
     }
     // ============ 基础缓存操作（保持兼容）============
 
-    public void set(String key, Object value, long timeout, TimeUnit unit) {
+    private void set(String key, Object value, long timeout, TimeUnit unit) {
         redisTemplate.execute((RedisCallback<Object>) connection -> {
             byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
             connection.openPipeline();
@@ -109,6 +109,46 @@ public class SafeCacheTemplate {
             }
             return connection.closePipeline();
         });
+    }
+
+    /**
+     *  暴露一个safeSet方法 保证分布式线程安全 以及防止状态机的使用
+     *  封装的像openGL那样使用真的很糟糕 解决办法就是多暴露各种各样的函数
+     * @param key key
+     * @param value  值
+     * @param timeout  过期时间
+     * @param unit   过期时间单位
+     */
+    public void safeSet(String key, Object value, long timeout, TimeUnit unit) {
+        safeSet(key,value,timeout,unit,RedisType.VALUE);
+    }
+    /**
+     * @param key key
+     * @param value  值
+     * @param timeout  过期时间
+     * @param unit   过期时间单位
+     * @param redisType set类型
+     */
+    public void safeSet(String key, Object value, long timeout, TimeUnit unit,RedisType redisType) {
+        redisTypeHolder.set(redisType);
+        String lockKey = "lock:" + key;
+        RLock lock = redissonClient.getLock(lockKey);
+        try {
+            // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
+            boolean locked = lock.tryLock(2, 10, TimeUnit.SECONDS);
+            if (!locked) {
+                throw new RuntimeException("获取分布式锁超时，key: " + key);
+            }
+            set(key,value,timeout,unit);
+        }catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("获取分布式锁被中断", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+            clear();
+        }
     }
 
     public void multiSet(List<String> keys, List<Object> values, long timeout, TimeUnit unit){

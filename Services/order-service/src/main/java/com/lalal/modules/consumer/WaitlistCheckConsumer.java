@@ -5,7 +5,6 @@ import com.lalal.modules.constant.cache.WaitlistCacheConstant;
 import com.lalal.modules.dto.SeatSelectionRequestMessage;
 import com.lalal.modules.dto.WaitlistCheckMessage;
 import com.lalal.modules.dto.WaitlistCheckResultMessage;
-import com.lalal.modules.enumType.RequestStatus;
 import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
@@ -16,8 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
 
@@ -141,9 +138,14 @@ public class WaitlistCheckConsumer extends RocketMQBaseConsumer {
     private Integer checkTicketAvailability(WaitlistCheckMessage msg) {
         // 方式1：查询 Redis 余票缓存
         // Key 格式：TICKET:REMAINING::trainNum::date::seatType
-        List<String> cacheKeys=msg.getSeatTypes()
-                .stream()
-                .map(CacheConstant.trainTicketRemainingKey(msg.get));
+
+//        List<String> cacheKeys=msg.getSeatTypes()
+//                .stream()
+//                .map(CacheConstant.trainTicketRemainingKey());
+        safeCacheTemplate.execute((connection)->{
+            connection.openPipeline();
+
+        });
         for (Integer seatType : msg.getSeatTypes()) {
             String cacheKey = String.format(
                     "TICKET:REMAINING::%s::%s::%d",

@@ -129,7 +129,7 @@ public class TicketServiceImpl implements TicketService {
         }
 
         // 3. 缓存初始状态
-        safeCacheTemplate.set(asyncKey, record, 30, TimeUnit.MINUTES);
+        safeCacheTemplate.safeSet(asyncKey, record, 30, TimeUnit.MINUTES);
 
         // 4. 构建选座请求消息
         SeatSelectionRequestMessage message = new SeatSelectionRequestMessage();
@@ -153,7 +153,7 @@ public class TicketServiceImpl implements TicketService {
             // 发送失败，更新状态
             record.setStatus(STATUS_FAILED);
             record.setErrorMessage("消息发送失败: " + e.getMessage());
-            safeCacheTemplate.set(asyncKey, record, 30, TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey, record, 30, TimeUnit.MINUTES);
             log.error("[购票] 发送消息失败: requestId={}", requestId, e);
             return PurchaseTicketVO.failed("消息发送失败，请重试");
         }

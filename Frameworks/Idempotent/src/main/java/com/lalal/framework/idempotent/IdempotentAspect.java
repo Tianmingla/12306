@@ -101,7 +101,7 @@ public class IdempotentAspect {
             // 如果需要缓存结果，缓存返回值
             if (idempotent.cacheResult()) {
                 try {
-                    safeCacheTemplate.set(resultKey, result, idempotent.expire(), TimeUnit.SECONDS);
+                    safeCacheTemplate.safeSet(resultKey, result, idempotent.expire(), TimeUnit.SECONDS);
                     log.debug("Cached result for key: {}", resultKey);
                 } catch (Exception e) {
                     log.error("Failed to cache result for key: {}", resultKey, e);

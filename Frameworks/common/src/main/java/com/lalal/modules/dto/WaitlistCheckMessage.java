@@ -45,6 +45,10 @@ public class WaitlistCheckMessage implements Serializable {
      * 车次号
      */
     private String trainNumber;
+    /**
+     * 车次id
+     */
+    private Integer trainId;
 
     /**
      * 出发站

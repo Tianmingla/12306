@@ -107,6 +107,6 @@ public class TicketPurchaseConsumer extends RocketMQBaseConsumer {
                 .orderSn(orderSn)
                 .errorMessage(errorMessage)
                 .build();
-        safeCacheTemplate.set(asyncKey, record, 1, TimeUnit.DAYS);
+        safeCacheTemplate.safeSet(asyncKey, record, 1, TimeUnit.DAYS);
     }
 }

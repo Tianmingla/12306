@@ -89,7 +89,7 @@ public class OrderResultProcessorConsumer extends RocketMQBaseConsumer {
             // 订单创建成功
             record.setStatus(1); // SUCCESS
             record.setOrderSn(orderResult.getOrderSn());
-            safeCacheTemplate.set(asyncKey,record,30, java.util.concurrent.TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey,record,30, java.util.concurrent.TimeUnit.MINUTES);
 
             log.info("[订单结果] 普通购票成功: requestId={}, orderSn={}",
                     requestId, orderResult.getOrderSn());
@@ -98,7 +98,7 @@ public class OrderResultProcessorConsumer extends RocketMQBaseConsumer {
             // 订单创建失败，需要释放座位
             record.setStatus(2); // FAILED
             record.setErrorMessage(orderResult.getErrorMessage());
-            safeCacheTemplate.set(asyncKey,record, 30, java.util.concurrent.TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey,record, 30, java.util.concurrent.TimeUnit.MINUTES);
 
             // 发送座位释放消息
             sendSeatReleaseMessage(requestId, record);

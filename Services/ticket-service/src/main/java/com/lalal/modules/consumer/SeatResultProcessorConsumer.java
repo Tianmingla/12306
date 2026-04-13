@@ -85,7 +85,7 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
             // 选座失败，更新状态为失败
             record.setStatus(2); // FAILED
             record.setErrorMessage(seatResult.getErrorMessage());
-            safeCacheTemplate.set(asyncKey,record,30,TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey,record,30,TimeUnit.MINUTES);
             log.info("[选座结果处理] 选座失败: requestId={}, error={}", requestId, seatResult.getErrorMessage());
             return;
         }
@@ -93,7 +93,7 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
         // 选座成功，继续处理：计算票价 -> 发送订单创建请求
         try {
             record.setStatus(5); // ORDER_CREATING
-            safeCacheTemplate.set(asyncKey,record,30,TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey,record,30,TimeUnit.MINUTES);
 
             // 获取乘客信息
             List<Long> passengerIds = JSON.parseArray(record.getPassengerIdsJson(), Long.class);
@@ -106,7 +106,7 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
                 log.error("[选座结果处理] 获取乘客信息失败: requestId={}", requestId);
                 record.setStatus(2);
                 record.setErrorMessage("获取乘客信息失败");
-                safeCacheTemplate.set(asyncKey,record,30,TimeUnit.MINUTES);
+                safeCacheTemplate.safeSet(asyncKey,record,30,TimeUnit.MINUTES);
                 return;
             }
             List<UserServiceClient.PassengerRemoteVO> passengers = passengerResult.getData();
@@ -124,7 +124,7 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
             log.error("[选座结果处理] 构建订单请求异常: requestId={}", requestId, e);
             record.setStatus(2); // FAILED
             record.setErrorMessage("构建订单请求失败: " + e.getMessage());
-            safeCacheTemplate.set(asyncKey,record,30,TimeUnit.MINUTES);
+            safeCacheTemplate.safeSet(asyncKey,record,30,TimeUnit.MINUTES);
             throw e;
         }
     }

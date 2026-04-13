@@ -52,8 +52,8 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         }
 
         String code = mockEnabled ? mockCode : String.format("%06d", RANDOM.nextInt(1_000_000));
-        safeCacheTemplate.set(CacheConstant.smsLoginCodeKey(p), code, expireMinutes, TimeUnit.MINUTES);
-        safeCacheTemplate.set(rateKey, "1", sendIntervalSeconds, TimeUnit.SECONDS);
+        safeCacheTemplate.safeSet(CacheConstant.smsLoginCodeKey(p), code, expireMinutes, TimeUnit.MINUTES);
+        safeCacheTemplate.safeSet(rateKey, "1", sendIntervalSeconds, TimeUnit.SECONDS);
         if (mockEnabled) {
             log.info("[MOCK SMS] phone={} code={}", p, code);
         }
