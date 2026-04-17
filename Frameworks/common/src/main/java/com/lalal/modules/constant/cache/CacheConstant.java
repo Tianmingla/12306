@@ -123,6 +123,16 @@ public class CacheConstant {
     public static String trainCarriageCount(Long trainId,String carriage_num){
         return String.format(TRAIN_CARRIAGE_COUNT,trainId,carriage_num);
     }
+
+    /**
+     * 构建车厢的类别数key
+     * @param trainId
+     * @param seatType
+     * @return
+     */
+    public static String trainSeatCountKey(Long trainId, Integer seatType) {
+        return String.format(TRAIN_SEAT_COUNT,trainId,seatType);
+    }
     /**
      * 构建关于站台的火车站台的详情列表数key
      */
@@ -195,6 +205,7 @@ public class CacheConstant {
     public static final String TRAIN_CARRIAGE_KEY_TEMPLATE="TRAIN::CARRIAGE::%s";
     public static final String  TRAIN_CODE_TO_DETAIL_TEMPLATE = "TRAIN::CODE::%s";
     public static final String  TRAIN_CARRIAGE_COUNT = "TRAIN::CARRIAGE::%s::%s";
+    public static final String  TRAIN_SEAT_COUNT = "TRAIN::CARRIAGE::%s::%s";
     public static final String  TRAIN_STATION_DETAIL = "TRAIN::STATION::%s";
 
     /* ==================== 票价相关缓存Key ==================== */

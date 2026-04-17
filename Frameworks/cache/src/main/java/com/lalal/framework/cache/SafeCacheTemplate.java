@@ -203,6 +203,20 @@ public class SafeCacheTemplate {
             return result;
         });
     }
+    public <T> List<T> lget(String key, TypeReference<T> typeReference) {
+        return redisTemplate.execute((RedisCallback<List<T>>) connection -> {
+            byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
+            List<T> result=new ArrayList<>();
+            List<byte[]> valueBytes=connection.listCommands().lRange(keyBytes,0,-1);
+            if(valueBytes==null){
+                return null;
+            }
+            for(byte[] valueByte:valueBytes){
+                result.add(curValueSerializer.deserialize(valueByte,typeReference));
+            }
+            return result;
+        });
+    }
     public List<Object> multiGet(List<String> keys){
         return redisTemplate.opsForValue().multiGet(keys);
     }
@@ -449,6 +463,65 @@ public class SafeCacheTemplate {
 
             // 4. 调用回调加载数据
             T value = loader.get();
+
+            // 5. 写入缓存（即使为 null，也可考虑缓存空值防穿透）
+            if (value != null) {
+                set(key, value, cacheTtl, timeUnit);
+            } else {
+                // 缓存空值，防止缓存穿透（TTL 较短）
+                set(key, NULL, 60, TimeUnit.SECONDS);
+            }
+
+            return value;
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("获取分布式锁被中断", e);
+        } finally {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+            clear();
+        }
+    }
+    /**
+     * 安全获取list缓存值，支持从数据源回调加载（防止缓存击穿）
+     *
+     * @param key          缓存键
+     * @param loader       数据加载回调（如从 DB 查询）
+     * @param typeReference  类型信息 针对反序列化关闭@class
+     * @param cacheTtl     缓存过期时间
+     * @param timeUnit     时间单位
+     * @param <T>          返回类型
+     * @return 缓存值或加载的新值
+     */
+    public <T> List<T> safeLGet(String key, Supplier<List<T>> loader,TypeReference<T> typeReference, long cacheTtl, TimeUnit timeUnit) {
+        redisTypeHolder.set(RedisType.LIST);
+        // 1. 先读缓存（无锁，高性能）
+        List<T> cached = lget(key,typeReference);
+        if (cached != null) {
+            return cached;
+        }
+
+        // 2. 缓存未命中，加分布式锁
+        String lockKey = "lock:" + key;
+        RLock lock = redissonClient.getLock(lockKey);
+
+        try {
+            // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
+            boolean locked = lock.tryLock(2, 10, TimeUnit.SECONDS);
+            if (!locked) {
+                throw new RuntimeException("获取分布式锁超时，key: " + key);
+            }
+
+            // 3. 双重检查：可能其他线程已加载
+            cached = lget(key,typeReference);
+            if (cached != null) {
+                return cached;
+            }
+
+            // 4. 调用回调加载数据
+            List<T> value = loader.get();
 
             // 5. 写入缓存（即使为 null，也可考虑缓存空值防穿透）
             if (value != null) {
