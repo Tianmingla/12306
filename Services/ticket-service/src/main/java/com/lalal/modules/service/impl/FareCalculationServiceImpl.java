@@ -1,5 +1,6 @@
 package com.lalal.modules.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.dto.FareCalculationRequestDTO;
@@ -19,7 +20,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -117,9 +120,57 @@ public class FareCalculationServiceImpl implements FareCalculationService {
     @Override
     public List<FareCalculationResultDTO> batchCalculateFare(List<FareCalculationRequestDTO> requests) {
         List<FareCalculationResultDTO> results = new ArrayList<>();
+        List<Long> trainIds=requests.stream().map(FareCalculationRequestDTO::getTrainId).toList();
+        List<String> departureStations=requests.stream().map(FareCalculationRequestDTO::getDepartureStation).toList();
+        List<String> arrivalStations=requests.stream().map(FareCalculationRequestDTO::getArrivalStation).toList();
+        Map<String,Integer> distanceMap=batchGetDistance(trainIds,departureStations,arrivalStations);
         for (FareCalculationRequestDTO request : requests) {
-            results.add(calculateFare(request));
+            FareCalculationResultDTO result = new FareCalculationResultDTO();
+            result.setTrainId(request.getTrainId());
+            result.setDepartureStation(request.getDepartureStation());
+            result.setArrivalStation(request.getArrivalStation());
+            result.setSeatType(request.getSeatType());
+            result.setPassengerId(request.getPassengerId());
+            // 1. 获取站间距离
+            Integer distance = distanceMap.get(request.getTrainId()+"_"+request.getDepartureStation()+"_"+request.getArrivalStation());
+
+            if (distance == null || distance <= 0) {
+                distance = getDistanceByTrainNumber(request.getTrainNumber(), request.getDepartureStation(), request.getArrivalStation());
+            }
+            if (distance == null || distance <= 0) {
+                log.warn("无法获取站间距离: trainId={}, trainNumber={}, dep={}, arr={}",
+                        request.getTrainId(), request.getTrainNumber(), request.getDepartureStation(), request.getArrivalStation());
+                // 使用默认距离（后续应该抛出异常或使用估算距离）
+                distance = 100;
+            }
+            result.setDistance(distance);
+
+            // 2. 获取座位类型和旅客类型
+            SeatType seatType = SeatType.findByCode(request.getSeatType());
+            if (seatType == null) {
+                seatType = SeatType.SECOND_CLASS;
+            }
+            PassengerTypeEnum passengerType = PassengerTypeEnum.fromCode(
+                    request.getPassengerType() != null ? request.getPassengerType() : 0);
+
+            // 3. 获取列车上浮类型
+            SurchargeTypeEnum surchargeType = getSurchargeType(request);
+
+            // 4. 是否春运期间
+            boolean isPeakSeason = Boolean.TRUE.equals(request.getIsPeakSeason());
+
+            // 5. 计算各分项票价
+            calculateFareItems(result, distance, seatType, surchargeType, passengerType);
+
+            // 6. 计算附加费
+            calculateSurcharges(result, distance, seatType, passengerType);
+
+            // 7. 计算总计
+            calculateTotals(result, isPeakSeason);
+
+            results.add(result);
         }
+
         return results;
     }
 
@@ -141,6 +192,57 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                 new TypeReference<Integer>() {},
                 24, TimeUnit.HOURS
         );
+    }
+
+    public Map<String,Integer> batchGetDistance(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations) {
+        List<String> cacheKeys = new ArrayList<>(trainIds.size());
+        List<Object[]> disArgs=new ArrayList<>(trainIds.size());
+
+        for(int i=0;i<trainIds.size();i++){
+            cacheKeys.add(CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
+                    arrivalStations.get(i)));
+            Object[] objects={trainIds.get(i),departureStations.get(i),arrivalStations.get(i)};
+            disArgs.add(objects);
+        }
+
+        List<Integer> result=safeCacheTemplate.safeBatchGet(
+                cacheKeys,
+                (args) -> {
+                    Map<String,Integer> idx=new HashMap<>();
+                    List<Long> trainIds_=args.stream().map(arg->(Long)arg[0]).toList();
+                    List<Long> departureStations_=args.stream().map(arg->(Long)arg[1]).toList();
+                    List<Long> arrivalStations_=args.stream().map(arg->(Long)arg[2]).toList();
+                    List<Integer> results=new ArrayList<>(disArgs.size());
+                    for(int i=0;i<args.size();i++){
+                        String key = trainIds_.get(i) + "_" + departureStations_.get(i) + "_" + arrivalStations_.get(i);
+                        idx.put(key,i);
+                        results.add(null);
+                    }
+
+                    LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper=new LambdaQueryWrapper<StationDistanceDO>()
+                            .select(StationDistanceDO::getTrainId,StationDistanceDO::getDistance,StationDistanceDO::getDepartureStationName,StationDistanceDO::getArrivalStationName)
+                            .in(StationDistanceDO::getTrainId,trainIds_)
+                            .in(StationDistanceDO::getDepartureStationName,departureStations_)
+                            .in(StationDistanceDO::getArrivalStationName,arrivalStations_)
+                            .eq(StationDistanceDO::getDelFlag,0);
+                    List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
+                    for(StationDistanceDO sd:dbResult){
+                        String key = sd.getTrainId() + "_" +sd.getDepartureStationName() + "_" + sd.getArrivalStationName();
+                        results.set(idx.get(key),sd.getDistance());
+                    }
+                    return results;
+                },
+                new TypeReference<Integer>() {},
+                disArgs,
+                24,
+                TimeUnit.HOURS
+        );
+        Map<String,Integer> batchResult=new HashMap<>();
+        for(int i=0;i<trainIds.size();i++){
+            String key = trainIds.get(i) + "_" + departureStations.get(i) + "_" + arrivalStations.get(i);
+            batchResult.put(key,result.get(i));
+        }
+        return batchResult;
     }
 
     @Override
