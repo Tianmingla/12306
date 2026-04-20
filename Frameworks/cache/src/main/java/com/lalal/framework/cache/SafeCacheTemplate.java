@@ -8,6 +8,7 @@ import com.lalal.framework.cache.RedisSerializer.RawRedisSerializer;
 import com.lalal.framework.cache.RedisSerializer.ValueRedisSerializer;
 import lombok.AllArgsConstructor;
 import org.redisson.api.RLock;
+import org.redisson.api.RSemaphore;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -43,6 +44,8 @@ public class SafeCacheTemplate {
     private RedissonClient redissonClient;
 
     private ValueRedisSerializer defaultValueSerializer;
+    private int batchSize=5; //大于这个的 走全局唯一批量获取令牌
+    private String token="semaphore:batch:token"; //实际可以在根据类型细分令牌
     //多线程环境 线程独有  TODO在哪里清除 java spring为线程池环境
     private static final ThreadLocal<RedisType> redisTypeHolder = new ThreadLocal<RedisType>() {
         @Override
@@ -573,7 +576,6 @@ public class SafeCacheTemplate {
 
         // 2. 存在缓存未命中，加分布式锁
         //非常重要 必须排序 保证全线程获取key顺序相同 否则死锁(虽然try不会 破环无限等待了但性能大大降低)
-
         List<String> nullKeys=nullKeysIndex.stream()
                 .map(i->{
                     return "lock"+keys.get(i);
@@ -672,37 +674,52 @@ public class SafeCacheTemplate {
                 .sorted()
                 .distinct() //去重 否则死锁！
                 .toList();
-        RLock[] locks = new RLock[nullKeys.size()];
-        for (int idx = 0; idx < nullKeys.size(); idx++) {
-            locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+        RSemaphore semaphore=null;
+        RLock mLock=null;
+        RLock[] locks=null;
+        //新架构思路 唯一令牌批量获取
+        boolean useToken=nullKeys.size()>batchSize;
+        if(useToken) {
+            semaphore = redissonClient.getSemaphore(token);
+            semaphore.trySetPermits(10); // 最多 10 个并发加载
+        }else {
+            locks = new RLock[nullKeys.size()];
+            for (int idx = 0; idx < nullKeys.size(); idx++) {
+                locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+            }
+            mLock = redissonClient.getMultiLock(locks);
         }
-        RLock mLock=redissonClient.getMultiLock(locks);
         boolean locked=false;
         try {
             // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
-            locked = mLock.tryLock(2, 10, TimeUnit.SECONDS);
+            locked =useToken? semaphore.tryAcquire():mLock.tryLock(2, 10, TimeUnit.SECONDS);
             if (!locked) {
-                String failedKeys = java.util.Arrays.stream(locks)
-                        .filter(lock -> {
-                            try {
-                                // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
-                                // 这里简单判断，更准确的是去 Redis 查 TTL
-                                return lock.isLocked();
-                            } catch (Exception e) {
-                                return true;
-                            }
-                        })
-                        .map(RLock::getName)
-                        .collect(Collectors.joining(", "));
+                if(useToken){
+                    throw new RuntimeException("获取令牌超时,令牌：" + token);
+                }else {
+                    String failedKeys = java.util.Arrays.stream(locks)
+                            .filter(lock -> {
+                                try {
+                                    // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
+                                    // 这里简单判断，更准确的是去 Redis 查 TTL
+                                    return lock.isLocked();
+                                } catch (Exception e) {
+                                    return true;
+                                }
+                            })
+                            .map(RLock::getName)
+                            .collect(Collectors.joining(", "));
 
-                // 记录详细日志
-                System.err.println("获取分布式锁超时！等待5秒仍未成功。");
-                System.err.println("请求锁列表: " + nullKeys);
-                System.err.println("疑似被占用的锁: " + failedKeys);
+                    // 记录详细日志
+                    System.err.println("获取分布式锁超时！等待5秒仍未成功。");
+                    System.err.println("请求锁列表: " + nullKeys);
+                    System.err.println("疑似被占用的锁: " + failedKeys);
 
-                // 可选：去 Redis 检查这些 Key 的剩余时间
-                // 这里抛出异常或进行降级处理
-                throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
+
+                    // 可选：去 Redis 检查这些 Key 的剩余时间
+                    // 这里抛出异常或进行降级处理
+                    throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
+                }
             }
 
             // 3. 双重检查：可能其他线程已加载
@@ -740,7 +757,9 @@ public class SafeCacheTemplate {
             Thread.currentThread().interrupt();
             throw new RuntimeException("获取分布式锁被中断", e);
         } finally {
-            if(locked) {
+            if(locked&&useToken){
+                semaphore.release();
+            }else if(locked){
                 mLock.unlock();
             }
             clear();
@@ -777,18 +796,52 @@ public class SafeCacheTemplate {
                 .sorted()
                 .distinct() //去重 否则死锁！
                 .toList();
-        RLock[] locks = new RLock[nullKeys.size()];
-        for (int idx = 0; idx < nullKeys.size(); idx++) {
-            locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+        RSemaphore semaphore=null;
+        RLock mLock=null;
+        RLock[] locks=null;
+        //新架构思路 唯一令牌批量获取
+        boolean useToken=nullKeys.size()>batchSize;
+        if(useToken) {
+            semaphore = redissonClient.getSemaphore(token);
+            semaphore.trySetPermits(10); // 最多 10 个并发加载
+        }else {
+            locks = new RLock[nullKeys.size()];
+            for (int idx = 0; idx < nullKeys.size(); idx++) {
+                locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+            }
+            mLock = redissonClient.getMultiLock(locks);
         }
-        RLock mLock=redissonClient.getMultiLock(locks);
         boolean locked=false;
         try {
             // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
-            locked = mLock.tryLock(2, 10, TimeUnit.SECONDS);
+            locked =useToken? semaphore.tryAcquire():mLock.tryLock(2, 10, TimeUnit.SECONDS);
             if (!locked) {
-                //TODO
-                throw new RuntimeException("获取分布式锁超时，keys: " +"");
+                if(useToken){
+                    throw new RuntimeException("获取令牌超时,令牌：" + token);
+                }else {
+                    String failedKeys = java.util.Arrays.stream(locks)
+                            .filter(lock -> {
+                                try {
+                                    // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
+                                    // 这里简单判断，更准确的是去 Redis 查 TTL
+                                    return lock.isLocked();
+                                } catch (Exception e) {
+                                    return true;
+                                }
+                            })
+                            .map(RLock::getName)
+                            .collect(Collectors.joining(", "));
+
+                    // 记录详细日志
+                    System.err.println("获取分布式锁超时！等待5秒仍未成功。");
+                    System.err.println("请求锁列表: " + nullKeys);
+                    System.err.println("疑似被占用的锁: " + failedKeys);
+
+
+                    // 可选：去 Redis 检查这些 Key 的剩余时间
+                    // 这里抛出异常或进行降级处理
+                    throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
+                }
             }
 
             // 3. 双重检查：可能其他线程已加载
@@ -847,9 +900,12 @@ public class SafeCacheTemplate {
             Thread.currentThread().interrupt();
             throw new RuntimeException("获取分布式锁被中断", e);
         } finally {
-            if(locked) {
+            if(locked&&useToken){
+                semaphore.release();
+            }else if(locked){
                 mLock.unlock();
             }
+            clear();
         }
     }
     /**
@@ -885,18 +941,52 @@ public class SafeCacheTemplate {
                 .sorted()
                 .distinct() //去重 否则死锁！
                 .toList();
-        RLock[] locks = new RLock[nullKeys.size()];
-        for (int idx = 0; idx < nullKeys.size(); idx++) {
-            locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+        RSemaphore semaphore=null;
+        RLock mLock=null;
+        RLock[] locks=null;
+        //新架构思路 唯一令牌批量获取
+        boolean useToken=nullKeys.size()>batchSize;
+        if(useToken) {
+            semaphore = redissonClient.getSemaphore(token);
+            semaphore.trySetPermits(10); // 最多 10 个并发加载
+        }else {
+            locks = new RLock[nullKeys.size()];
+            for (int idx = 0; idx < nullKeys.size(); idx++) {
+                locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+            }
+            mLock = redissonClient.getMultiLock(locks);
         }
-        RLock mLock=redissonClient.getMultiLock(locks);
         boolean locked=false;
         try {
             // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
-            locked = mLock.tryLock(2, 10, TimeUnit.SECONDS);
+            locked =useToken? semaphore.tryAcquire():mLock.tryLock(2, 10, TimeUnit.SECONDS);
             if (!locked) {
-                //TODO
-                throw new RuntimeException("获取分布式锁超时，keys: " +"");
+                if(useToken){
+                    throw new RuntimeException("获取令牌超时,令牌：" + token);
+                }else {
+                    String failedKeys = java.util.Arrays.stream(locks)
+                            .filter(lock -> {
+                                try {
+                                    // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
+                                    // 这里简单判断，更准确的是去 Redis 查 TTL
+                                    return lock.isLocked();
+                                } catch (Exception e) {
+                                    return true;
+                                }
+                            })
+                            .map(RLock::getName)
+                            .collect(Collectors.joining(", "));
+
+                    // 记录详细日志
+                    System.err.println("获取分布式锁超时！等待5秒仍未成功。");
+                    System.err.println("请求锁列表: " + nullKeys);
+                    System.err.println("疑似被占用的锁: " + failedKeys);
+
+
+                    // 可选：去 Redis 检查这些 Key 的剩余时间
+                    // 这里抛出异常或进行降级处理
+                    throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
+                }
             }
 
             // 3. 双重检查：可能其他线程已加载
@@ -936,7 +1026,9 @@ public class SafeCacheTemplate {
             Thread.currentThread().interrupt();
             throw new RuntimeException("获取分布式锁被中断", e);
         } finally {
-            if(locked) {
+            if(locked&&useToken){
+                semaphore.release();
+            }else if(locked){
                 mLock.unlock();
             }
             clear();
@@ -975,18 +1067,52 @@ public class SafeCacheTemplate {
                 .sorted()
                 .distinct() //去重 否则死锁！
                 .toList();
-        RLock[] locks = new RLock[nullKeys.size()];
-        for (int idx = 0; idx < nullKeys.size(); idx++) {
-            locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+        RSemaphore semaphore=null;
+        RLock mLock=null;
+        RLock[] locks=null;
+        //新架构思路 唯一令牌批量获取
+        boolean useToken=nullKeys.size()>batchSize;
+        if(useToken) {
+            semaphore = redissonClient.getSemaphore(token);
+            semaphore.trySetPermits(10); // 最多 10 个并发加载
+        }else {
+            locks = new RLock[nullKeys.size()];
+            for (int idx = 0; idx < nullKeys.size(); idx++) {
+                locks[idx] = redissonClient.getLock(nullKeys.get(idx));
+            }
+            mLock = redissonClient.getMultiLock(locks);
         }
-        RLock mLock=redissonClient.getMultiLock(locks);
         boolean locked=false;
         try {
             // 尝试获取锁：最多等待 2 秒，持有锁最多 10 秒（防死锁）
-            locked = mLock.tryLock(2, 10, TimeUnit.SECONDS);
+            locked =useToken? semaphore.tryAcquire():mLock.tryLock(2, 10, TimeUnit.SECONDS);
             if (!locked) {
-                //TODO
-                throw new RuntimeException("获取分布式锁超时，keys: " +"");
+                if(useToken){
+                    throw new RuntimeException("获取令牌超时,令牌：" + token);
+                }else {
+                    String failedKeys = java.util.Arrays.stream(locks)
+                            .filter(lock -> {
+                                try {
+                                    // 检查锁是否被持有 (注意：isLocked 是本地缓存还是远程查询取决于版本，最好查 Redis)
+                                    // 这里简单判断，更准确的是去 Redis 查 TTL
+                                    return lock.isLocked();
+                                } catch (Exception e) {
+                                    return true;
+                                }
+                            })
+                            .map(RLock::getName)
+                            .collect(Collectors.joining(", "));
+
+                    // 记录详细日志
+                    System.err.println("获取分布式锁超时！等待5秒仍未成功。");
+                    System.err.println("请求锁列表: " + nullKeys);
+                    System.err.println("疑似被占用的锁: " + failedKeys);
+
+
+                    // 可选：去 Redis 检查这些 Key 的剩余时间
+                    // 这里抛出异常或进行降级处理
+                    throw new RuntimeException("获取分布式锁超时，冲突锁: " + failedKeys);
+                }
             }
 
             // 3. 双重检查：可能其他线程已加载
@@ -1027,7 +1153,9 @@ public class SafeCacheTemplate {
             Thread.currentThread().interrupt();
             throw new RuntimeException("获取分布式锁被中断", e);
         } finally {
-            if(locked) {
+            if(locked&&useToken){
+                semaphore.release();
+            }else if(locked){
                 mLock.unlock();
             }
             clear();
