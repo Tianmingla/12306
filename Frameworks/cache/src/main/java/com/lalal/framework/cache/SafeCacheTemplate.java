@@ -43,7 +43,7 @@ public class SafeCacheTemplate {
 
     private RedissonClient redissonClient;
 
-    private ValueRedisSerializer defaultValueSerializer;
+    private static ValueRedisSerializer defaultValueSerializer;
     private int batchSize=5; //大于这个的 走全局唯一批量获取令牌
     private String token="semaphore:batch:token"; //实际可以在根据类型细分令牌
     //多线程环境 线程独有  TODO在哪里清除 java spring为线程池环境
@@ -53,18 +53,22 @@ public class SafeCacheTemplate {
             return RedisType.VALUE; // 设置默认值
         }
     };;
-    private ValueRedisSerializer  curValueSerializer;
+    private static final ThreadLocal<ValueRedisSerializer>  curValueSerializer=new ThreadLocal<ValueRedisSerializer>(){
+        @Override
+        protected ValueRedisSerializer initialValue(){
+            return defaultValueSerializer;
+        }
+    };
 
 
     public SafeCacheTemplate(RedisTemplate<String, Object> redisTemplate,RedissonClient redissonClient,ValueRedisSerializer defaultValueSerializer){
         this.redisTemplate=redisTemplate;
         this.redissonClient=redissonClient;
-        this.defaultValueSerializer=defaultValueSerializer;
-        this.curValueSerializer=defaultValueSerializer;
+        SafeCacheTemplate.defaultValueSerializer=defaultValueSerializer;
     }
 
     public SafeCacheTemplate setDefaultValueSerializer(){
-        curValueSerializer=defaultValueSerializer;
+        curValueSerializer.set(defaultValueSerializer);
         return this;
     }
     private static void clear(){
@@ -76,12 +80,12 @@ public class SafeCacheTemplate {
      * @return
      */
     public SafeCacheTemplate setCustomizedSerializer(ValueRedisSerializer redisSerializer){
-        curValueSerializer=redisSerializer;
+        curValueSerializer.set(redisSerializer);
         return this;
     }
 
     public SafeCacheTemplate setRawValueSerializer(){
-        curValueSerializer=new RawRedisSerializer();
+        curValueSerializer.set(new RawRedisSerializer());
         return this;
     }
     // ============ 基础缓存操作（保持兼容）============
@@ -94,7 +98,7 @@ public class SafeCacheTemplate {
             //在switch中 连续递增的值编译器处理是o(1)的
             switch (redisTypeHolder.get()){
                 case VALUE:
-                    connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.serialize(value));
+                    connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.get().serialize(value));
                     break;
                 case HASH:
                     //TODO
@@ -104,7 +108,7 @@ public class SafeCacheTemplate {
                     int size=valueList.size();
                     byte[][] valueListBytes=new byte[size][];
                     for(int i=0;i<size;i++){
-                        valueListBytes[i]= curValueSerializer.serialize(valueList.get(i));
+                        valueListBytes[i]= curValueSerializer.get().serialize(valueList.get(i));
                     }
                     connection.rPush(keyBytes,valueListBytes);
                     connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
@@ -163,7 +167,7 @@ public class SafeCacheTemplate {
                 case VALUE:
                     for(int i=0;i<keys.size();i++){
                         byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
-                        connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.serialize(values.get(i)));
+                        connection.setEx(keyBytes,unit.toSeconds(timeout),curValueSerializer.get().serialize(values.get(i)));
                     }
                     break;
                 case HASH:
@@ -176,7 +180,7 @@ public class SafeCacheTemplate {
                         byte[][] valueListBytes=new byte[size][];
                         byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
                         for(int j=0;j<size;j++){
-                            valueListBytes[j]= curValueSerializer.serialize(valueList.get(j));
+                            valueListBytes[j]= curValueSerializer.get().serialize(valueList.get(j));
                         }
                         connection.rPush(keyBytes,valueListBytes);
                         connection.keyCommands().expire(keyBytes,unit.toSeconds(timeout));
@@ -202,7 +206,7 @@ public class SafeCacheTemplate {
             if(valueBytes==null){
                 return null;
             }
-            result=curValueSerializer.deserialize(valueBytes,typeReference);
+            result=curValueSerializer.get().deserialize(valueBytes,typeReference);
             return result;
         });
     }
@@ -215,7 +219,7 @@ public class SafeCacheTemplate {
                 return null;
             }
             for(byte[] valueByte:valueBytes){
-                result.add(curValueSerializer.deserialize(valueByte,typeReference));
+                result.add(curValueSerializer.get().deserialize(valueByte,typeReference));
             }
             return result;
         });
@@ -255,7 +259,7 @@ public class SafeCacheTemplate {
             if (obj == null) {
                 results.add(null);
             } else {
-                T value = curValueSerializer.deserialize((byte[]) obj, typeRef);
+                T value = curValueSerializer.get().deserialize((byte[]) obj, typeRef);
                 results.add(value);
             }
         }
@@ -349,7 +353,7 @@ public class SafeCacheTemplate {
                     if (bytes == null) {
                         innerList.add(null);
                     } else {
-                        T value = curValueSerializer.deserialize(bytes, typeReference);
+                        T value = curValueSerializer.get().deserialize(bytes, typeReference);
                         innerList.add(value);
                     }
                 }

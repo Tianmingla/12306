@@ -4,11 +4,13 @@ import com.lalal.modules.dto.transfer.TransferRouteResult;
 import com.lalal.modules.dto.transfer.TransferSegment;
 import com.lalal.modules.graph.*;
 import com.lalal.modules.service.TransferSearchService;
+import com.lalal.modules.service.impl.LocalGraphBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -24,6 +26,9 @@ import java.util.*;
 public class TransferTestController {
 
     private final TransferSearchService transferSearchService;
+    private final LocalGraphBuilder localGraphBuilder;
+
+    private static TransitGraph graph =null;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -39,11 +44,6 @@ public class TransferTestController {
     public Map<String, Object> testDijkstra() {
         log.info("测试 Dijkstra 算法");
 
-        // 构建测试图
-        TransitGraph graph = buildTestGraph();
-
-        // 打印图结构
-        graph.printGraph();
 
         // 执行 Dijkstra 搜索
         TransitDijkstra dijkstra = new TransitDijkstra(graph);
@@ -87,7 +87,6 @@ public class TransferTestController {
     public Map<String, Object> testAStar() {
         log.info("测试 A* 算法");
 
-        TransitGraph graph = buildTestGraph();
 
         TransitAStar aStar = new TransitAStar(graph);
 
@@ -175,9 +174,7 @@ public class TransferTestController {
      */
     @GetMapping("/formatted")
     public Map<String, Object> testFormattedRoutes() {
-        TransitGraph graph = buildTestGraph();
         TransitAStar aStar = new TransitAStar(graph);
-
         List<TransitAStar.AStarResult> results = aStar.aStarMulti(
                 "北京",
                 LocalDateTime.of(2024, 1, 1, 8, 0),
@@ -209,8 +206,7 @@ public class TransferTestController {
      */
     @GetMapping("/graph")
     public Map<String, Object> printGraph() {
-        TransitGraph graph = buildTestGraph();
-
+        graph=buildTestGraph();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("nodes", graph.nodeCount());
         response.put("edges", graph.edgeCount());
@@ -248,77 +244,78 @@ public class TransferTestController {
     private TransitGraph buildTestGraph() {
         TransitGraph graph = new TransitGraph();
 
-        // G1: 北京 → 武汉 (08:00 → 12:00, 4h, ¥300)
-        graph.addTrainEdge("G1", 0, "北京",
-                LocalDateTime.of(2024, 1, 1, 8, 0),
-                "武汉",
-                LocalDateTime.of(2024, 1, 1, 12, 0),
-                Arrays.asList(1, 2, 3),
-                Arrays.asList(
-                        new TrainEdge.SeatPrice(1, new BigDecimal(300)),  // 二等座
-                        new TrainEdge.SeatPrice(2, new BigDecimal(500)),  // 一等座
-                        new TrainEdge.SeatPrice(3, new BigDecimal(900))   // 商务座
-                ),
-                Arrays.asList(
-                        new TrainEdge.SeatRemaining(1, 100),
-                        new TrainEdge.SeatRemaining(2, 50),
-                        new TrainEdge.SeatRemaining(3, 10)
-                ));
-
-        // G2: 武汉 → 广州 (14:00 → 18:00, 4h, ¥400)
-        graph.addTrainEdge("G2", 0, "武汉",
-                LocalDateTime.of(2024, 1, 1, 14, 0),
-                "广州",
-                LocalDateTime.of(2024, 1, 1, 18, 0),
-                Arrays.asList(1, 2, 3),
-                Arrays.asList(
-                        new TrainEdge.SeatPrice(1, new BigDecimal(400)),
-                        new TrainEdge.SeatPrice(2, new BigDecimal(700)),
-                        new TrainEdge.SeatPrice(3, new BigDecimal(1200))
-                ),
-                Arrays.asList(
-                        new TrainEdge.SeatRemaining(1, 80),
-                        new TrainEdge.SeatRemaining(2, 30),
-                        new TrainEdge.SeatRemaining(3, 5)
-                ));
-
-        // G3: 北京 → 长沙 (09:00 → 13:00, 4h, ¥250)
-        graph.addTrainEdge("G3", 0, "北京",
-                LocalDateTime.of(2024, 1, 1, 9, 0),
-                "长沙",
-                LocalDateTime.of(2024, 1, 1, 13, 0),
-                Arrays.asList(1, 2),
-                Arrays.asList(
-                        new TrainEdge.SeatPrice(1, new BigDecimal(250)),
-                        new TrainEdge.SeatPrice(2, new BigDecimal(450))
-                ),
-                Arrays.asList(
-                        new TrainEdge.SeatRemaining(1, 120),
-                        new TrainEdge.SeatRemaining(2, 60)
-                ));
-
-        // G4: 长沙 → 广州 (15:00 → 19:00, 4h, ¥350)
-        graph.addTrainEdge("G4", 0, "长沙",
-                LocalDateTime.of(2024, 1, 1, 15, 0),
-                "广州",
-                LocalDateTime.of(2024, 1, 1, 19, 0),
-                Arrays.asList(1, 2, 3),
-                Arrays.asList(
-                        new TrainEdge.SeatPrice(1, new BigDecimal(350)),
-                        new TrainEdge.SeatPrice(2, new BigDecimal(600)),
-                        new TrainEdge.SeatPrice(3, new BigDecimal(1000))
-                ),
-                Arrays.asList(
-                        new TrainEdge.SeatRemaining(1, 90),
-                        new TrainEdge.SeatRemaining(2, 40),
-                        new TrainEdge.SeatRemaining(3, 8)
-                ));
-
-        // 添加换乘等待边
-        graph.addTransferWaitEdges("北京");
-        graph.addTransferWaitEdges("武汉");
-        graph.addTransferWaitEdges("长沙");
-        graph.addTransferWaitEdges("广州");
+        graph=localGraphBuilder.buildFullGraph(LocalDate.now());
+//        // G1: 北京 → 武汉 (08:00 → 12:00, 4h, ¥300)
+//        graph.addTrainEdge("G1", 0, "北京",
+//                LocalDateTime.of(2024, 1, 1, 8, 0),
+//                "武汉",
+//                LocalDateTime.of(2024, 1, 1, 12, 0),
+//                Arrays.asList(1, 2, 3),
+//                Arrays.asList(
+//                        new TrainEdge.SeatPrice(1, new BigDecimal(300)),  // 二等座
+//                        new TrainEdge.SeatPrice(2, new BigDecimal(500)),  // 一等座
+//                        new TrainEdge.SeatPrice(3, new BigDecimal(900))   // 商务座
+//                ),
+//                Arrays.asList(
+//                        new TrainEdge.SeatRemaining(1, 100),
+//                        new TrainEdge.SeatRemaining(2, 50),
+//                        new TrainEdge.SeatRemaining(3, 10)
+//                ));
+//
+//        // G2: 武汉 → 广州 (14:00 → 18:00, 4h, ¥400)
+//        graph.addTrainEdge("G2", 0, "武汉",
+//                LocalDateTime.of(2024, 1, 1, 14, 0),
+//                "广州",
+//                LocalDateTime.of(2024, 1, 1, 18, 0),
+//                Arrays.asList(1, 2, 3),
+//                Arrays.asList(
+//                        new TrainEdge.SeatPrice(1, new BigDecimal(400)),
+//                        new TrainEdge.SeatPrice(2, new BigDecimal(700)),
+//                        new TrainEdge.SeatPrice(3, new BigDecimal(1200))
+//                ),
+//                Arrays.asList(
+//                        new TrainEdge.SeatRemaining(1, 80),
+//                        new TrainEdge.SeatRemaining(2, 30),
+//                        new TrainEdge.SeatRemaining(3, 5)
+//                ));
+//
+//        // G3: 北京 → 长沙 (09:00 → 13:00, 4h, ¥250)
+//        graph.addTrainEdge("G3", 0, "北京",
+//                LocalDateTime.of(2024, 1, 1, 9, 0),
+//                "长沙",
+//                LocalDateTime.of(2024, 1, 1, 13, 0),
+//                Arrays.asList(1, 2),
+//                Arrays.asList(
+//                        new TrainEdge.SeatPrice(1, new BigDecimal(250)),
+//                        new TrainEdge.SeatPrice(2, new BigDecimal(450))
+//                ),
+//                Arrays.asList(
+//                        new TrainEdge.SeatRemaining(1, 120),
+//                        new TrainEdge.SeatRemaining(2, 60)
+//                ));
+//
+//        // G4: 长沙 → 广州 (15:00 → 19:00, 4h, ¥350)
+//        graph.addTrainEdge("G4", 0, "长沙",
+//                LocalDateTime.of(2024, 1, 1, 15, 0),
+//                "广州",
+//                LocalDateTime.of(2024, 1, 1, 19, 0),
+//                Arrays.asList(1, 2, 3),
+//                Arrays.asList(
+//                        new TrainEdge.SeatPrice(1, new BigDecimal(350)),
+//                        new TrainEdge.SeatPrice(2, new BigDecimal(600)),
+//                        new TrainEdge.SeatPrice(3, new BigDecimal(1000))
+//                ),
+//                Arrays.asList(
+//                        new TrainEdge.SeatRemaining(1, 90),
+//                        new TrainEdge.SeatRemaining(2, 40),
+//                        new TrainEdge.SeatRemaining(3, 8)
+//                ));
+//
+//        // 添加换乘等待边
+//        graph.addTransferWaitEdges("北京");
+//        graph.addTransferWaitEdges("武汉");
+//        graph.addTransferWaitEdges("长沙");
+//        graph.addTransferWaitEdges("广州");
 
         return graph;
     }

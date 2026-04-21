@@ -19,10 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -198,10 +195,21 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         List<String> cacheKeys = new ArrayList<>(trainIds.size());
         List<Object[]> disArgs=new ArrayList<>(trainIds.size());
 
+        //去重
+        List<Integer> index=new ArrayList<>();
+        Set<String> set=new HashSet<>();
         for(int i=0;i<trainIds.size();i++){
-            cacheKeys.add(CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
-                    arrivalStations.get(i)));
-            Object[] objects={trainIds.get(i),departureStations.get(i),arrivalStations.get(i)};
+            String key=CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
+                    arrivalStations.get(i));
+            if(!set.contains(key)){
+                set.add(key);
+                index.add(i);
+                cacheKeys.add(key);
+            }
+        }
+
+        for(int i=0;i<index.size();i++){
+            Object[] objects={trainIds.get(index.get(i)),departureStations.get(index.get(i)),arrivalStations.get(index.get(i))};
             disArgs.add(objects);
         }
 
@@ -210,8 +218,8 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                 (args) -> {
                     Map<String,Integer> idx=new HashMap<>();
                     List<Long> trainIds_=args.stream().map(arg->(Long)arg[0]).toList();
-                    List<Long> departureStations_=args.stream().map(arg->(Long)arg[1]).toList();
-                    List<Long> arrivalStations_=args.stream().map(arg->(Long)arg[2]).toList();
+                    List<String> departureStations_=args.stream().map(arg->(String)arg[1]).toList();
+                    List<String> arrivalStations_=args.stream().map(arg->(String)arg[2]).toList();
                     List<Integer> results=new ArrayList<>(disArgs.size());
                     for(int i=0;i<args.size();i++){
                         String key = trainIds_.get(i) + "_" + departureStations_.get(i) + "_" + arrivalStations_.get(i);
@@ -221,10 +229,18 @@ public class FareCalculationServiceImpl implements FareCalculationService {
 
                     LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper=new LambdaQueryWrapper<StationDistanceDO>()
                             .select(StationDistanceDO::getTrainId,StationDistanceDO::getDistance,StationDistanceDO::getDepartureStationName,StationDistanceDO::getArrivalStationName)
-                            .in(StationDistanceDO::getTrainId,trainIds_)
-                            .in(StationDistanceDO::getDepartureStationName,departureStations_)
-                            .in(StationDistanceDO::getArrivalStationName,arrivalStations_)
-                            .eq(StationDistanceDO::getDelFlag,0);
+                            .eq(StationDistanceDO::getDelFlag,0)
+                            .and(w->{
+                                for(int i=0;i<args.size();i++){
+                                    final int j=i;
+                                    w.or(o->{
+                                        o.eq(StationDistanceDO::getTrainId,trainIds_.get(j));
+                                        o.eq(StationDistanceDO::getDepartureStationName,departureStations_.get(j));
+                                        o.eq(StationDistanceDO::getArrivalStationName,arrivalStations_.get(j));
+                                    });
+                                }
+                            });
+
                     List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
                     for(StationDistanceDO sd:dbResult){
                         String key = sd.getTrainId() + "_" +sd.getDepartureStationName() + "_" + sd.getArrivalStationName();
