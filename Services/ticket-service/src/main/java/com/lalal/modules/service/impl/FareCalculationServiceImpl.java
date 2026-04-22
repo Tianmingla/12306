@@ -226,23 +226,30 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                         idx.put(key,i);
                         results.add(null);
                     }
+                    //这里批次太大了 数据库查询直接崩了 分批次
+                    int batchSize=5000;
+                    List<StationDistanceDO> dbResults=new ArrayList<>(args.size());
+                    for(int i=0;i<args.size();i+=batchSize) {
+                        int finalI = i;
+                        LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
+                                .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
+                                .eq(StationDistanceDO::getDelFlag, 0)
+                                .and(w -> {
+                                    for (int z = finalI; z < Math.min(finalI+1000,args.size()); z++) {
+                                        final int j = z;
+                                        w.or(o -> {
+                                            o.eq(StationDistanceDO::getTrainId, trainIds_.get(j));
+                                            o.eq(StationDistanceDO::getDepartureStationName, departureStations_.get(j));
+                                            o.eq(StationDistanceDO::getArrivalStationName, arrivalStations_.get(j));
+                                        });
+                                    }
+                                });
 
-                    LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper=new LambdaQueryWrapper<StationDistanceDO>()
-                            .select(StationDistanceDO::getTrainId,StationDistanceDO::getDistance,StationDistanceDO::getDepartureStationName,StationDistanceDO::getArrivalStationName)
-                            .eq(StationDistanceDO::getDelFlag,0)
-                            .and(w->{
-                                for(int i=0;i<args.size();i++){
-                                    final int j=i;
-                                    w.or(o->{
-                                        o.eq(StationDistanceDO::getTrainId,trainIds_.get(j));
-                                        o.eq(StationDistanceDO::getDepartureStationName,departureStations_.get(j));
-                                        o.eq(StationDistanceDO::getArrivalStationName,arrivalStations_.get(j));
-                                    });
-                                }
-                            });
+                        List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
+                        dbResults.addAll(dbResult);
+                    }
 
-                    List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
-                    for(StationDistanceDO sd:dbResult){
+                    for(StationDistanceDO sd:dbResults){
                         String key = sd.getTrainId() + "_" +sd.getDepartureStationName() + "_" + sd.getArrivalStationName();
                         results.set(idx.get(key),sd.getDistance());
                     }
@@ -254,10 +261,13 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                 TimeUnit.HOURS
         );
         Map<String,Integer> batchResult=new HashMap<>();
-        for(int i=0;i<trainIds.size();i++){
-            String key = trainIds.get(i) + "_" + departureStations.get(i) + "_" + arrivalStations.get(i);
+
+        for(int i=0;i<index.size();i++){
+            int j=index.get(i);
+            String key = trainIds.get(j) + "_" + departureStations.get(j) + "_" + arrivalStations.get(j);
             batchResult.put(key,result.get(i));
         }
+
         return batchResult;
     }
 
