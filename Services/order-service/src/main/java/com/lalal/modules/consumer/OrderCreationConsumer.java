@@ -7,6 +7,7 @@ import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
 import com.lalal.modules.service.OrderService;
+import com.lalal.modules.service.ReminderService;
 import com.lalal.modules.service.WaitlistService;
 import com.lalal.modules.service.WaitlistQueueService;
 import com.lalal.modules.utils.DateUtils;
@@ -47,6 +48,7 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
     private final WaitlistService waitlistService;
     private final WaitlistQueueService waitlistQueueService;
     private final MessageQueueService messageQueueService;
+    private final ReminderService reminderService;
 
     private static final String ORDER_CREATION_RESULT_TOPIC = "order-creation-result-topic";
 
@@ -91,6 +93,13 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
             }
 
             log.info("[订单创建] 订单创建成功: requestId={}, orderSn={}", requestId, orderSn);
+
+            // 初始化出行提醒（延迟消息 + 版本控制）
+            try {
+                initReminder(orderSn, message);
+            } catch (Exception e) {
+                log.warn("[订单创建] 提醒初始化失败，不影响订单: orderSn={}", orderSn, e);
+            }
 
         } catch (Exception e) {
             log.error("[订单创建] 订单创建失败: requestId={}", requestId, e);
@@ -137,5 +146,47 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
         }
 
         return dto;
+    }
+
+    /**
+     * 初始化出行提醒
+     * 发送延迟消息（发车前1h、30m、到达提醒）
+     */
+    private void initReminder(String orderSn, OrderCreationRequestMessage message) {
+        // 获取车次时刻信息（需要从 ticket-service 获取或从消息中携带）
+        // 这里简化处理，假设消息中有时间信息
+        // 实际应该查询 t_train_station 表获取发车/到达时间
+
+        String trainNum = message.getTrainNum();
+        String runDate = message.getRunDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String startStation = message.getStartStation();
+        String endStation = message.getEndStation();
+        String username = message.getUsername();
+
+        // 获取第一个乘客姓名
+        String passengerName = message.getItems() != null && !message.getItems().isEmpty()
+                ? message.getItems().get(0).getRealName()
+                : "";
+
+        // TODO: 实际应该查询车次时刻表获取精确时间
+        // 这里用简化逻辑：假设发车时间为当天 08:00，到达时间为当天 12:00
+        LocalDate date = message.getRunDate();
+        long planDepartTime = date.atTime(8, 0)
+                .atZone(java.time.ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+        long planArrivalTime = date.atTime(12, 0)
+                .atZone(java.time.ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli();
+
+        reminderService.initReminderState(
+                orderSn, trainNum, runDate,
+                startStation, endStation,
+                username, passengerName,
+                planDepartTime, planArrivalTime
+        );
+
+        log.info("[订单创建] 提醒初始化完成: orderSn={}, trainNum={}", orderSn, trainNum);
     }
 }

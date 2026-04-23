@@ -214,6 +214,38 @@ public class CacheConstant {
     public static final String TRAIN_FARE_CONFIG_KEY_TEMPLATE = "FARE::CONFIG::%s";
     public static final String PRE_CALCULATED_FARE_KEY_TEMPLATE = "FARE::PRE::%s::%s::%s::%d";
 
+    /* ==================== 出行提醒相关缓存Key ==================== */
+
+    public static final String REMINDER_STATE_KEY_TEMPLATE = "REMINDER::STATE::%s";
+    public static final String TRAIN_DELAY_KEY_TEMPLATE = "TRAIN::DELAY::%s::%s";
+
+    /**
+     * 构建提醒状态缓存Key
+     *
+     * @param orderSn 订单号
+     * @return 缓存Key字符串
+     */
+    public static String reminderStateKey(String orderSn) {
+        if (orderSn == null || orderSn.isEmpty()) {
+            throw new IllegalArgumentException("订单号不能为空");
+        }
+        return String.format(REMINDER_STATE_KEY_TEMPLATE, orderSn);
+    }
+
+    /**
+     * 构建列车晚点状态缓存Key
+     *
+     * @param trainNumber 车次号
+     * @param date 乘车日期 (yyyy-MM-dd)
+     * @return 缓存Key字符串
+     */
+    public static String trainDelayKey(String trainNumber, String date) {
+        if (trainNumber == null || trainNumber.isEmpty() || date == null || date.isEmpty()) {
+            throw new IllegalArgumentException("车次号和日期不能为空");
+        }
+        return String.format(TRAIN_DELAY_KEY_TEMPLATE, trainNumber, date);
+    }
+
     /**
      * 构建站间距离缓存Key
      *
