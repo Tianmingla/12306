@@ -28,11 +28,16 @@ public class BusinessClassSelectionStrategy extends AbstractSeatSelectionStrateg
         int seatCount = carriage.getSeatCount();
         int numNeeded = request.getPassengers().size();
         SeatLayout layout = getLayout();
+        //如果有余应该加一行
         int rows = seatCount / layout.getSeatsPerRow();
         
         List<int[]> candidates = new ArrayList<>();
         for (int i = 1; i <= rows; i++) {
             candidates.addAll(layout.getAdjacentGroups(i, numNeeded));
+        }
+        int mod=seatCount%layout.getSeatsPerRow();
+        if(mod>0){
+            candidates.addAll(layout.getModGroups(rows+1,numNeeded,mod));
         }
         return candidates;
     }

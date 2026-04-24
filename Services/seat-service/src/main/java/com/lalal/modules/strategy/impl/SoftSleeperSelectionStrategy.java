@@ -34,6 +34,10 @@ public class SoftSleeperSelectionStrategy extends AbstractSeatSelectionStrategy 
         for (int i = 1; i <= compartments; i++) {
             candidates.addAll(layout.getAdjacentGroups(i, numNeeded));
         }
+        int mod=seatCount%layout.getSeatsPerRow();
+        if(mod>0){
+            candidates.addAll(layout.getModGroups(compartments+1,numNeeded,mod));
+        }
         return candidates;
     }
 

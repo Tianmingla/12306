@@ -34,6 +34,10 @@ public class SoftSeatSelectionStrategy extends AbstractSeatSelectionStrategy {
         for (int i = 1; i <= rows; i++) {
             candidates.addAll(layout.getAdjacentGroups(i, numNeeded));
         }
+        int mod=seatCount%layout.getSeatsPerRow();
+        if(mod>0){
+            candidates.addAll(layout.getModGroups(rows+1,numNeeded,mod));
+        }
         return candidates;
     }
 

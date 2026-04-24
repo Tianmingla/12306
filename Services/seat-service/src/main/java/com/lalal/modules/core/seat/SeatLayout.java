@@ -4,6 +4,7 @@ import lombok.Getter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -80,6 +81,37 @@ public class SeatLayout {
 
         // 简单的滑动窗口检查连通性
         for (int i = 0; i <= seatsPerRow - count; i++) {
+            boolean continuous = true;
+            for (int j = i; j < i + count - 1; j++) {
+                if (!adjacencyMatrix[j][j + 1]) {
+                    continuous = false;
+                    break;
+                }
+            }
+            if (continuous) {
+                int[] group = new int[count];
+                for (int j = 0; j < count; j++) {
+                    group[j] = startIdx + i + j;
+                }
+                groups.add(group);
+            }
+        }
+        return groups;
+    }
+    public List<int[]> getModGroups(int row, int count, int mod) {
+
+        List<int[]> groups = new ArrayList<>();
+        int startIdx = (row - 1) * seatsPerRow;
+
+        if (count == 1) {
+            for (int i = 0; i < mod; i++) {
+                groups.add(new int[]{startIdx + i});
+            }
+            return groups;
+        }
+
+        // 简单的滑动窗口检查连通性
+        for (int i = 0; i <= mod - count; i++) {
             boolean continuous = true;
             for (int j = i; j < i + count - 1; j++) {
                 if (!adjacencyMatrix[j][j + 1]) {
