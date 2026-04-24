@@ -74,17 +74,22 @@ BATCH_SIZE = 200
 
 
 # =============================================================================
-# 座位类型枚举（与数据库 t_seat.seat_type 对应）
+# 座位类型枚举（严格对齐 Java SeatType.java）
 # =============================================================================
 
-SEAT_TYPE_BUSINESS = 3      # 商务座
-SEAT_TYPE_FIRST_CLASS = 2   # 一等座
-SEAT_TYPE_SECOND_CLASS = 1  # 二等座
-SEAT_TYPE_HARD_SEAT = 0     # 硬座
-SEAT_TYPE_SOFT_SLEEPER = 6  # 软卧
-SEAT_TYPE_HARD_SLEEPER = 5  # 硬卧
+# 高铁/动车座位类型
+SEAT_TYPE_SECOND_CLASS = 0  # 二等座
+SEAT_TYPE_FIRST_CLASS = 1   # 一等座
+SEAT_TYPE_BUSINESS = 2      # 商务座
 
-# 车厢类型枚举
+# 普通列车座位类型
+SEAT_TYPE_SOFT_SLEEPER = 3  # 软卧
+SEAT_TYPE_HARD_SLEEPER = 4  # 硬卧
+SEAT_TYPE_HARD_SEAT = 5     # 硬座
+SEAT_TYPE_NO_SEAT = 6       # 无座
+SEAT_TYPE_SOFT_SEAT = 7     # 软座
+
+# 车厢类型枚举（对齐数据库 t_carriage.carriage_type）
 CARRIAGE_TYPE_NORMAL = 0    # 普通车厢
 CARRIAGE_TYPE_BED = 1       # 卧铺车厢
 CARRIAGE_TYPE_BUSINESS = 2  # 商务车厢
@@ -189,104 +194,114 @@ def generate_sleeper_numbers(total_seats: int, is_soft: bool) -> List[str]:
 
 # =============================================================================
 # 列车配置规则（按车次类型定义车厢布局）
+# 车厢类型根据座位类型自动推导：
+#   - 商务座 → CARRIAGE_TYPE_BUSINESS (2)
+#   - 卧铺（软卧/硬卧）→ CARRIAGE_TYPE_BED (1)
+#   - 其他 → CARRIAGE_TYPE_NORMAL (0)
 # =============================================================================
+
+def get_carriage_type_by_seat_type(seat_type: int) -> int:
+    """根据座位类型推导车厢类型"""
+    return seat_type
 
 # 高铁 8 节编组（复兴号 CR400）
 G_HIGH_SPEED_8 = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_BUSINESS, "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},  # 1 节商务座
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 28},  # 1 节一等座
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},  # 二等座
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},  # 二等座
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},  # 二等座
-    {"carriage_number": "06", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},  # 二等座
-    {"carriage_number": "07", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},  # 二等座
-    {"carriage_number": "08", "carriage_type": CARRIAGE_TYPE_BUSINESS, "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 64},  # 1 节商务座/二等座合造
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},  # 商务座
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 28},  # 一等座
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "06", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "07", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "08", "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 64},  # 商务座/二等座合造
 ]
 
 # 高铁 16 节长编组（和谐号 CRH380）
 G_HIGH_SPEED_16 = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_BUSINESS, "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 28},
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "06", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "07", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "08", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "09", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "10", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "11", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "12", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "13", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "14", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
-    {"carriage_number": "15", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 56},  # 长编组增加一等座
-    {"carriage_number": "16", "carriage_type": CARRIAGE_TYPE_BUSINESS, "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 28},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "06", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "07", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "08", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "09", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "10", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "11", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "12", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "13", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "14", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "15", "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 56},
+    {"carriage_number": "16", "seat_type": SEAT_TYPE_BUSINESS, "seat_count": 55},
 ]
 
 # 城际 C 型（短编全二等座）
 C_INTERCITY_8 = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "06", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "07", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
-    {"carriage_number": "08", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "06", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "07", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
+    {"carriage_number": "08", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 100},
 ]
 
 # 动车 D 型（8 节编组）
 D_EMU_8 = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 40},  # 一等座
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},  # 二等座
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
-    {"carriage_number": "06", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
-    {"carriage_number": "07", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
-    {"carriage_number": "08", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_FIRST_CLASS, "seat_count": 40},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "06", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "07", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
+    {"carriage_number": "08", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 86},
 ]
 
 # 直达特快 Z 型（25T 型）
 Z_DIRECT_EXPRESS = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_SOFT_SLEEPER, "seat_count": 32},   # 软卧 1 节
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},   # 硬卧 1 节
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "06", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},   # 硬座 1 节
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_SOFT_SLEEPER, "seat_count": 32},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "06", "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},
 ]
 
 # 特快 T 型（25K 型）
 T_EXPRESS = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_SOFT_SLEEPER, "seat_count": 32},
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "05", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_SOFT_SLEEPER, "seat_count": 32},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "05", "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},
 ]
 
 # 快速 K 型（25G 型）
 K_EXPRESS = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "02", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "03", "carriage_type": CARRIAGE_TYPE_BED, "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
-    {"carriage_number": "04", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "02", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "03", "seat_type": SEAT_TYPE_HARD_SLEEPER, "seat_count": 66},
+    {"carriage_number": "04", "seat_type": SEAT_TYPE_HARD_SEAT, "seat_count": 118},
 ]
 
 # 默认配置（未知车次类型）
 DEFAULT_LAYOUT = [
-    {"carriage_number": "01", "carriage_type": CARRIAGE_TYPE_NORMAL, "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
+    {"carriage_number": "01", "seat_type": SEAT_TYPE_SECOND_CLASS, "seat_count": 90},
 ]
 
-# 车次品牌到配置规则的映射
+# 车次品牌到配置规则的映射（严格匹配数据库 train_brand 字段）
 TRAIN_BRAND_TO_LAYOUT = {
     'G': G_HIGH_SPEED_16,  # 高铁默认使用 16 节长编组
-    'C': C_INTERCITY_8,
-    'D': D_EMU_8,
-    'Z': Z_DIRECT_EXPRESS,
-    'T': T_EXPRESS,
-    'K': K_EXPRESS,
+    'C': C_INTERCITY_8,    # 城际
+    'D': D_EMU_8,          # 动车
+    'Z': Z_DIRECT_EXPRESS, # 直达特快
+    'T': T_EXPRESS,        # 特快
+    'K': K_EXPRESS,        # 快速
+    # 兼容可能的旧数据
+    'GC': G_HIGH_SPEED_16, # 高铁城际
 }
 
 
@@ -344,9 +359,11 @@ def build_records_for_train(train_id: int, train_brand: str) -> Tuple[List[Dict]
 
     for layout_config in layout:
         carriage_number = layout_config['carriage_number']
-        carriage_type = layout_config['carriage_type']
         seat_type = layout_config['seat_type']
         seat_count = layout_config['seat_count']
+
+        # 根据座位类型自动推导车厢类型
+        carriage_type = get_carriage_type_by_seat_type(seat_type)
 
         now = datetime.now()
 
