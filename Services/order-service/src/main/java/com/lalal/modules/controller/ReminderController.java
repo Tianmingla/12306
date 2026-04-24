@@ -1,8 +1,9 @@
 package com.lalal.modules.controller;
 
 import com.lalal.modules.dto.ReminderState;
+import com.lalal.modules.enumType.ReturnCode;
+import com.lalal.modules.result.Result;
 import com.lalal.modules.service.ReminderService;
-import com.lalal.modules.vo.Result;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,7 +43,7 @@ public class ReminderController {
             @RequestParam int delayMinutes) {
 
         if (!reminderEnabled) {
-            return Result.fail("提醒功能已禁用");
+            return Result.fail("提醒功能已禁用", ReturnCode.unUse.code());
         }
 
         log.info("[晚点更新] trainNumber={}, date={}, delayMinutes={}", trainNumber, date, delayMinutes);
@@ -52,7 +53,7 @@ public class ReminderController {
             return Result.success("晚点状态已更新");
         } catch (Exception e) {
             log.error("[晚点更新] 失败", e);
-            return Result.fail("更新失败: " + e.getMessage());
+            return Result.fail("更新失败: " + e.getMessage(),ReturnCode.fail.code());
         }
     }
 
@@ -68,7 +69,7 @@ public class ReminderController {
             @RequestParam String date) {
 
         if (!reminderEnabled) {
-            return Result.fail("提醒功能已禁用");
+            return Result.fail("提醒功能已禁用", ReturnCode.unUse.code());
         }
 
         log.info("[停运更新] trainNumber={}, date={}", trainNumber, date);
@@ -78,7 +79,7 @@ public class ReminderController {
             return Result.success("停运状态已更新");
         } catch (Exception e) {
             log.error("[停运更新] 失败", e);
-            return Result.fail("更新失败: " + e.getMessage());
+            return Result.fail("更新失败: " + e.getMessage(),ReturnCode.fail.code());
         }
     }
 
@@ -91,7 +92,7 @@ public class ReminderController {
     public Result<ReminderState> getReminderState(@PathVariable String orderSn) {
         ReminderState state = reminderService.getReminderState(orderSn);
         if (state == null) {
-            return Result.fail("提醒状态不存在或已过期");
+            return Result.fail("提醒状态不存在或已过期",ReturnCode.fail.code());
         }
         return Result.success(state);
     }

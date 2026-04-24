@@ -146,7 +146,7 @@ public class ReminderServiceImpl implements ReminderService {
     @Override
     public void processReminder(ReminderMessage message) {
         String orderSn = message.getOrderSn();
-        int msgVersion = message.getVersion();
+        Integer msgVersion = message.getVersion();
 
         log.info("[提醒] 收到提醒消息: orderSn={}, type={}, version={}, triggerTime={}",
                 orderSn, message.getReminderType(), msgVersion, message.getTriggerTime());

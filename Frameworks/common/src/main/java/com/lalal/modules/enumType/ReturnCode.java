@@ -5,7 +5,7 @@ public enum ReturnCode {
     fail(404),
     unauthorized(401),
     failedAuthorized(402),
-
+    unUse(411),
     SEVER_ERROR(505);
 
     private Integer code;

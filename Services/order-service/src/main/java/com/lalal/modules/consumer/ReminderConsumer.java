@@ -31,12 +31,13 @@ import org.springframework.stereotype.Component;
     consumerGroup = "travel-reminder-consumer",
     selectorExpression = "*"
 )
-public class ReminderConsumer extends RocketMQBaseConsumer<ReminderMessage> {
+public class ReminderConsumer extends RocketMQBaseConsumer {
 
     private final ReminderService reminderService;
 
     @Override
-    protected void doProcess(ReminderMessage message) {
+    protected void doProcess(Object msg) {
+        ReminderMessage message=(ReminderMessage) msg;
         log.info("[提醒消费] 收到消息: orderSn={}, type={}, version={}",
                 message.getOrderSn(), message.getReminderType(), message.getVersion());
 
