@@ -1,20 +1,61 @@
+server:
+  port: 8083
+
 spring:
+  application:
+    name: order-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      auto-commit: true
+      connection-test-query: SELECT 1
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:nacos}:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+      password: ""
+      username: ""
 
 rocketmq:
-  name-server: ${ROCKETMQ_NAMESRV:rocketmq-namesrv}:9876
+  name-server: ${ROCKETMQ_NAMESRV:rocketmq-namesrv:9876}
+  producer:
+    group: seat-release-consumer
 
+# 支付宝开放平台（沙箱）
+alipay:
+  enabled: true
+  gateway-url: https://openapi-sandbox.dl.alipaydev.com/gateway.do
+  app-id: 9021000157633330
+  private-key: MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC4du3ETVSKPyOVx73ZDwWExcdntmBkYaseNxfmyAlNVfxw5SHGqXPjHB/ONQL18lAn3FQueUQ8R+nA4aQRy2y5eHzRLF59d2FYQRkGJmiG3CLkqb18aRPfEA84g0+kw1ljeWhCl4jzrrFtJad3K5OZAZcusL4ydCDfp+H+19f/YcMcAn/7aVWeb9qUH8e8uqp0KI4YHtHgNJz++MuP1/Xb1HfXWxYOpPn5tA+osUs76/A949GDER0GpA5radpWReX5hGWCnGbk6948FGoKz6Y3J6VyQnWQqRbArRJzHpulKgEPpzvexK4VrrAC63qq/ovgUZ/9Hcym+HZNukz+cUo/AgMBAAECggEBAKvhVUdWbvGqR3Qm/AUm9BN1XoqK62Jdh17OIx1NQy2mc2SWfFRqTKtP52rzBmE5eerKaD4tjKFGuM6a8ZALJrHjTRpy51CtTi036yNJ4pfWw0ShzQgBuRxeEHCuGiYCSGZiF/4EyP2Wx4hWT6bBGfS2ALLmyTKl9oOwIOqfIIq6bb6Py9hfFIzFIKNIidmH/94fywGoz6hPl69MBSmHrNIj30hW0SLKmbwAW6L0bk+2/lfsVGj2mNgGgv6J9IzSpp9pQZY4bd5L9AK/OoXRuzjUbLWc7bRcfpOlD/BUzcQmCv6Pz/2oTcZqbIudkzIsC3oAeCEQRQw5aUy3JsDrTbECgYEA5ezsdHswHmxb7qX6R+h+Z0frvP5XycLU1ZCp1ZMjtryxxyAHe3C6FROmjBvWG6vJilv/U7t7I24BO0AKXF78H8Wn3bqzQpeTz1IWvy833NzxD61f6BV1tC8ocFiKDItH6sZ4ZBsuLve3zGe/R5tNNHzKBGQCmwPfdFD5wMDFQ+0CgYEAzWI1IeleNkP8+d8qxLKuiRbtCOamfIbrdEvO2ISYLr9qp+DLliZOpjB9JRhDSgpOUs3Z4BS56UTt3n4H0gywPfCEyKUDz+bpsYjLR8ieNoXfQ4Srq+LOOUIPmPeoAqRiqBZph/a7Ns6lvbmzG+V2vpVbtw8Qc/sFzRkhn9FwGVsCgYEAvSJVp8Ol44DTZs6VwQ0Y3bCl1IOMh2WDWmJzskIlQK6btuc8AGjMSYYunFZRm9WGJhBjSeeQ9aYJ0UluvGlOEHyxB44K4554cjRejcozs7TzfyfpGqp8dknMhA3xETyJXjEA26gYJ36SbMxy5l5z9dco/s+d7RIUgEQUDmEEZEkCgYAmxadqI3gZnnQfZ7XXNDQmxSEyUPiVAZNpfPYrgbyI9rHXx2QnkEvAq960JgRt8cwfbaT33HHMS6rsGba4PJT43HL0vdIeaWUskrptbr4PZO5k/KK77DEqNgJjyjz5YrcNLE330Og+zHwVeP0LAyKLj/6kbD+a5YSO13O1jAAxiQKBgQCdn1K1MukyPZDb/rQzUDsKvcCTVttUTNg+CwY6of3GRDy7lhB3uhZUwASUQO5mv1cOy0qwMlt9HMVBHaw2NWsXq6v/kmeZRxXsf5f16ZXd7xMtzvaYHuaSrVnmbwfSnfVt1pyOU6sSqTZU3DuqHOcHp03wQLu2S0qRH1zu8H2o8Q==
+  alipay-public-key: |
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmu/qB2eGgNkd3LIJHWcPXbcUDpVEWDg8iQEMBxX+fZDUxCpjyO2/0g/8SHyF0NZ2zfn4UixV/4MLPQ0DMSRQlFctDHO5zA36YAYxyWXwnSxWKD6eDwRixb+KmYvNylA+JyqPKXfvs02/7DrKjLnxFY+h7KPXjPfAwQ9Rhe7pXbIse3U1ezve53VB22qO4wHv4pd3UkcvFw/32rLsxqEDDk+HfgG0AGc8mP7i1dxaLtNUFrRtZMJaA6gbEz/BNR6n35VDMVFcS3jFA8pND7PF0QwYbc8jnKwYjxgTYsASwmglg7YA7tZDHpned8HdDlVHxcA5TcFLltIb/LENDMRM+QIDAQAB
+  notify-url: http://gateway-service:8080/api/order/pay/notify
+  return-url: http://gateway-service:8080/api/order/pay/return
+  frontend-base-url: http://localhost:3000
+  sign-type: RSA2
+
+# 出行提醒配置
+reminder:
+  enabled: true
+  depart-before-1h-minutes: 60
+  depart-before-30m-minutes: 30
+
+# Actuator endpoints for monitoring
 management:
   endpoints:
     web:
@@ -27,15 +68,6 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      percentiles:
-        http.server.requests: 0.5,0.95,0.99
-  prometheus:
-    metrics:
-      export:
-        enabled: true
 
 logging:
   level:

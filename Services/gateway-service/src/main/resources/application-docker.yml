@@ -1,13 +1,46 @@
+server:
+  port: 8080
+
 spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/user/**
+        - id: ticket-service
+          uri: lb://ticket-service
+          predicates:
+            - Path=/api/ticket/**,/api/trainDetail/**
+        - id: seat-service
+          uri: lb://seat-service
+          predicates:
+            - Path=/api/seat/**
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/order/**,/api/reminder/**
+        - id: admin-service
+          uri: lb://admin-service
+          predicates:
+            - Path=/api/admin/**
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
-  cloud:
-    nacos:
-      discovery:
-        server-addr: ${NACOS_SERVER_ADDR:nacos}:8848
 
+# 流量监控配置
+traffic:
+  peak-threshold: 100
+  monitor-interval: 1s
+
+# Actuator endpoints for monitoring
 management:
   endpoints:
     web:
@@ -20,17 +53,3 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      percentiles:
-        http.server.requests: 0.5,0.95,0.99
-  prometheus:
-    metrics:
-      export:
-        enabled: true
-
-logging:
-  level:
-    com.lalal: INFO
-    org.springframework: WARN

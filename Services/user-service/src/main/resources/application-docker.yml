@@ -1,17 +1,51 @@
+server:
+  port: 8084
+
 spring:
+  application:
+    name: user-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      auto-commit: true
+      connection-test-query: SELECT 1
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
-  cloud:
-    nacos:
-      discovery:
-        server-addr: ${NACOS_SERVER_ADDR:nacos}:8848
+      database: 0
+      timeout: 2000ms
 
+jwt:
+  secret: 12306-secret-key-12306-secret-key-12306-secret-key
+  expiration: 86400000
+
+salt: "lalal_secret_salt_2026"
+
+# 短信登录配置
+user:
+  sms:
+    mock-enabled: true
+    mock-code: "123456"
+    expire-minutes: 5
+    send-interval-seconds: 60
+
+# Actuator endpoints for monitoring
 management:
   endpoints:
     web:
@@ -24,15 +58,6 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      percentiles:
-        http.server.requests: 0.5,0.95,0.99
-  prometheus:
-    metrics:
-      export:
-        enabled: true
 
 logging:
   level:

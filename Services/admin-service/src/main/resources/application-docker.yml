@@ -1,17 +1,49 @@
+server:
+  port: 8085
+
 spring:
+  application:
+    name: admin-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      auto-commit: true
+      connection-test-query: SELECT 1
   data:
     redis:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
   cloud:
     nacos:
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:nacos}:8848
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+      password: ""
+      username: ""
 
+# JWT 配置（与网关保持一致）
+jwt:
+  secret: 12306-secret-key-12306-secret-key-12306-secret-key
+  expiration: 86400000
+
+# 管理后台统计缓存配置
+admin:
+  cache:
+    dashboard-ttl: 300
+    stats-ttl: 3600
+    train-distribution-ttl: 86400
+
+# Actuator endpoints for monitoring
 management:
   endpoints:
     web:
@@ -24,15 +56,6 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      percentiles:
-        http.server.requests: 0.5,0.95,0.99
-  prometheus:
-    metrics:
-      export:
-        enabled: true
 
 logging:
   level:
