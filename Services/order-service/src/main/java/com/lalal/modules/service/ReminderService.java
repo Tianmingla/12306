@@ -38,6 +38,8 @@ public interface ReminderService {
      */
     void processReminder(ReminderMessage message);
 
+    void handleOrderCancel(String orderSn);
+
     /**
      * 更新列车晚点状态
      *

@@ -4,6 +4,7 @@ import com.alipay.api.AlipayApiException;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lalal.modules.config.AlipayProperties;
+import com.lalal.modules.dto.OrderCreationResultMessage;
 import com.lalal.modules.dto.request.OrderCreateRequestDTO;
 import com.lalal.modules.dto.response.OrderDetailVO;
 import com.lalal.modules.dto.response.OrderItemVO;
@@ -18,6 +19,7 @@ import com.lalal.modules.service.AlipayTradeService;
 import com.lalal.modules.service.OrderService;
 import com.lalal.modules.dto.SeatReleaseMessage;
 import com.lalal.modules.mq.MessageQueueService;
+import com.lalal.modules.service.ReminderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,8 @@ import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -38,10 +42,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implements OrderService {
 
+    private static final String ORDER_TIMEOUT_CANCEL_TOPIC ="order-timeout-cancel-topic";
     private final OrderItemMapper orderItemMapper;
     private final AlipayTradeService alipayTradeService;
     private final AlipayProperties alipayProperties;
     private final MessageQueueService messageQueueService;
+    private final ReminderService reminderService;
 
     private static final String SEAT_RELEASE_TOPIC = "seat-release-topic";
 
@@ -121,7 +127,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             itemDO.setPassengerName(item.getRealName());
             orderItemMapper.insert(itemDO);
         }
-
+        // 初始化出行提醒（延迟消息 + 版本控制） 目前只能提醒一个
+        reminderService.initReminderState(
+                orderSn, request.getTrainNumber(), DateTimeFormatter.ofPattern("yyyy-MM-dd").format(request.getRunDate()),
+                request.getStartStation(), request.getEndStation(),
+                request.getUsername(),request.getItems().get(0).getRealName(),
+                LocalDateTime.now().atZone(java.time.ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli(), LocalDateTime.now().atZone(java.time.ZoneId.systemDefault())
+                        .toInstant()
+                        .toEpochMilli()
+        );
+        OrderCreationResultMessage msg=new OrderCreationResultMessage();
+        msg.setOrderSn(orderSn);
+        //发送超时取消延迟消息
+        messageQueueService.sendDelay(ORDER_TIMEOUT_CANCEL_TOPIC,msg,30*60*1000);
         return orderSn;
     }
 
@@ -256,6 +276,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         qw.orderByDesc(OrderDO::getCreateTime);
         List<OrderDO> orders = this.list(qw);
 
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        // 批量查询乘客数量（优化 N+1 查询）
+        List<String> orderSns = orders.stream()
+                .map(OrderDO::getOrderSn)
+                .collect(Collectors.toList());
+        Map<String, Integer> passengerCountMap = batchGetPassengerCounts(orderSns);
+
         return orders.stream().map(order -> {
             OrderListVO vo = new OrderListVO();
             vo.setOrderSn(order.getOrderSn());
@@ -266,15 +296,32 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             vo.setTotalAmount(order.getTotalAmount());
             vo.setStatus(order.getStatus());
             vo.setStatusText(statusText(order.getStatus()));
-
-            // 统计乘客数量
-            LambdaQueryWrapper<OrderItemDO> itemQw = new LambdaQueryWrapper<>();
-            itemQw.eq(OrderItemDO::getOrderSn, order.getOrderSn());
-            Long count = orderItemMapper.selectCount(itemQw);
-            vo.setPassengerCount(count != null ? count.intValue() : 0);
-
+            vo.setPassengerCount(passengerCountMap.getOrDefault(order.getOrderSn(), 0));
             return vo;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 批量查询订单的乘客数量
+     */
+    private Map<String, Integer> batchGetPassengerCounts(List<String> orderSns) {
+        if (orderSns == null || orderSns.isEmpty()) {
+            return Map.of();
+        }
+
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<OrderItemDO> wrapper =
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<>();
+        wrapper.select("order_sn", "COUNT(*) as count")
+               .in("order_sn", orderSns)
+               .groupBy("order_sn");
+
+        List<Map<String, Object>> results = orderItemMapper.selectMaps(wrapper);
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        m -> (String) m.get("order_sn"),
+                        m -> ((Number) m.get("count")).intValue()
+                ));
     }
 
     @Override
@@ -315,7 +362,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void cancelOrder(String orderSn, String phone) {
+    public void cancelOrder(String orderSn,String phone) {
         OrderDO order = findByOrderSn(orderSn);
         if (order == null) {
             throw new IllegalArgumentException("订单不存在");
@@ -332,5 +379,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
 
         // 发送座位释放消息
         sendSeatReleaseMessage(order, SeatReleaseMessage.ReleaseType.CANCEL);
+        reminderService.handleOrderCancel(orderSn);
+
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelOrder(String orderSn) {
+        OrderDO order = findByOrderSn(orderSn);
+        order.setStatus(2); // 已取消
+        this.updateById(order);
+        // 发送座位释放消息
+        sendSeatReleaseMessage(order, SeatReleaseMessage.ReleaseType.CANCEL);
+        reminderService.handleOrderCancel(orderSn);
     }
 }

@@ -168,14 +168,20 @@ public class ReminderServiceImpl implements ReminderService {
             return;
         }
 
-        // 3. 状态校验：停运
-        if (state.getStatus() == ReminderState.STATUS_CANCEL) {
-            log.info("[提醒] 列车已停运，取消提醒: orderSn={}", orderSn);
-            // 发送停运通知
-            sendSms(state.getUsername(),
-                    String.format("【12306】很抱歉，您购买的%s次列车因故停运，请关注后续通知。",
-                            state.getTrainNumber()));
-            return;
+        // 3. 状态校验
+        switch (state.getStatus()){
+            case ReminderState.STATUS_CANCEL:
+                log.info("[提醒] 列车已停运，取消提醒: orderSn={}", orderSn);
+                // 发送停运通知
+                sendSms(state.getUsername(),
+                        String.format("【12306】很抱歉，您购买的%s次列车因故停运，请关注后续通知。",
+                                state.getTrainNumber()));
+                safeCacheTemplate.del(stateKey);
+                return;
+            case  ReminderState.STATUS_ORDER_CANCEL:
+                log.info("订单 orderSn={}已取消 skip", orderSn);
+                safeCacheTemplate.del(stateKey);
+                return;
         }
 
         // 4. 检查是否已发送
@@ -197,6 +203,18 @@ public class ReminderServiceImpl implements ReminderService {
                 orderSn, message.getReminderType(),
                 state.getUsername() != null && state.getUsername().length() > 7
                         ? state.getUsername().substring(0, 3) : "***");
+    }
+
+    @Override
+    public void handleOrderCancel(String orderSn){
+        String stateKey = CacheConstant.reminderStateKey(orderSn);
+        ReminderState state = safeCacheTemplate.get(stateKey, new TypeReference<ReminderState>() {});
+        if (state == null) {
+            log.warn("[提醒] 提醒状态已过期或不存在: orderSn={}", orderSn);
+            return;
+        }
+        state.setStatus(ReminderState.STATUS_ORDER_CANCEL);
+        safeCacheTemplate.safeSet(stateKey, state, DEFAULT_TTL_DAYS, TimeUnit.DAYS);
     }
 
     /**

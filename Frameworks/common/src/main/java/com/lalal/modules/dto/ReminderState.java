@@ -42,8 +42,8 @@ public class ReminderState implements Serializable {
     private Integer version;
 
     /**
-     * 列车状态
-     * 0: 正常  1: 晚点  2: 停运  3: 检票口变更
+     *
+     * 0: 正常  1: 晚点  2: 停运  3: 检票口变更 4:订单取消
      */
     private Integer status;
 
@@ -78,6 +78,7 @@ public class ReminderState implements Serializable {
     public static final int STATUS_DELAY = 1;
     public static final int STATUS_CANCEL = 2;
     public static final int STATUS_GATE_CHANGE = 3;
+    public static final int STATUS_ORDER_CANCEL = 4;
 
     // 提醒发送标记
     public static final int FLAG_1H_SENT = 1;      // bit0

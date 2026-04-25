@@ -31,4 +31,8 @@ public interface OrderService {
      * 取消订单（仅限待支付的订单）
      */
     void cancelOrder(String orderSn, String phone);
+    /**
+     * 取消订单（仅限待支付的订单）内部接口
+     */
+    void cancelOrder(String orderSn);
 }

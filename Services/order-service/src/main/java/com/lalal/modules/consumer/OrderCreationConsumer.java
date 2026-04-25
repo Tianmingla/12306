@@ -21,13 +21,16 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
  * 订单创建消费者
  * 监听 order-creation-topic
  * 调用 OrderService 创建订单
- * 发送 OrderCreationResultMessage 到 order-creation-result-topic
+ * 发送 OrderCreationResultMessage 到 order-creation-result-topic 回调
+ * 发送 对应延迟消息 travel-reminder-topic 做出行服务提醒
+ * 发送 延迟消息 到 order-timeout-cancel-topic 订单超时取消
  */
 @Component
 @Slf4j
@@ -51,6 +54,7 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
     private final ReminderService reminderService;
 
     private static final String ORDER_CREATION_RESULT_TOPIC = "order-creation-result-topic";
+    private static final String ORDER_TIMEOUT_CANCEL_TOPIC = "order-timeout-cancel-topic";
 
     @Override
     protected void doProcess(Object msg) {
@@ -80,8 +84,6 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
             resultMsg.setTotalAmount(totalAmount);
             resultMsg.setTimestamp(System.currentTimeMillis());
 
-            messageQueueService.send(ORDER_CREATION_RESULT_TOPIC, "result", resultMsg);
-
             // 候补订单：更新状态为已兑现
             if (message.getWaitlistSn() != null && !message.getWaitlistSn().isBlank()) {
                 waitlistService.updateWaitlistStatus(message.getWaitlistSn(), 2, orderSn);
@@ -94,13 +96,16 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
 
             log.info("[订单创建] 订单创建成功: requestId={}, orderSn={}", requestId, orderSn);
 
+            //处理成功之后 发生的事件
+            messageQueueService.send(ORDER_CREATION_RESULT_TOPIC, "result", resultMsg);
             // 初始化出行提醒（延迟消息 + 版本控制）
             try {
                 initReminder(orderSn, message);
             } catch (Exception e) {
                 log.warn("[订单创建] 提醒初始化失败，不影响订单: orderSn={}", orderSn, e);
             }
-
+            //发送超时取消延迟消息
+            messageQueueService.sendDelay(ORDER_TIMEOUT_CANCEL_TOPIC,resultMsg,30*60*1000);
         } catch (Exception e) {
             log.error("[订单创建] 订单创建失败: requestId={}", requestId, e);
 
@@ -168,8 +173,6 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
                 ? message.getItems().get(0).getRealName()
                 : "";
 
-        // TODO: 实际应该查询车次时刻表获取精确时间
-        // 这里用简化逻辑：假设发车时间为当天 08:00，到达时间为当天 12:00
         LocalDate date = message.getRunDate();
         long planDepartTime = date.atTime(8, 0)
                 .atZone(java.time.ZoneId.systemDefault())
