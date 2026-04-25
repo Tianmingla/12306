@@ -114,9 +114,9 @@ public class ReminderServiceImpl implements ReminderService {
         // 计算延迟时间（从现在到触发时间）
         long delayMillis = triggerTime - System.currentTimeMillis();
         if (delayMillis < 0) {
-            log.warn("[提醒] 触发时间已过，跳过: orderSn={}, type={}, triggerTime={}",
+            log.warn("[提醒] 触发时间已过，立即提醒: orderSn={}, type={}, triggerTime={}",
                     orderSn, reminderType, triggerTime);
-            return;
+            delayMillis=0;
         }
 
         ReminderMessage message = ReminderMessage.builder()

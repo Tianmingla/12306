@@ -54,7 +54,6 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
     private final ReminderService reminderService;
 
     private static final String ORDER_CREATION_RESULT_TOPIC = "order-creation-result-topic";
-    private static final String ORDER_TIMEOUT_CANCEL_TOPIC = "order-timeout-cancel-topic";
 
     @Override
     protected void doProcess(Object msg) {
@@ -96,16 +95,8 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
 
             log.info("[订单创建] 订单创建成功: requestId={}, orderSn={}", requestId, orderSn);
 
-            //处理成功之后 发生的事件
+            //发送回调消息
             messageQueueService.send(ORDER_CREATION_RESULT_TOPIC, "result", resultMsg);
-            // 初始化出行提醒（延迟消息 + 版本控制）
-            try {
-                initReminder(orderSn, message);
-            } catch (Exception e) {
-                log.warn("[订单创建] 提醒初始化失败，不影响订单: orderSn={}", orderSn, e);
-            }
-            //发送超时取消延迟消息
-            messageQueueService.sendDelay(ORDER_TIMEOUT_CANCEL_TOPIC,resultMsg,30*60*1000);
         } catch (Exception e) {
             log.error("[订单创建] 订单创建失败: requestId={}", requestId, e);
 

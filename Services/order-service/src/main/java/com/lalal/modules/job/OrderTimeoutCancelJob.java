@@ -41,7 +41,7 @@ public class OrderTimeoutCancelJob {
     /**
      * 每分钟执行一次，检查超时订单
      */
-    @Scheduled(fixedRate = 60 * 1000)
+//    @Scheduled(fixedRate = 60 * 1000)
     public void cancelTimeoutOrders() {
         Date timeoutThreshold = new Date(System.currentTimeMillis() - ORDER_TIMEOUT_MS);
 
