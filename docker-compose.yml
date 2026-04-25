@@ -109,6 +109,21 @@ services:
         condition: service_healthy
     volumes:
       - rocketmq_data:/home/rocketmq/store
+      - ./rocketmq/broker.conf:/home/rocketmq/rocketmq-5.1.4/conf/broker.conf:ro
+    networks:
+      - 12306-network
+
+  rocketmq-topic-init:
+    image: apache/rocketmq:5.1.4
+    container_name: 12306-rocketmq-topic-init
+    depends_on:
+      rocketmq-broker:
+        condition: service_started
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+    volumes:
+      - ./rocketmq/init-topics.sh:/home/rocketmq/init-topics.sh:ro
+    entrypoint: ["/bin/bash", "/home/rocketmq/init-topics.sh"]
     networks:
       - 12306-network
 
