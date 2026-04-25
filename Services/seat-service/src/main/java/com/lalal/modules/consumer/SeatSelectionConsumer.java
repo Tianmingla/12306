@@ -78,15 +78,12 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
                 if (isWaitlist) {
                     // 候补订单无票：返回 null，上层继续排队（不发送失败消息）
                     log.info("[座位选择] 候补订单无可用座位，继续排队: requestId={}", requestId);
-                    // 注意：这里返回 null 不会触发下面的发送逻辑，因为 selectedSeats 为 null
-                    // 上层 WaitlistCheckConsumer 会收到 null 并处理
-                    return;
                 } else {
                     // 普通购票无票：直接失败
                     log.warn("[座位选择] 无可用座位: requestId={}", requestId);
-                    sendFailureResult(requestId, message.getWaitlistSn(), "座位选择失败: 无可用座位");
-                    return;
                 }
+                sendFailureResult(requestId, message.getWaitlistSn(), "座位选择失败: 无可用座位");
+                return;
             }
 
             // 发送成功结果

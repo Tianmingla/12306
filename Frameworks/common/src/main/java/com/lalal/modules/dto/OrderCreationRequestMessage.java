@@ -45,7 +45,6 @@ public class OrderCreationRequestMessage implements Serializable {
      * 到达站
      */
     private String endStation;
-
     /**
      * 用户账号(手机号)
      */
