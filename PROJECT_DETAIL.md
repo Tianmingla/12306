@@ -1254,41 +1254,70 @@ traffic:
 | `POST /api/ticket/purchase` | 购票 |
 | `GET /api/ticket/check/{requestId}` | 查询异步购票状态 |
 
-#### 5.4.2 高峰购票流程
+#### 5.4.2 购票流程（MQ 消息驱动架构）
+
+系统采用纯 MQ 消息驱动架构，根据流量状态选择同步或异步路径：
 
 ```
-┌─────────┐                      ┌──────────┐
-│ Gateway │                      │  Redis   │
-│ 检测QPS │─────────────────────►│ peak=true│
-└────┬────┘                      └──────────┘
-     │
-     ▼
-┌─────────────────────────────────────────┐
-│         TicketService.purchase()          │
-│  读取 traffic:peak:status               │
-│           │                             │
-│           ├─► false: 同步处理(OpenFeign)│
-│           │                             │
-│           └─► true: 异步处理(MQ)         │
-└───────────────┬─────────────────────────┘
-                │
-                ▼
-         ┌─────────────┐
-         │ Redis SETNX │
-         │ status=0    │
-         └──────┬──────┘
-                │ 成功
-                ▼
-         ┌─────────────┐
-         │ MQ 发送消息 │
-         └──────┬──────┘
-                │
-                ▼
-         ┌─────────────┐
-         │  返回前端   │
-         │ PROCESSING  │
-         │ requestId   │
-         └─────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          用户购票请求                                         │
+│                    POST /api/ticket/purchase                                 │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      ▼
+                     ┌────────────────────────────────┐
+                     │    TicketServiceImpl.purchase() │
+                     │   检查 Redis: traffic:peak:status│
+                     └────────────────┬───────────────┘
+                                      │
+               ┌──────────────────────┴──────────────────────┐
+               │                                              │
+               ▼ (非高峰)                                     ▼ (高峰)
+    ┌──────────────────────┐                    ┌──────────────────────┐
+    │ 同步处理 (OpenFeign) │                    │ 异步处理 (MQ)         │
+    │                      │                    │                      │
+    │ 1. 调用座位服务选座  │                    │ 1. 保存请求到 Redis  │
+    │ 2. 计算票价         │                    │ 2. 发送到 seat-selection-topic│
+    │ 3. 调用订单服务创建 │                    │ 3. 返回 PROCESSING   │
+    │ 4. 返回订单号       │                    │    + requestId       │
+    └──────────────────────┘                    └──────────────────────┘
+```
+
+##### 异步购票消息流
+
+```
+[前端请求] ──► ticket-service
+                    │
+                    ▼ 发送到: seat-selection-topic (tag: select)
+             ┌─────────────────────────────────────────────┐
+             │ SeatSelectionConsumer (seat-service)         │
+             │ - 执行座位选择逻辑                            │
+             │ - 锁定座位（Redis + Lua 脚本）                │
+             │ - 填充计划发车/到达时间（从 t_train_station）  │
+             └─────────────────────┬───────────────────────┘
+                                   │
+                                   ▼ 发送到: seat-selection-result-topic (tag: result)
+             ┌─────────────────────────────────────────────┐
+             │ SeatResultProcessorConsumer (ticket-service) │
+             │ - 获取乘客信息（调用 user-service）            │
+             │ - 计算票价                                    │
+             │ - 构建订单创建请求                            │
+             └─────────────────────┬───────────────────────┘
+                                   │
+                                   ▼ 发送到: order-creation-topic (tag: create)
+             ┌─────────────────────────────────────────────┐
+             │ OrderCreationConsumer (order-service)        │
+             │ - 创建订单（status=0 待支付）                  │
+             │ - 发送超时取消延迟消息（30分钟）                │
+             │ - 初始化出行提醒                              │
+             └─────────────────────┬───────────────────────┘
+                                   │
+                                   ▼ 发送到: order-creation-result-topic (tag: result)
+             ┌─────────────────────────────────────────────┐
+             │ OrderResultProcessorConsumer (ticket-service)│
+             │ - 成功：更新缓存，返回订单号给前端             │
+             │ - 失败：发送座位释放消息                      │
+             └─────────────────────────────────────────────┘
 ```
 
 #### 5.4.3 购票核心流程 (`processCorePurchase`)
@@ -1301,30 +1330,27 @@ public PurchaseTicketVO processCorePurchase(...) {
     // 2. 座位选择
     TicketDTO selectedSeats = seatServiceClient.select(seatRequest);
 
-    // 3. 获取列车信息
+    // 3. 获取列车信息 + 查询发车/到达时刻
     TrainDO train = trainMapper.selectOne(...);
+    fillPlanTimes(orderRequest, train, date); // 从 t_train_station 获取时刻
 
     // 4. 计算票价
     List<FareCalculationResultDTO> fares =
         fareCalculationService.batchCalculateFare(...);
 
-    // 5. 创建订单
+    // 5. 创建订单（通过 Feign 调用）
     String orderSn = orderServiceClient.create(orderRequest);
 
     return PurchaseTicketVO.success(orderSn);
 }
 ```
 
-#### 5.4.4 异步购票消费者 (`TicketPurchaseConsumer`)
+#### 5.4.4 MQ 消费者汇总
 
-**Topic**: `ticket-purchase-topic`
-**Tag**: `purchase`
-
-**处理流程**:
-1. 从缓存读取请求状态
-2. 校验参数
-3. 调用 `processCorePurchase()` 处理购票
-4. 更新缓存结果
+| 消费者 | Topic | Tag | 功能 |
+|--------|-------|-----|------|
+| SeatResultProcessorConsumer | seat-selection-result-topic | * | 处理选座结果，计算票价，发送订单创建请求 |
+| OrderResultProcessorConsumer | order-creation-result-topic | * | 处理订单创建结果，更新缓存或发送座位释放 |
 
 ---
 
@@ -1358,6 +1384,51 @@ TicketDTO {
 }
 ```
 
+#### 5.5.3 MQ 消费者
+
+| 消费者 | Topic | Tag | 功能 |
+|--------|-------|-----|------|
+| SeatSelectionConsumer | seat-selection-topic | select | 处理选座请求（普通购票+候补），锁定座位，查询时刻信息，发送选座结果 |
+| SeatReleaseConsumer | seat-release-topic | * | 释放座位（退票/取消/超时），触发候补兑现 |
+
+#### 5.5.4 座位选择消息处理 (`SeatSelectionConsumer`)
+
+**监听 Topic**: `seat-selection-topic`（Tag: `select`）
+
+**处理流程**:
+1. 构建选座请求，调用 `SeatSelectionService` 执行选座
+2. 支持两种来源：`NORMAL`（普通购票）和 `WAITLIST`（候补订单）
+3. 选座成功后，从 `t_train_station` 查询出发站和到达站的时刻信息
+4. 将计划发车时间（`planDepartTime`）和到达时间（`planArrivalTime`）附加到结果消息中
+5. 发送结果到 `seat-selection-result-topic`
+
+**时刻查询逻辑**:
+```java
+// 查询出发站发车时间
+TrainStationDO departStation = trainStationMapper.selectOne(...);
+planDepartTime = runDate.atTime(departStation.getDepartureTime())
+        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+
+// 查询到达站到达时间（考虑跨天 arriveDayDiff）
+TrainStationDO arriveStation = trainStationMapper.selectOne(...);
+LocalDate arriveDate = runDate.plusDays(arriveStation.getArriveDayDiff());
+planArrivalTime = arriveDate.atTime(arriveStation.getArrivalTime())
+        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+```
+
+#### 5.5.5 座位释放消费者 (`SeatReleaseConsumer`)
+
+**监听 Topic**: `seat-release-topic`
+
+**触发时机**：
+- 用户取消订单（`releaseType=CANCEL`）
+- 用户退票（`releaseType=REFUND`）
+- 订单超时自动取消（`releaseType=TIMEOUT`）
+
+**处理流程**:
+1. 使用 Lua 脚本原子性释放座位到可用池
+2. 对每种释放的座位类型，发送候补兑现消息到 `waitlist-fulfill-topic`
+
 ---
 
 ### 5.6 Order Service (订单服务)
@@ -1385,11 +1456,90 @@ TicketDTO {
 |------|------|
 | 0 | 待支付 |
 | 1 | 已支付 |
-| 2 | 已完成 |
-| 3 | 已取消 |
-| 4 | 已退款 |
+| 2 | 已取消 |
+| 3 | 已退票 |
 
-#### 5.6.3 候补订单状态
+#### 5.6.3 MQ 消费者汇总
+
+| 消费者 | Topic | Tag | 功能 |
+|--------|-------|-----|------|
+| OrderCreationConsumer | order-creation-topic | create | 创建订单，发送结果回调，初始化出行提醒，发送超时取消延迟消息 |
+| OrderTimeoutCancelConsumer | order-timeout-cancel-topic | cancel | 处理订单超时取消，释放座位，取消出行提醒 |
+| ReminderConsumer | travel-reminder-topic | * | 处理出行提醒消息，发送短信通知 |
+| WaitlistFulfillConsumer | waitlist-fulfill-topic | fulfill | 候补兑现触发，从队列取出最高优先级订单 |
+| WaitlistSeatResultConsumer | seat-selection-result-topic | * | 处理候补选座结果，成功创建订单，失败重新排队 |
+
+#### 5.6.4 订单创建消费者 (`OrderCreationConsumer`)
+
+**监听 Topic**: `order-creation-topic`（Tag: `create`）
+
+**处理流程**:
+1. 转换消息为订单创建请求 DTO
+2. 调用 `OrderService.createOrder()` 创建订单（status=0 待支付）
+3. 如果是候补订单（`waitlistSn` 不为空），更新候补状态为已兑现
+4. 发送成功结果到 `order-creation-result-topic`
+5. 初始化出行提醒状态（调用 `ReminderService.initReminderState()`）
+6. 发送超时取消延迟消息到 `order-timeout-cancel-topic`（30分钟后触发）
+
+**消息数据传递**:
+```java
+// 计划发车/到达时间从消息中获取（由 seat-service 查询填充）
+Long planDepartTime = message.getPlanDepartTime();
+Long planArrivalTime = message.getPlanArrivalTime();
+// 若消息中没有，使用兜底值（当前时间）
+```
+
+#### 5.6.5 订单超时取消消费者 (`OrderTimeoutCancelConsumer`)
+
+**监听 Topic**: `order-timeout-cancel-topic`（Tag: `cancel`）
+
+**触发时机**：订单创建 30 分钟后仍未支付
+
+**处理流程**:
+1. 查询订单，检查状态是否为待支付（status=0）
+2. 调用 `OrderService.cancelOrder()` 取消订单
+3. 发送座位释放消息到 `seat-release-topic`（触发候补兑现）
+4. 调用 `ReminderService.handleOrderCancel()` 取消出行提醒
+
+**延迟消息机制**:
+```java
+// OrderCreationConsumer 发送延迟消息
+messageQueueService.sendDelay(ORDER_TIMEOUT_CANCEL_TOPIC, resultMsg, 30 * 60 * 1000);
+// 30分钟后，RocketMQ 触发消费者处理
+```
+
+#### 5.6.6 出行提醒服务 (`ReminderService`)
+
+**功能**: 为已支付订单发送出行提醒短信
+
+**提醒时机**:
+- 发车前 1 小时
+- 发车前 30 分钟
+- 到达后 10 分钟（行程结束提醒）
+
+**版本控制机制**:
+```java
+// 消息携带版本号，Redis 存储当前版本
+// 版本不匹配时，重新计算触发时间并发送新延迟消息
+// 防止订单取消/改签后发送错误提醒
+```
+
+**状态标识**:
+| 状态 | 值 | 说明 |
+|------|-----|------|
+| STATUS_NORMAL | 0 | 正常状态 |
+| STATUS_DELAY | 1 | 列车晚点 |
+| STATUS_CANCEL | 2 | 列车停运 |
+| STATUS_ORDER_CANCEL | 4 | 订单已取消 |
+
+**已发送标识（位掩码）**:
+| 标识 | 值 | 说明 |
+|------|-----|------|
+| FLAG_1H_SENT | 1 | 1小时提醒已发送 |
+| FLAG_30M_SENT | 2 | 30分钟提醒已发送 |
+| FLAG_ARRIVAL_SENT | 4 | 到达提醒已发送 |
+
+#### 5.6.7 候补订单状态
 
 | 状态 | 说明 |
 |------|------|
@@ -1399,7 +1549,7 @@ TicketDTO {
 | 3 | 已取消（用户主动取消） |
 | 4 | 已过期（超过截止时间） |
 
-#### 5.6.4 候补优先级计算规则
+#### 5.6.8 候补优先级计算规则
 
 候补订单采用 Redis ZSet 实现优先级队列，分数越高越优先：
 
@@ -1416,7 +1566,7 @@ TicketDTO {
 - 历史购票加成：暂不启用（固定0分）
 - 乘客类型加成：暂不启用（固定成人0分）
 
-#### 5.6.5 候补订单处理流程
+#### 5.6.9 候补订单处理流程
 
 候补订单采用**事件驱动架构**，仅在退票或新增座位时触发兑现流程：
 
@@ -1430,9 +1580,9 @@ TicketDTO {
 [waitlist-fulfill-topic] ──→ WaitlistFulfillConsumer (order-service)
     ↓ (ZPOPMAX 取出最高优先级)
 [seat-selection-topic] ──→ SeatSelectionConsumer (seat-service)
-    ↓ (选座成功/失败)
+    ↓ (选座成功/失败，携带 planDepartTime/planArrivalTime)
 [seat-selection-result-topic] ──→ WaitlistSeatResultConsumer (order-service)
-    ↓ (成功：创建订单)
+    ↓ (成功：创建订单，传递时刻信息)
 [order-creation-topic] ──→ OrderCreationConsumer (order-service)
     ↓
 ┌──────────────┴──────────────┐
@@ -1448,10 +1598,9 @@ TicketDTO {
 4. **状态持久化**：候补订单状态流转实时同步数据库
 5. **优先级惩罚**：每次失败降低 10 分，重新排队
 6. **来源标识**：通过 `source=WAITLIST` 标记，区别于普通购票
+7. **时刻传递**：选座成功后，时刻信息随消息传递到订单创建，用于出行提醒
 
-#### 5.6.6 核心消费者
-
-##### 5.6.6.1 WaitlistFulfillConsumer（候补兑现消费者）
+#### 5.6.10 候补兑现消费者 (`WaitlistFulfillConsumer`)
 
 **监听 Topic**: `waitlist-fulfill-topic`（Tag: `fulfill`）
 
@@ -1459,34 +1608,28 @@ TicketDTO {
 - 用户退票时 → `SeatReleaseConsumer` 发送兑现消息
 - 新增车次/座位时 → 发送兑现消息
 
-**功能**：
+**处理流程**：
 1. 从 Redis ZSet 队列出队（ZPOPMAX 原子弹出最高优先级订单）
 2. 查询候补订单，状态检查（仅处理"待兑现"状态）
 3. 检查截止时间，过期订单标记为已过期
 4. 更新状态为"兑现中"
-5. 发送选座请求到 `seat-selection-topic`
+5. 发送选座请求到 `seat-selection-topic`（标记 `source=WAITLIST`）
 
-**Redis 操作**：
-```java
-// ZPOPMAX 原子弹出最高分数的成员
-Set<ZSetOperations.TypedTuple<String>> popped = redisTemplate.opsForZSet().popMax(key, 1);
-```
-
-##### 5.6.6.2 WaitlistSeatResultConsumer（候补选座结果消费者）
+#### 5.6.11 候补选座结果消费者 (`WaitlistSeatResultConsumer`)
 
 **监听 Topic**: `seat-selection-result-topic`（Tag: `*`）
 
-**功能**：
-1. 查询候补订单，校验状态（仅处理"兑现中"状态）
-2. **选座成功**：
-   - 发送订单创建请求到 `order-creation-topic`
-   - 订单创建成功后，状态更新为"已兑现"，移除队列
-3. **选座失败**：
+**处理流程**：
+1. 仅处理候补订单（`waitlistSn` 不为空）
+2. 查询候补订单，校验状态（仅处理"兑现中"状态）
+3. **选座成功**：
+   - 构建订单创建消息，传递时刻信息（`planDepartTime`、`planArrivalTime`）
+   - 发送到 `order-creation-topic`
+4. **选座失败**：
    - 状态回滚为"待兑现"
    - 优先级惩罚 -10 分，重新入队
-   - 触发重新排队
 
-#### 5.6.7 Redis 数据结构
+#### 5.6.12 Redis 数据结构
 
 **候补优先级队列（ZSet）**：
 ```
@@ -1516,7 +1659,14 @@ Fields: requestId, userId, trainNum, date, status,
         waitlistSn（候补订单号）, source（NORMAL/WAITLIST）
 ```
 
-#### 5.6.8 候补订单实体
+**出行提醒状态（Hash）**：
+```
+Key: REMINDER::STATE::{orderSn}
+Fields: version, status, trainNumber, startStation, endStation,
+        planDepartTime, planArrivalTime, sentFlags
+```
+
+#### 5.6.14 候补订单实体
 
 **数据表**: `t_waitlist_order`
 
@@ -1535,22 +1685,23 @@ Fields: requestId, userId, trainNum, date, status,
 | `deadline` | 候补截止时间 |
 | `status` | 状态（0-待兑现，1-兑现中，2-已兑现，3-已取消，4-已过期） |
 | `fulfilled_order_sn` | 兑现后的订单号 |
-| `priority_score` | 优先级分数 |
-| `retry_count` | 失败重试次数 |
 | `create_time` | 创建时间 |
 | `update_time` | 更新时间 |
 
-#### 5.6.9 MQ Topic 汇总
+#### 5.6.15 MQ Topic 汇总
 
 | Topic | Tag | 生产者 | 消费者 | 用途 |
 |-------|-----|--------|--------|------|
-| `waitlist-fulfill-topic` | `fulfill` | SeatReleaseConsumer | WaitlistFulfillConsumer | 候补兑现触发 |
-| `seat-selection-topic` | `select` | WaitlistFulfillConsumer | SeatSelectionConsumer | 选座请求 |
-| `seat-selection-result-topic` | `*` | SeatSelectionConsumer | WaitlistSeatResultConsumer | 选座结果 |
-| `order-creation-topic` | `create` | WaitlistSeatResultConsumer | OrderCreationConsumer | 订单创建请求 |
-| `seat-release-topic` | `*` | OrderService | SeatReleaseConsumer | 座位释放（触发候补） |
+| `seat-selection-topic` | `select` | ticket-service (异步购票)、order-service (候补兑现) | seat-service | 选座请求 |
+| `seat-selection-result-topic` | `result` | seat-service | ticket-service (普通购票)、order-service (候补) | 选座结果返回 |
+| `order-creation-topic` | `create` | ticket-service (异步)、order-service (候补) | order-service | 订单创建请求 |
+| `order-creation-result-topic` | `result` | order-service | ticket-service | 订单创建结果回调 |
+| `order-timeout-cancel-topic` | `cancel` | order-service (订单创建/支付) | order-service | 订单超时取消（延迟30分钟） |
+| `travel-reminder-topic` | `*` | order-service (ReminderService) | order-service | 出行提醒（延迟消息） |
+| `seat-release-topic` | `*` | order-service (取消/退票/超时)、ticket-service (失败) | seat-service | 座位释放，触发候补兑现 |
+| `waitlist-fulfill-topic` | `fulfill` | seat-service (座位释放) | order-service | 候补兑现触发 |
 
-#### 5.6.10 候补订单 API 示例
+#### 5.6.16 候补订单 API 示例
 
 **创建候补订单**：
 ```http
@@ -1590,7 +1741,7 @@ GET /api/waitlist/list?username=13800138000
 DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 ```
 
-#### 5.6.11 候补订单审计日志
+#### 5.6.17 候补订单审计日志
 
 **数据表**: `t_waitlist_log`
 
@@ -1607,20 +1758,21 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 | `operator` | 操作人（SYSTEM/用户账号） |
 | `create_time` | 记录时间 |
 
-#### 5.6.12 与普通购票的差异
+#### 5.6.18 与普通购票的差异
 
-| 维度 | 普通购票 | 候补订单 |
-|------|----------|----------|
-| 处理模式 | 高峰时异步 MQ | 事件驱动 MQ（退票/新增座位触发） |
+| 维度 | 普通购票（异步） | 候补订单 |
+|------|------------------|----------|
+| 处理模式 | MQ 异步处理 | 事件驱动 MQ（退票/新增座位触发） |
 | 触发方式 | 用户主动下单 | 自动兑现 |
 | 座位锁定 | 30分钟 | 10分钟（更快释放） |
-| 无票处理 | 直接失败 | 继续排队，等待下次触发 |
+| 无票处理 | 失败返回 | 继续排队，等待下次触发 |
 | 失败惩罚 | 无 | 优先级 -10 分 |
 | 截止时间 | 无 | 有（发车前一定时间） |
 | 队列管理 | 无 | Redis ZSet 优先级队列（ZPOPMAX 出队） |
 | 来源标识 | `NORMAL` | `WAITLIST` |
+| 时刻信息获取 | 从消息获取，无则查询 DB | 随消息传递 |
 
-#### 5.6.13 待优化方向
+#### 5.6.19 待优化方向
 
 1. **VIP 等级加成**：接入用户服务，查询 VIP 等级并计算加成
 2. **历史购票加成**：统计用户历史订单数量，给予忠诚度加分
@@ -1679,7 +1831,7 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 
 ## 6. 项目整体总结
 
-### 6.1 系统架构图
+### 6.1 系统架构图（MQ 消息驱动）
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -1709,32 +1861,35 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 │               │────────►│               │           │               │
 │ - 购票搜索    │         │ - 座位选择    │           │ - 订单创建    │
 │ - 购票处理    │         │ - 座位锁定    │           │ - 支付集成    │
-│ - 高峰异步化  │         │ - 座位释放    │           │ - 退款处理    │
-└───────┬───────┘         └───────────────┘           └───────┬───────┘
-        │                                                       │
-        │              ┌───────────────┐                       │
+│ - 选座结果处理│         │ - 座位释放    │           │ - 退款处理    │
+│ - 订单结果处理│         │ - 候补触发    │           │ - 候补兑现    │
+└───────┬───────┘         └───────────────┘           │ - 出行提醒    │
+        │                                               │ - 超时取消    │
+        │              ┌───────────────┐               └───────┬───────┘
         │              │   User Service│                       │
         └─────────────►│    (8084)    │◄───────────────────────┘
                        │               │       Feign
                        │ - 用户认证    │
                        │ - 乘车人管理 │
                        └───────────────┘
-                                    │
-                                    ▼
-                       ┌───────────────────────┐
-                       │      MQ (RocketMQ)     │
-                       │  ticket-purchase-topic │
-                       │  seat-release-topic    │
-                       └───────────────────────┘
-                                    │
-                                    ▼
-                       ┌───────────────────────┐
-                       │   Ticket Service        │
-                       │  (Consumer 消费者)    │
-                       │                       │
-                       │ - 异步处理购票        │
-                       │ - 座位释放            │
-                       └───────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           MQ 消息流 (RocketMQ)                               │
+│                                                                               │
+│  购票流程:                                                                    │
+│  seat-selection-topic ──► seat-selection-result-topic ──► order-creation-topic│
+│                              ──► order-creation-result-topic                  │
+│                                                                               │
+│  候补流程:                                                                    │
+│  seat-release-topic ──► waitlist-fulfill-topic ──► seat-selection-topic      │
+│                              ──► seat-selection-result-topic ──► order-creation│
+│                                                                               │
+│  超时取消:                                                                    │
+│  order-timeout-cancel-topic (延迟30分钟) ──► seat-release-topic              │
+│                                                                               │
+│  出行提醒:                                                                    │
+│  travel-reminder-topic (延迟消息: 1h前/30m前/到达后)                          │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 6.2 技术栈总结
@@ -1771,10 +1926,13 @@ DELETE /api/waitlist/cancel/WLABCDEF12345678?username=13800138000
 | 模块 | 功能 | 技术亮点 |
 |------|------|----------|
 | 车票搜索 | 出发地/目的地/日期查询 | 中转方案计算 |
-| 座位选择 | 自动/手动选座 | Redis 位图存储 |
+| 座位选择 | 自动/手动选座 | Redis 位图存储 + Lua 脚本原子操作 |
 | 票价计算 | 多维度计价 | 距离×单价×折扣 |
 | 订单管理 | 创建/支付/退款/取消 | 支付宝沙箱集成 |
-| 高峰购票 | 流量削峰 | Redis+MQ 异步化 |
+| 异步购票 | MQ 消息驱动 | 流量削峰 + Redis 状态追踪 |
+| 候补购票 | 事件驱动兑现 | Redis ZSet 优先级队列 + ZPOPMAX |
+| 出行提醒 | 延迟消息提醒 | 版本控制 + 状态机 |
+| 订单超时 | 自动取消 | 延迟队列（30分钟） |
 | 用户管理 | 短信登录/乘车人 | JWT Token |
 | 后台管理 | 数据统计/用户管理 | 游标分页 |
 
@@ -1820,6 +1978,10 @@ TRAIN::ROUTE::{startRegion}::{endRegion}           # 路线缓存
 USER::DETAIL::{userId}                            # 用户信息
 REQUEST::{requestId}                               # 请求追踪
 traffic:peak:status                               # 高峰状态
+ticket:async:req:{requestId}                       # 异步购票请求状态
+REMINDER::STATE::{orderSn}                        # 出行提醒状态（版本控制）
+WAITLIST:QUEUE::{trainNumber}::{date}              # 候补队列（ZSet）
+WAITLIST:DETAIL::{waitlistSn}                      # 候补订单详情（Hash）
 ```
 
 #### 6.5.2 缓存策略
@@ -1830,6 +1992,9 @@ traffic:peak:status                               # 高峰状态
 | 路线缓存 | 1天 | 主动更新 |
 | 用户信息 | 30分钟 | LRU |
 | 高峰状态 | 5秒 | 自动过期 |
+| 异步请求 | 30分钟 | 完成后删除 |
+| 候补队列 | 永久 | 订单失效后删除 |
+| 提醒状态 | 24小时 | 出行完成后删除 |
 
 ### 6.6 项目启动指南
 
@@ -1863,11 +2028,13 @@ traffic:peak:status                               # 高峰状态
 
 ### 6.7 项目亮点
 
-1. **高性能**: Redis + 异步化应对高并发
+1. **高性能**: Redis + MQ 异步化应对高并发，Lua 脚本保证座位操作原子性
 2. **可扩展**: 微服务架构便于水平扩展
-3. **高可用**: MQ 削峰保证系统稳定
-4. **安全**: JWT + 幂等性防止重复提交
+3. **高可用**: MQ 削峰保证系统稳定，延迟消息实现超时自动取消
+4. **安全**: JWT + 幂等性防止重复提交，版本控制防止过期提醒
 5. **可观测**: 请求追踪 ID 贯穿全链路
 6. **规范化**: 统一响应格式、统一异常处理
+7. **事件驱动**: 候补兑现由退票/释放座位事件触发，不使用轮询
+8. **数据传递**: 时刻信息从源头服务查询后随消息传递，避免跨服务耦合
 
 ---
