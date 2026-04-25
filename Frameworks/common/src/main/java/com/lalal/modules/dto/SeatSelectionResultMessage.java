@@ -49,6 +49,16 @@ public class SeatSelectionResultMessage implements Serializable {
     private Long timestamp;
 
     /**
+     * 计划发车时间（毫秒时间戳）
+     */
+    private Long planDepartTime;
+
+    /**
+     * 计划到达时间（毫秒时间戳）
+     */
+    private Long planArrivalTime;
+
+    /**
      * 座位项
      */
     @Data

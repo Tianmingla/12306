@@ -56,6 +56,16 @@ public class OrderCreationRequestMessage implements Serializable {
     private LocalDate runDate;
 
     /**
+     * 计划发车时间（毫秒时间戳）
+     */
+    private Long planDepartTime;
+
+    /**
+     * 计划到达时间（毫秒时间戳）
+     */
+    private Long planArrivalTime;
+
+    /**
      * 订单项列表
      */
     private List<OrderItem> items;

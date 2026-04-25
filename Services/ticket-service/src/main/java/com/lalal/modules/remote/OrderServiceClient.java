@@ -24,6 +24,14 @@ public interface OrderServiceClient {
         private String endStation;
         private String username;
         private LocalDate runDate;
+        /**
+         * 计划发车时间（毫秒时间戳）
+         */
+        private Long planDepartTime;
+        /**
+         * 计划到达时间（毫秒时间戳）
+         */
+        private Long planArrivalTime;
         private List<OrderItemRemoteRequestDTO> items;
 
         @Data

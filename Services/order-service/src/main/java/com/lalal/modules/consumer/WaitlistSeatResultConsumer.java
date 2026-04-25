@@ -119,6 +119,10 @@ public class WaitlistSeatResultConsumer extends RocketMQBaseConsumer {
         orderMsg.setRunDate(order.getTravelDate());
         orderMsg.setTrainNum(order.getTrainNumber());
 
+        // 传递计划发车/到达时间
+        orderMsg.setPlanDepartTime(result.getPlanDepartTime());
+        orderMsg.setPlanArrivalTime(result.getPlanArrivalTime());
+
         // 发送订单创建请求
         messageQueueService.send(ORDER_CREATION_TOPIC, "create", orderMsg);
 

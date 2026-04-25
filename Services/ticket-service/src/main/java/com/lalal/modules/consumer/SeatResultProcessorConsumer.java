@@ -7,8 +7,10 @@ import com.lalal.framework.cache.SafeCacheTemplate;
 import com.lalal.modules.dto.*;
 import com.lalal.modules.entity.TicketAsyncRequestDO;
 import com.lalal.modules.entity.TrainDO;
+import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.mapper.TicketAsyncRequestMapper;
 import com.lalal.modules.mapper.TrainMapper;
+import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
 import com.lalal.modules.mq.rocketmq.RocketMQBaseConsumer;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
@@ -53,6 +56,7 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
     private final SafeCacheTemplate safeCacheTemplate;
     private final MessageQueueService messageQueueService;
     private final TrainMapper trainMapper;
+    private final TrainStationMapper trainStationMapper;
     private final FareCalculationService fareCalculationService;
     private final UserServiceClient userServiceClient;
 
@@ -134,6 +138,12 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
             TicketAsyncRequestDO requestRecord,
             List<UserServiceClient.PassengerRemoteVO> passengers) {
 
+        // 获取列车信息（票价计算需要）
+        TrainDO trainDO = trainMapper.selectOne(
+            new LambdaQueryWrapper<TrainDO>()
+                .eq(TrainDO::getTrainNumber, requestRecord.getTrainNum())
+        );
+
         OrderCreationRequestMessage orderMsg = new OrderCreationRequestMessage();
         orderMsg.setRequestId(requestId);
         orderMsg.setTrainNum(requestRecord.getTrainNum());
@@ -142,11 +152,16 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
         orderMsg.setUsername(requestRecord.getAccount());
         orderMsg.setRunDate(requestRecord.getDate());
 
-        // 获取列车信息
-        TrainDO trainDO = trainMapper.selectOne(
-            new LambdaQueryWrapper<TrainDO>()
-                .eq(TrainDO::getTrainNumber, requestRecord.getTrainNum())
-        );
+        // 优先使用消息中的时刻信息，若不存在则从数据库查询
+        if (seatResult.getPlanDepartTime() != null && seatResult.getPlanArrivalTime() != null) {
+            orderMsg.setPlanDepartTime(seatResult.getPlanDepartTime());
+            orderMsg.setPlanArrivalTime(seatResult.getPlanArrivalTime());
+            log.debug("[选座结果处理] 使用消息中的时刻: departTime={}, arriveTime={}",
+                    seatResult.getPlanDepartTime(), seatResult.getPlanArrivalTime());
+        } else {
+            // 查询发车时间和到达时间
+            fillPlanTimes(orderMsg, trainDO, requestRecord);
+        }
 
         // 从座位结果构建订单项
         List<OrderCreationRequestMessage.OrderItem> items = new ArrayList<>();
@@ -196,5 +211,49 @@ public class SeatResultProcessorConsumer extends RocketMQBaseConsumer {
 
         orderMsg.setItems(items);
         return orderMsg;
+    }
+
+    /**
+     * 从 t_train_station 查询出发站和到达站的时刻信息，填入消息
+     */
+    private void fillPlanTimes(OrderCreationRequestMessage orderMsg, TrainDO trainDO, TicketAsyncRequestDO requestRecord) {
+        if (trainDO == null) {
+            log.warn("[选座结果处理] 列车信息不存在，无法获取时刻: trainNum={}", requestRecord.getTrainNum());
+            return;
+        }
+
+        LocalDate runDate = requestRecord.getDate();
+        Long trainId = trainDO.getId();
+
+        // 查询出发站
+        LambdaQueryWrapper<TrainStationDO> departWrapper = new LambdaQueryWrapper<>();
+        departWrapper.eq(TrainStationDO::getTrainId, trainId)
+                .eq(TrainStationDO::getStationName, requestRecord.getStartStation())
+                .select(TrainStationDO::getDepartureTime, TrainStationDO::getArriveDayDiff);
+        TrainStationDO departStation = trainStationMapper.selectOne(departWrapper);
+
+        // 查询到达站
+        LambdaQueryWrapper<TrainStationDO> arriveWrapper = new LambdaQueryWrapper<>();
+        arriveWrapper.eq(TrainStationDO::getTrainId, trainId)
+                .eq(TrainStationDO::getStationName, requestRecord.getEndStation())
+                .select(TrainStationDO::getArrivalTime, TrainStationDO::getArriveDayDiff);
+        TrainStationDO arriveStation = trainStationMapper.selectOne(arriveWrapper);
+
+        if (departStation != null && departStation.getDepartureTime() != null) {
+            int departDayDiff = departStation.getArriveDayDiff() != null ? departStation.getArriveDayDiff() : 0;
+            LocalDate departDate = runDate.plusDays(departDayDiff);
+            orderMsg.setPlanDepartTime(departDate.atTime(departStation.getDepartureTime())
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        }
+
+        if (arriveStation != null && arriveStation.getArrivalTime() != null) {
+            int arriveDayDiff = arriveStation.getArriveDayDiff() != null ? arriveStation.getArriveDayDiff() : 0;
+            LocalDate arriveDate = runDate.plusDays(arriveDayDiff);
+            orderMsg.setPlanArrivalTime(arriveDate.atTime(arriveStation.getArrivalTime())
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        }
+
+        log.info("[选座结果处理] 时刻信息: trainNum={}, departTime={}, arriveTime={}",
+                requestRecord.getTrainNum(), orderMsg.getPlanDepartTime(), orderMsg.getPlanArrivalTime());
     }
 }

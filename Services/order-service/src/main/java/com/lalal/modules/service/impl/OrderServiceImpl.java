@@ -128,15 +128,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             orderItemMapper.insert(itemDO);
         }
         // 初始化出行提醒（延迟消息 + 版本控制） 目前只能提醒一个
+        Long planDepartTime = request.getPlanDepartTime();
+        Long planArrivalTime = request.getPlanArrivalTime();
+        // 如果请求中没有时刻信息，使用兜底值
+        if (planDepartTime == null || planArrivalTime == null) {
+            planDepartTime = LocalDateTime.now().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+            planArrivalTime = planDepartTime;
+        }
         reminderService.initReminderState(
                 orderSn, request.getTrainNumber(), DateTimeFormatter.ofPattern("yyyy-MM-dd").format(request.getRunDate()),
                 request.getStartStation(), request.getEndStation(),
                 request.getUsername(),request.getItems().get(0).getRealName(),
-                LocalDateTime.now().atZone(java.time.ZoneId.systemDefault())
-                        .toInstant()
-                        .toEpochMilli(), LocalDateTime.now().atZone(java.time.ZoneId.systemDefault())
-                        .toInstant()
-                        .toEpochMilli()
+                planDepartTime, planArrivalTime
         );
         OrderCreationResultMessage msg=new OrderCreationResultMessage();
         msg.setOrderSn(orderSn);

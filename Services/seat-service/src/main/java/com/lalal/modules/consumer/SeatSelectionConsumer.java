@@ -1,9 +1,14 @@
 package com.lalal.modules.consumer;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.lalal.modules.dao.TrainDO;
+import com.lalal.modules.dao.TrainStationDO;
 import com.lalal.modules.dto.SeatSelectionRequestMessage;
 import com.lalal.modules.dto.SeatSelectionResultMessage;
 import com.lalal.modules.dto.request.SeatSelectionRequestDTO;
 import com.lalal.modules.dto.response.TicketDTO;
+import com.lalal.modules.mapper.TrainMapper;
+import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.model.Passenger;
 import com.lalal.modules.mq.MessageQueueService;
 import com.lalal.modules.mq.annotation.MessageConsumer;
@@ -16,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -49,6 +55,8 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
 
     private final SeatSelectionService seatSelectionService;
     private final MessageQueueService messageQueueService;
+    private final TrainMapper trainMapper;
+    private final TrainStationMapper trainStationMapper;
 
     private static final String SEAT_SELECTION_RESULT_TOPIC = "seat-selection-result-topic";
 
@@ -103,6 +111,10 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
                     .collect(Collectors.toList()));
             resultMsg.setTimestamp(System.currentTimeMillis());
 
+            // 填充计划发车/到达时间
+            fillPlanTimes(resultMsg, message.getTrainNum(), message.getStartStation(),
+                    message.getEndStation(), message.getDate());
+
             messageQueueService.send(SEAT_SELECTION_RESULT_TOPIC, "result", resultMsg);
 
             log.info("[座位选择] 处理成功: requestId={}, seatCount={}",
@@ -145,6 +157,60 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
         }
         dto.setPassengers(passengers);
         return dto;
+    }
+
+    /**
+     * 从 t_train_station 查询出发站和到达站的时刻信息，填入消息
+     */
+    private void fillPlanTimes(SeatSelectionResultMessage resultMsg, String trainNum,
+                               String startStation, String endStation, String dateStr) {
+        try {
+            // 获取列车信息
+            TrainDO trainDO = trainMapper.selectOne(
+                    new LambdaQueryWrapper<TrainDO>()
+                            .eq(TrainDO::getTrainNumber, trainNum)
+            );
+            if (trainDO == null) {
+                log.warn("[座位选择] 列车信息不存在，无法获取时刻: trainNum={}", trainNum);
+                return;
+            }
+
+            LocalDate runDate = LocalDate.parse(dateStr);
+            Long trainId = trainDO.getId();
+
+            // 查询出发站
+            LambdaQueryWrapper<TrainStationDO> departWrapper = new LambdaQueryWrapper<>();
+            departWrapper.eq(TrainStationDO::getTrainId, trainId)
+                    .eq(TrainStationDO::getStationName, startStation)
+                    .select(TrainStationDO::getDepartureTime, TrainStationDO::getArriveDayDiff);
+            TrainStationDO departStation = trainStationMapper.selectOne(departWrapper);
+
+            // 查询到达站
+            LambdaQueryWrapper<TrainStationDO> arriveWrapper = new LambdaQueryWrapper<>();
+            arriveWrapper.eq(TrainStationDO::getTrainId, trainId)
+                    .eq(TrainStationDO::getStationName, endStation)
+                    .select(TrainStationDO::getArrivalTime, TrainStationDO::getArriveDayDiff);
+            TrainStationDO arriveStation = trainStationMapper.selectOne(arriveWrapper);
+
+            if (departStation != null && departStation.getDepartureTime() != null) {
+                int departDayDiff = departStation.getArriveDayDiff() != null ? departStation.getArriveDayDiff() : 0;
+                LocalDate departDate = runDate.plusDays(departDayDiff);
+                resultMsg.setPlanDepartTime(departDate.atTime(departStation.getDepartureTime())
+                        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+            }
+
+            if (arriveStation != null && arriveStation.getArrivalTime() != null) {
+                int arriveDayDiff = arriveStation.getArriveDayDiff() != null ? arriveStation.getArriveDayDiff() : 0;
+                LocalDate arriveDate = runDate.plusDays(arriveDayDiff);
+                resultMsg.setPlanArrivalTime(arriveDate.atTime(arriveStation.getArrivalTime())
+                        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+            }
+
+            log.debug("[座位选择] 时刻信息: trainNum={}, departTime={}, arriveTime={}",
+                    trainNum, resultMsg.getPlanDepartTime(), resultMsg.getPlanArrivalTime());
+        } catch (Exception e) {
+            log.warn("[座位选择] 获取时刻信息失败: trainNum={}", trainNum, e);
+        }
     }
 }
 

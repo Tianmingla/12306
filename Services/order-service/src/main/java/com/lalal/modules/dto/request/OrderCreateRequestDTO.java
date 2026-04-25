@@ -14,6 +14,10 @@ public class OrderCreateRequestDTO {
     private String username;
     /** 与 ticket-service Feign 字段名 runDate 对齐 */
     private LocalDate runDate;
+    /** 计划发车时间（毫秒时间戳） */
+    private Long planDepartTime;
+    /** 计划到达时间（毫秒时间戳） */
+    private Long planArrivalTime;
     private List<OrderItemRequestDTO> items;
 
     @Data

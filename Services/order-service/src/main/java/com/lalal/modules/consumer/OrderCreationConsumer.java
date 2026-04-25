@@ -132,6 +132,8 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
         dto.setEndStation(msg.getEndStation());
         dto.setUsername(msg.getUsername());
         dto.setRunDate(msg.getRunDate());
+        dto.setPlanDepartTime(msg.getPlanDepartTime());
+        dto.setPlanArrivalTime(msg.getPlanArrivalTime());
 
         // 转换订单项
         if (msg.getItems() != null) {
@@ -158,10 +160,6 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
      * 发送延迟消息（发车前1h、30m、到达提醒）
      */
     private void initReminder(String orderSn, OrderCreationRequestMessage message) {
-        // 获取车次时刻信息（需要从 ticket-service 获取或从消息中携带）
-        // 这里简化处理，假设消息中有时间信息
-        // 实际应该查询 t_train_station 表获取发车/到达时间
-
         String trainNum = message.getTrainNum();
         String runDate = message.getRunDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         String startStation = message.getStartStation();
@@ -173,15 +171,23 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
                 ? message.getItems().get(0).getRealName()
                 : "";
 
-        LocalDate date = message.getRunDate();
-        long planDepartTime = date.atTime(8, 0)
-                .atZone(java.time.ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli();
-        long planArrivalTime = date.atTime(12, 0)
-                .atZone(java.time.ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli();
+        // 从消息中获取计划发车/到达时间
+        Long planDepartTime = message.getPlanDepartTime();
+        Long planArrivalTime = message.getPlanArrivalTime();
+
+        // 如果消息中没有时间，使用默认值（兜底）
+        if (planDepartTime == null || planArrivalTime == null) {
+            log.warn("[订单创建] 消息中缺少时刻信息，使用默认值: orderSn={}", orderSn);
+            LocalDate date = message.getRunDate();
+            planDepartTime = date.atTime(8, 0)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli();
+            planArrivalTime = date.atTime(12, 0)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli();
+        }
 
         reminderService.initReminderState(
                 orderSn, trainNum, runDate,
@@ -190,6 +196,7 @@ public class OrderCreationConsumer extends RocketMQBaseConsumer {
                 planDepartTime, planArrivalTime
         );
 
-        log.info("[订单创建] 提醒初始化完成: orderSn={}, trainNum={}", orderSn, trainNum);
+        log.info("[订单创建] 提醒初始化完成: orderSn={}, trainNum={}, departTime={}, arriveTime={}",
+                orderSn, trainNum, planDepartTime, planArrivalTime);
     }
 }

@@ -10,10 +10,12 @@ import com.lalal.modules.dto.response.AsyncTicketCheckVO;
 import com.lalal.modules.dto.response.PurchaseTicketVO;
 import com.lalal.modules.entity.TicketAsyncRequestDO;
 import com.lalal.modules.entity.TrainDO;
+import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.enumType.RequestStatus;
 import com.lalal.modules.enumType.ReturnCode;
 import com.lalal.modules.mapper.TicketAsyncRequestMapper;
 import com.lalal.modules.mapper.TrainMapper;
+import com.lalal.modules.mapper.TrainStationMapper;
 import com.lalal.modules.remote.OrderServiceClient;
 import com.lalal.modules.remote.SeatServiceClient;
 import com.lalal.modules.remote.UserServiceClient;
@@ -28,6 +30,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -56,6 +59,7 @@ public class TicketServiceImpl implements TicketService {
     private final MessageQueueService messageQueueService;
     private final SeatServiceClient seatServiceClient;
     private final TrainMapper trainMapper;
+    private final TrainStationMapper trainStationMapper;
     private final FareCalculationService fareCalculationService;
     private  final  OrderServiceClient orderServiceClient;
 
@@ -243,6 +247,9 @@ public class TicketServiceImpl implements TicketService {
         orderRequest.setUsername(account);
         orderRequest.setRunDate(LocalDate.parse(date));
 
+        // 查询发车和到达时间
+        fillPlanTimes(orderRequest, trainDO, date);
+
         List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = new ArrayList<>();
         for (int i = 0; i < selectedSeats.getItems().size(); i++) {
             TicketDTO.TicketItem item = selectedSeats.getItems().get(i);
@@ -320,4 +327,50 @@ public class TicketServiceImpl implements TicketService {
         }
     }
 
+    /**
+     * 从 t_train_station 查询出发站和到达站的时刻信息，填入订单请求
+     */
+    private void fillPlanTimes(OrderServiceClient.OrderCreateRemoteRequestDTO orderRequest, TrainDO trainDO, String date) {
+        if (trainDO == null) {
+            log.warn("[购票] 列车信息不存在，无法获取时刻: trainNum={}", orderRequest.getTrainNumber());
+            return;
+        }
+
+        LocalDate runDate = LocalDate.parse(date);
+        Long trainId = trainDO.getId();
+
+        // 查询出发站
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TrainStationDO> departWrapper =
+            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        departWrapper.eq(TrainStationDO::getTrainId, trainId)
+                .eq(TrainStationDO::getStationName, orderRequest.getStartStation())
+                .select(TrainStationDO::getDepartureTime, TrainStationDO::getArriveDayDiff);
+        TrainStationDO departStation = trainStationMapper.selectOne(departWrapper);
+
+        // 查询到达站
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<TrainStationDO> arriveWrapper =
+            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        arriveWrapper.eq(TrainStationDO::getTrainId, trainId)
+                .eq(TrainStationDO::getStationName, orderRequest.getEndStation())
+                .select(TrainStationDO::getArrivalTime, TrainStationDO::getArriveDayDiff);
+        TrainStationDO arriveStation = trainStationMapper.selectOne(arriveWrapper);
+
+        if (departStation != null && departStation.getDepartureTime() != null) {
+            int departDayDiff = departStation.getArriveDayDiff() != null ? departStation.getArriveDayDiff() : 0;
+            LocalDate departDate = runDate.plusDays(departDayDiff);
+            orderRequest.setPlanDepartTime(departDate.atTime(departStation.getDepartureTime())
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        }
+
+        if (arriveStation != null && arriveStation.getArrivalTime() != null) {
+            int arriveDayDiff = arriveStation.getArriveDayDiff() != null ? arriveStation.getArriveDayDiff() : 0;
+            LocalDate arriveDate = runDate.plusDays(arriveDayDiff);
+            orderRequest.setPlanArrivalTime(arriveDate.atTime(arriveStation.getArrivalTime())
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        }
+
+        log.info("[购票] 时刻信息: trainNum={}, departTime={}, arriveTime={}",
+                orderRequest.getTrainNumber(), orderRequest.getPlanDepartTime(), orderRequest.getPlanArrivalTime());
+    }
 }
+
