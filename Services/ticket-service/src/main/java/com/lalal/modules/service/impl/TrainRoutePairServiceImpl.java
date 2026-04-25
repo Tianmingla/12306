@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -73,7 +74,9 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 TimeUnit.DAYS
         );
         if (!direct.isEmpty()) {
-            direct=direct.stream().limit(10).toList();
+            if(LocalDate.parse(date).equals(LocalDate.now())) {
+                direct = direct.stream().filter(d -> d.getStartTime().isAfter(LocalTime.now())).toList();
+            }
             List<TrainSearchResponseDTO> result=direct
                     .stream()
                     .map((e)->{
