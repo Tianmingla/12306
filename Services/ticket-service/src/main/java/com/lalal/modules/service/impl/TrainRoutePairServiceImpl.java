@@ -16,6 +16,8 @@ import com.lalal.modules.service.FareCalculationService;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
 import com.lalal.modules.service.TrainStationService;
+import com.lalal.modules.template.CompositeKey2;
+import com.lalal.modules.template.CompositeKey4;
 import com.lalal.modules.utils.DateUtils;
 import lombok.AllArgsConstructor;
 import org.apache.ibatis.cache.Cache;
@@ -75,7 +77,13 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         );
         if (!direct.isEmpty()) {
             if(LocalDate.parse(date).equals(LocalDate.now())) {
-                direct = direct.stream().filter(d -> d.getStartTime().isAfter(LocalTime.now())).toList();
+                direct = direct.stream().filter(d -> {
+                    //TODO 数据库数据不干净问题 数据清洗不当 先在这里过滤处理
+                    if(d.getStartTime()==null){
+                        return false;
+                    }
+                    return d.getStartTime().isAfter(LocalTime.now());
+                }).toList();
             }
             List<TrainSearchResponseDTO> result=direct
                     .stream()
@@ -145,7 +153,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         for(int i=0;i<firstLeg.size();i++){
             for(int j=0;j<secondLeg.size();j++){
                 //保证结果是同站换乘
-                if(firstLeg.get(i).getArrivalStation()==secondLeg.get(j).getDepartureStation()) {
+                if(Objects.equals(firstLeg.get(i).getArrivalStation(), secondLeg.get(j).getDepartureStation())) {
                     TrainSearchResponseDTO trainSearchResponseDTO = new TrainSearchResponseDTO();
                     trainSearchResponseDTO.setSegments(List.of(firstLeg.get(i), secondLeg.get(j)));
                     trainSearchResponseDTO.setTransferCount(2);
@@ -282,6 +290,38 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         for(Map.Entry<String,Integer> idx:remainingTicketIndex.entrySet()){
             remainingTicketmap.put(idx.getKey(),remainingTicketList.get(idx.getValue()));
         }
+        List<FareCalculationRequestDTO> fareRequests=new ArrayList<>();
+        results.forEach(result-> result.getSegments().forEach(seg->{
+            String startStation=seg.getDepartureStation();
+            String endStation=seg.getArrivalStation();
+            fareRequests.addAll(trainDOList.stream()
+                    .flatMap(t->seatTypemap.get(t)
+                            .stream()
+                            .map(s->{
+                                FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
+                                fareRequest.setTrainId(t);
+                                fareRequest.setDepartureStation(startStation);
+                                fareRequest.setArrivalStation(endStation);
+                                fareRequest.setSeatType(s);
+                                // 默认成人票
+                                fareRequest.setPassengerType(0);
+                                return fareRequest;
+                            })
+                    )
+                    .toList()
+            );
+        }));
+        Map<CompositeKey4<Long,Integer,String,String>,BigDecimal> fareCalculationCachemap=new HashMap<>();
+        List<FareCalculationResultDTO> fareCalculationResultDTOS=fareCalculationService.batchCalculateFare(fareRequests);
+        for(FareCalculationResultDTO fareCalculationResultDTO:fareCalculationResultDTOS){
+            fareCalculationCachemap.put(new CompositeKey4<>(
+                    fareCalculationResultDTO.getTrainId(),
+                    fareCalculationResultDTO.getSeatType(),
+                    fareCalculationResultDTO.getDepartureStation(),
+                    fareCalculationResultDTO.getArrivalStation()
+            ),fareCalculationResultDTO.getTotalFare());
+        }
+
 
 
 
@@ -349,22 +389,13 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
 
                 // 计算该段票价
                 seatTypes.forEach((seatType)->{
-                    FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
-                    fareRequest.setTrainId(trainId);
-                    fareRequest.setTrainNumber(trainNum);
-                    fareRequest.setDepartureStation(startStation);
-                    fareRequest.setArrivalStation(endStation);
-                    fareRequest.setSeatType(seatType);
-                    fareRequest.setPassengerType(0); // 默认成人票
-
-                    try {
-                        FareCalculationResultDTO fareResult = fareCalculationService.calculateFare(fareRequest);
-                        BigDecimal fare = fareResult.getTotalFare();
-                        priceTicket.put(SeatType.getDescByCode(seatType),fare);
-                    } catch (Exception e) {
-                        // 票价计算失败时使用默认值
-                        priceTicket.put(SeatType.getDescByCode(seatType),BigDecimal.ZERO);
-                    }
+                    BigDecimal fare = fareCalculationCachemap.get(new CompositeKey4<>(
+                            trainId,
+                            seatType,
+                            startStation,
+                            endStation
+                    ));
+                    priceTicket.put(SeatType.getDescByCode(seatType),fare);
                 });
                 totalPriceBySeatType.add(priceTicket);
             });

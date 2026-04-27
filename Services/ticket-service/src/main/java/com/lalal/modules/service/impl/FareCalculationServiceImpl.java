@@ -21,6 +21,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 票价计算服务实现
@@ -117,10 +119,21 @@ public class FareCalculationServiceImpl implements FareCalculationService {
     @Override
     public List<FareCalculationResultDTO> batchCalculateFare(List<FareCalculationRequestDTO> requests) {
         List<FareCalculationResultDTO> results = new ArrayList<>();
-        List<Long> trainIds=requests.stream().map(FareCalculationRequestDTO::getTrainId).toList();
-        List<String> departureStations=requests.stream().map(FareCalculationRequestDTO::getDepartureStation).toList();
-        List<String> arrivalStations=requests.stream().map(FareCalculationRequestDTO::getArrivalStation).toList();
+        List<FareCalculationRequestDTO> requestSets=requests.stream()
+                .collect(Collectors.toMap(
+                        FareCalculationRequestDTO::getTrainId,
+                        Function.identity(),
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ))
+                .values()
+                .stream()
+                .collect(Collectors.toList());
+        List<Long> trainIds=requestSets.stream().map(FareCalculationRequestDTO::getTrainId).toList();
+        List<String> departureStations=requestSets.stream().map(FareCalculationRequestDTO::getDepartureStation).toList();
+        List<String> arrivalStations=requestSets.stream().map(FareCalculationRequestDTO::getArrivalStation).toList();
         Map<String,Integer> distanceMap=batchGetDistance(trainIds,departureStations,arrivalStations);
+        Map<Long,SurchargeTypeEnum> surchargeTypeEnumMap=getBatchSurchargeType(requestSets);
         for (FareCalculationRequestDTO request : requests) {
             FareCalculationResultDTO result = new FareCalculationResultDTO();
             result.setTrainId(request.getTrainId());
@@ -151,7 +164,7 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                     request.getPassengerType() != null ? request.getPassengerType() : 0);
 
             // 3. 获取列车上浮类型
-            SurchargeTypeEnum surchargeType = getSurchargeType(request);
+            SurchargeTypeEnum surchargeType = surchargeTypeEnumMap.get(request.getTrainId());
 
             // 4. 是否春运期间
             boolean isPeakSeason = Boolean.TRUE.equals(request.getIsPeakSeason());
@@ -195,17 +208,13 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         List<String> cacheKeys = new ArrayList<>(trainIds.size());
         List<Object[]> disArgs=new ArrayList<>(trainIds.size());
 
-        //去重
+
         List<Integer> index=new ArrayList<>();
-        Set<String> set=new HashSet<>();
         for(int i=0;i<trainIds.size();i++){
             String key=CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
                     arrivalStations.get(i));
-            if(!set.contains(key)){
-                set.add(key);
-                index.add(i);
-                cacheKeys.add(key);
-            }
+            index.add(i);
+            cacheKeys.add(key);
         }
 
         for(int i=0;i<index.size();i++){
@@ -288,22 +297,67 @@ public class FareCalculationServiceImpl implements FareCalculationService {
      * 获取列车上浮类型
      */
     private SurchargeTypeEnum getSurchargeType(FareCalculationRequestDTO request) {
-        // 先查询数据库配置
         if (request.getTrainId() != null) {
-            TrainFareConfigDO config = trainFareConfigMapper.selectByTrainId(request.getTrainId());
+            TrainFareConfigDO config = safeCacheTemplate.safeGet(
+                    CacheConstant.trainFareConfigKey(request.getTrainId()),
+                    ()-> trainFareConfigMapper.selectByTrainId(request.getTrainId()),
+                    new TypeReference<TrainFareConfigDO>(){},
+                    3,
+                    TimeUnit.DAYS
+            );
             if (config != null) {
                 return SurchargeTypeEnum.fromCode(config.getSurchargeType());
             }
         }
-        if (request.getTrainNumber() != null) {
-            TrainFareConfigDO config = trainFareConfigMapper.selectByTrainNumber(request.getTrainNumber());
-            if (config != null) {
-                return SurchargeTypeEnum.fromCode(config.getSurchargeType());
-            }
-        }
-
         // 根据车次品牌推断
         return SurchargeTypeEnum.fromTrainBrand(request.getTrainBrand());
+    }
+    /**
+     * 获取列车上浮类型
+     */
+    private Map<Long,SurchargeTypeEnum> getBatchSurchargeType(List<FareCalculationRequestDTO> request) {
+        List<String> keys=request.stream()
+                .map(r->CacheConstant
+                        .trainFareConfigKey(r.getTrainId()))
+                .toList();
+        List<Object[]> args=request.stream()
+                .map(r->{
+                    return new Object[]{r.getTrainId()};
+                })
+                .toList();
+        List<TrainFareConfigDO> trainFareConfigDOS= safeCacheTemplate.safeBatchGet(
+                keys,
+                (args_)->{
+                    List<Long> trainIds=args_.stream().map(a->(Long)a[0]).toList();
+                    Map<Long,Integer> index=new HashMap<>(trainIds.size()*2);
+                    List<TrainFareConfigDO> results=new ArrayList<>();
+                    for(int i=0;i<trainIds.size();i++){
+                        index.put(trainIds.get(i),i);
+                        results.add(null);
+                    }
+                    LambdaQueryWrapper<TrainFareConfigDO> lambdaQueryWrapper=new LambdaQueryWrapper<TrainFareConfigDO>()
+                            .in(TrainFareConfigDO::getTrainId,trainIds)
+                            .eq(TrainFareConfigDO::getDelFlag,0);
+                    List<TrainFareConfigDO> dbResults=trainFareConfigMapper.selectList(lambdaQueryWrapper);
+                    for(TrainFareConfigDO dbResult:dbResults){
+                        results.set(index.get(dbResult.getTrainId()),dbResult);
+                    }
+                    return results;
+                },
+                new TypeReference<TrainFareConfigDO>(){},
+                args,
+                3,
+                TimeUnit.DAYS
+        );
+        return trainFareConfigDOS.stream()
+                .collect(Collectors.toMap(
+                        TrainFareConfigDO::getId,
+                        t->SurchargeTypeEnum.fromCode(t.getSurchargeType())
+                ));
+
+        // 根据车次品牌推断
+//        return request.stream()
+//                .collect(Collectors.toMap(FareCalculationRequestDTO::getTrainId,r->SurchargeTypeEnum.fromTrainBrand(r.getTrainBrand())));
     }
 
     /**
