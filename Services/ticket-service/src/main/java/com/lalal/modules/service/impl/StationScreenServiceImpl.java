@@ -103,12 +103,22 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
 
         List<TrainStationDO> departures = getDepartureTrainsForToday(stationDO.getId(), today);
 
-        // 转换为车站大屏 DTO
-        List<StationScreenTrainDTO> trains = departures.stream()
-                .map(departure -> convertToScreenTrain(departure, now))
-                .filter(train -> train != null)
-                .sorted(Comparator.comparing(StationScreenTrainDTO::getActualDepartureTime))
-                .collect(Collectors.toList());
+        if (departures.isEmpty()) {
+            return StationScreenResponseDTO.builder()
+                    .stationId(stationDO.getId())
+                    .stationName(stationDO.getName())
+                    .stationCode(stationDO.getCode())
+                    .currentTime(now.format(DateTimeFormatter.ofPattern("HH:mm")))
+                    .currentDate(now.format(DateTimeFormatter.ofPattern("yyyy 年 M 月 d 日 EEEE")))
+                    .totalTrainsToday(0)
+                    .onTimeRate(100.0)
+                    .trains(Collections.emptyList())
+                    .announcements(Collections.singletonList("当前无发车车次"))
+                    .build();
+        }
+
+        // 批量查询优化：避免 N+1 问题
+        List<StationScreenTrainDTO> trains = batchConvertToScreenTrain(departures, now);
 
         // 计算统计数据
         int totalTrainsToday = departures.size();
@@ -151,15 +161,12 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
      */
     private List<TrainStationDO> getDepartureTrainsForToday(Long stationId, LocalDate date) {
         // 查询该车站作为出发站的记录
-        int limit=20;
         List<TrainStationDO> departureTrains = safeCacheTemplate.safeGet(
                 CacheConstant.trainStationDetailList(stationId),
                 ()->{
                     LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
-                    wrapper.eq(TrainStationDO::getStationId, stationId)
-                            .ge(TrainStationDO::getDepartureTime,LocalTime.now())
-//                            .eq(TrainStationDO::getRunDate,date) test环境 先注释掉
-                            .last("limit "+limit);
+                    wrapper.eq(TrainStationDO::getStationId, stationId);
+//                            .eq(TrainStationDO::getRunDate,date) test环境 先注释
 //                      wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
 //                      TrainStationDO::getPlatform, TrainStationDO::getSequence, TrainStationDO::getRunDate);
                     wrapper.select(TrainStationDO::getId, TrainStationDO::getTrainId, TrainStationDO::getDepartureTime,
@@ -169,8 +176,10 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
                 new TypeReference<List<TrainStationDO>>(){},
                 3,
                 TimeUnit.MINUTES
-
-        );
+        ).stream().filter(d->{
+            if(d.getDepartureTime()==null) return false;
+            return d.getDepartureTime().isAfter(LocalTime.now());
+        }).toList();
 
         if (departureTrains.isEmpty()) {
             return departureTrains;
@@ -210,7 +219,217 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
     }
 
     /**
-     * 将 TrainStationDO 转换为 StationScreenTrainDTO
+     * 批量转换为车站大屏 DTO（优化 N+1 查询）
+     */
+    private List<StationScreenTrainDTO> batchConvertToScreenTrain(List<TrainStationDO> departures, LocalDateTime serverNow) {
+        if (departures.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 批量获取所有 trainId
+        List<Long> trainIds = departures.stream()
+                .map(TrainStationDO::getTrainId)
+                .distinct()
+                .toList();
+
+        // 批量查询列车信息
+        Map<Long, TrainDO> trainMap = batchGetTrains(trainIds);
+
+        // 批量查询所有站点信息（用于查找终到站）
+        Map<Long, List<TrainStationDO>> trainStationsMap = batchGetTrainStations(trainIds);
+
+        // 转换为 DTO
+        return departures.stream()
+                .map(departure -> {
+                    Long trainId = departure.getTrainId();
+                    TrainDO train = trainMap.get(trainId);
+                    if (train == null) {
+                        log.warn("车次信息不存在，trainId: {}", trainId);
+                        return null;
+                    }
+
+                    // 从已查询的站点列表中获取终到站
+                    String terminalStation = getTerminalStationFromCache(trainId, departure.getStationId(), trainStationsMap);
+
+                    Integer sequence = departure.getSequence();
+                    LocalTime departureTime = departure.getDepartureTime();
+                    LocalDateTime actualDepartureTime = calculateActualDepartureTime(serverNow, departureTime, sequence);
+
+                    DelayInfo delayInfo = calculateDelayStatus(actualDepartureTime, departureTime, serverNow);
+                    CheckInStatus checkInStatus = calculateCheckInStatus(actualDepartureTime, serverNow, train.getTrainType());
+
+                    String waitingRoom = assignWaitingRoom(sequence);
+                    Random random = new Random();
+                    Integer pre = random.nextInt(10);
+                    char tail = (char) (random.nextInt(0, 26) + 65);
+                    String platform = pre + tail + "";
+                    String checkInGate = "A" + (sequence % 10) + "-" + (sequence % 5 + 1);
+
+                    String remainingTimeDesc = calculateRemainingTimeDesc(delayInfo, checkInStatus, actualDepartureTime, serverNow);
+
+                    return StationScreenTrainDTO.builder()
+                            .trainNumber(train.getTrainNumber())
+                            .trainType(train.getTrainType())
+                            .trainTypeName(getTrainTypeName(train.getTrainType()))
+                            .terminalStation(terminalStation)
+                            .departureTime(departureTime.format(TIME_FORMATTER))
+                            .estimatedDepartureTime(delayInfo.getEstimatedDepartureTime())
+                            .delayStatus(delayInfo.getDelayStatus())
+                            .delayStatusText(delayInfo.getDelayStatusText())
+                            .delayMinutes(delayInfo.getDelayMinutes())
+                            .checkInStatus(checkInStatus.getStatus())
+                            .checkInStatusText(checkInStatus.getText())
+                            .waitingRoom(waitingRoom)
+                            .checkInGate(checkInGate)
+                            .platform(platform)
+                            .remainingTimeDesc(remainingTimeDesc)
+                            .actualDepartureTime(Date.from(actualDepartureTime.atZone(java.time.ZoneId.systemDefault()).toInstant()))
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(StationScreenTrainDTO::getActualDepartureTime))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 批量查询列车信息
+     */
+    private Map<Long, TrainDO> batchGetTrains(List<Long> trainIds) {
+        if (trainIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // 1. 构建缓存键列表
+        List<String> trainKeys = trainIds.stream()
+                .map(t->t.toString())
+                .map(CacheConstant::trainCodeToDetail)
+                .toList();
+
+        // 2. 构建参数列表，每个参数是一个包含 trainId 的 Object 数组
+        List<Object[]> trainArgs = trainIds.stream()
+                .map(id -> new Object[]{id})
+                .toList();
+
+        // 3. 调用 safeCacheTemplate.safeBatchGet 从缓存或数据库中批量获取
+        List<TrainDO> trainDOList = safeCacheTemplate.safeBatchGet(
+                trainKeys,
+                (List<Object[]> args) -> {
+                    // 这个 Lambda 表达式在缓存未命中时执行，用于从数据库加载数据
+                    List<Long> ids = args.stream()
+                            .map(arg -> (Long) arg[0])
+                            .toList();
+                    // 从数据库批量查询
+                    return trainMapper.selectBatchIds(ids);
+                },
+                new TypeReference<TrainDO>() {}, // 指定返回元素的类型
+                trainArgs,
+                3, // 缓存过期时间
+                TimeUnit.DAYS // 时间单位
+        );
+
+        // 4. 将返回的 List<TrainDO> 重新组装成 Map<Long, TrainDO>
+        // safeBatchGet 返回的列表顺序与传入的 trainIds 顺序一致，因此可以直接使用循环索引
+        Map<Long, TrainDO> trainMap = new HashMap<>();
+        for (int i = 0; i < trainIds.size(); i++) {
+            trainMap.put(trainIds.get(i), trainDOList.get(i));
+        }
+
+        return trainMap;
+    }
+
+    /**
+     * 批量查询列车站点信息
+     */
+    private Map<Long, List<TrainStationDO>> batchGetTrainStations(List<Long> trainIds) {
+        if (trainIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        // 1. 构建缓存键列表
+        List<String> stationKeys = trainIds.stream()
+                .map(CacheConstant::trainStationDetail)
+                .toList();
+
+        // 2. 构建参数列表
+        List<Object[]> stationArgs = trainIds.stream()
+                .map(id -> new Object[]{id})
+                .toList();
+
+        // 3. 调用 safeCacheTemplate.safeBatchGet
+        List<List<TrainStationDO>> stationListList = safeCacheTemplate.safeBatchGet(
+                stationKeys,
+                (List<Object[]> args) -> {
+                    // 缓存未命中时的数据库加载逻辑
+                    List<Long> ids = args.stream()
+                            .map(arg -> (Long) arg[0])
+                            .toList();
+
+                    // 构建查询条件
+                    LambdaQueryWrapper<TrainStationDO> wrapper = new LambdaQueryWrapper<>();
+                    wrapper.in(TrainStationDO::getTrainId, ids)
+                            .orderByAsc(TrainStationDO::getTrainId, TrainStationDO::getSequence);
+
+                    // 从数据库查询所有相关站点
+                    List<TrainStationDO> allStations = trainStationMapper.selectList(wrapper);
+
+                    // --- 关键步骤：将扁平的查询结果重组为与 ids 顺序一致的 List<List<TrainStationDO>> ---
+                    // 1. 创建 ID 到索引的映射，用于快速定位
+                    Map<Long, Integer> indexMap = new HashMap<>();
+                    // 2. 初始化结果列表，保证顺序与 ids (即 args) 一致
+                    List<List<TrainStationDO>> result = new ArrayList<>(ids.size());
+                    for (int i = 0; i < ids.size(); i++) {
+                        indexMap.put(ids.get(i), i);
+                        result.add(new ArrayList<>());
+                    }
+
+                    // 3. 将查询到的站点放入对应的列表中
+                    for (TrainStationDO station : allStations) {
+                        Integer index = indexMap.get(station.getTrainId());
+                        if (index != null) {
+                            result.get(index).add(station);
+                        }
+                    }
+
+                    // 注意：由于数据库查询使用了 orderByAsc，放入列表中的站点已经是按 sequence 排序的
+                    return result;
+                },
+                new TypeReference<List<TrainStationDO>>() {}, // 泛型类型为 List<TrainStationDO>
+                stationArgs,
+                3,
+                TimeUnit.DAYS
+        );
+
+        // 4. 将返回的 List<List<TrainStationDO>> 转换为 Map<Long, List<TrainStationDO>>
+        Map<Long, List<TrainStationDO>> stationMap = new HashMap<>();
+        for (int i = 0; i < trainIds.size(); i++) {
+            stationMap.put(trainIds.get(i), stationListList.get(i));
+        }
+
+        return stationMap;
+    }
+
+    /**
+     * 从已查询的站点列表中获取终到站
+     */
+    private String getTerminalStationFromCache(Long trainId, Long currentStationId, Map<Long, List<TrainStationDO>> trainStationsMap) {
+        List<TrainStationDO> stations = trainStationsMap.get(trainId);
+        if (stations == null || stations.isEmpty()) {
+            return "未知";
+        }
+
+        // 找到当前站点，取最后一个站点作为终到站
+        for (TrainStationDO station : stations) {
+            if (station.getId().equals(currentStationId)) {
+                TrainStationDO last = stations.get(stations.size() - 1);
+                return last.getStationName();
+            }
+        }
+
+        return stations.get(stations.size() - 1).getStationName();
+    }
+
+    /**
+     * 将 TrainStationDO 转换为 StationScreenTrainDTO（保留原方法供单条查询使用）
      */
     private StationScreenTrainDTO convertToScreenTrain(TrainStationDO departure, LocalDateTime serverNow) {
         Long trainId = departure.getTrainId();
