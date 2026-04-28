@@ -101,7 +101,7 @@ public class LocalGraphBuilder {
         List<TrainStationDO> viaTrains =trainStationMapper.selectList(
                 new LambdaQueryWrapper<TrainStationDO>()
                         .in(TrainStationDO::getStationName, Arrays.asList(from, to))
-                        .eq(TrainStationDO::getRunDate, date)
+//                        .eq(TrainStationDO::getRunDate, date)
         );
 
         for (TrainStationDO ts : viaTrains) {
@@ -129,7 +129,7 @@ public class LocalGraphBuilder {
         List<TrainStationDO> allStations = trainStationMapper.selectList(
                 new LambdaQueryWrapper<TrainStationDO>()
                         .in(TrainStationDO::getTrainNumber, relevantTrainNumbers)
-                        .eq(TrainStationDO::getRunDate, date)
+//                        .eq(TrainStationDO::getRunDate, date)
                         .orderByAsc(TrainStationDO::getSequence)
         );
 

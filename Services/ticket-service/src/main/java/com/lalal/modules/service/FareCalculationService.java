@@ -4,6 +4,7 @@ import com.lalal.modules.dto.FareCalculationRequestDTO;
 import com.lalal.modules.dto.FareCalculationResultDTO;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 票价计算服务接口
@@ -35,6 +36,15 @@ public interface FareCalculationService {
      * @return 里程(公里)
      */
     Integer getDistance(Long trainId, String departureStation, String arrivalStation);
+    /**
+     * 获取站间距离
+     *
+     * @param trainIds          列车ID
+     * @param departureStations 出发站名称
+     * @param arrivalStations   到达站名称
+     * @return 里程(公里)
+     */
+    Map<String,Integer> batchGetDistance(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations);
 
     /**
      * 获取站间距离（通过车次号）

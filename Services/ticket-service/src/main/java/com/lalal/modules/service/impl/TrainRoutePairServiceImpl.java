@@ -10,16 +10,20 @@ import com.lalal.modules.dto.FareCalculationRequestDTO;
 import com.lalal.modules.dto.FareCalculationResultDTO;
 import com.lalal.modules.dto.response.TrainSearchResponseDTO;
 import com.lalal.modules.entity.*;
+import com.lalal.modules.dto.transfer.TransferRouteResult;
+import com.lalal.modules.dto.transfer.TransferSegment;
 import com.lalal.modules.enumType.train.SeatType;
 import com.lalal.modules.mapper.*;
 import com.lalal.modules.service.FareCalculationService;
 import com.lalal.modules.service.StationService;
 import com.lalal.modules.service.TrainRoutePairService;
 import com.lalal.modules.service.TrainStationService;
+import com.lalal.modules.service.TransferSearchService;
 import com.lalal.modules.template.CompositeKey2;
 import com.lalal.modules.template.CompositeKey4;
 import com.lalal.modules.utils.DateUtils;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.cache.Cache;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -38,7 +42,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-
+@Slf4j
 @Service
 @AllArgsConstructor
 public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper, TrainRoutePairDO> implements TrainRoutePairService {
@@ -53,6 +57,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     TrainStationService trainStationService;
     RedissonClient redissonClient;
     FareCalculationService fareCalculationService;
+    TransferSearchService transferSearchService;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
         // 1. mid不为空，查找 from->mid->to
@@ -97,24 +102,19 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             fillTrainSearchResult(result,date);
             return result;
         }
-        // 3. 无直达，返回热门中转方案（mock热门站台）
-        List<String> hotMidStationNames = Arrays.asList("长沙", "广州", "北京", "上海"); // TODO: 热门中转站统计优化
-        List<StationDO> hotMidStations=hotMidStationNames
-                .stream()
-                .map((e)->{
-                    StationDO stationDO=new StationDO();
-                    stationDO.setName(e);
-                    return stationDO;
-                })
+        // 3. 无直达，调用智能中转服务
+        log.info("无直达线路，启动智能中转搜索: from={}, to={}, date={}", from, to, date);
+        List<TransferRouteResult> transferResults = transferSearchService.search(from, to, date);
+        if (transferResults.isEmpty()) {
+            log.info("智能中转也未找到线路: from={}, to={}", from, to);
+            return List.of();
+        }
+        log.info("智能中转找到 {} 条线路", transferResults.size());
+        List<TrainSearchResponseDTO> result=transferResults.stream()
+                .map(this::convertTransferResultToResponseDTO)
                 .toList();
-
-
-
-        List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to);
-
         fillTrainSearchResult(result,date);
         return result;
-
     }
     private List<TrainSearchResponseDTO> handleMidMerge(String from,
                                                         String mid,
@@ -162,6 +162,57 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             }
         }
         return result;
+    }
+
+    /**
+     * 将智能中转搜索结果(TransferRouteResult)转换为车次搜索响应(TrainSearchResponseDTO)
+     * 使智能中转结果能够复用前端的渲染逻辑
+     */
+    private TrainSearchResponseDTO convertTransferResultToResponseDTO(TransferRouteResult transferResult) {
+        TrainSearchResponseDTO response = new TrainSearchResponseDTO();
+        response.setPlanId(transferResult.getRouteId());
+        response.setTransferCount(transferResult.getTransferCount());
+        response.setTotalDurationMinutes(transferResult.getTotalMinutes());
+        response.setFirstDepartureTime(transferResult.getDepartureTime());
+        response.setFinalArrivalTime(transferResult.getArrivalTime());
+
+        List<TrainRoutePairDO> segments = transferResult.getSegments().stream()
+                .map(seg -> {
+                    TrainRoutePairDO pair = new TrainRoutePairDO();
+                    pair.setTrainNumber(seg.getTrainNumber());
+                    pair.setDepartureStation(seg.getDepartureStation());
+                    pair.setArrivalStation(seg.getArrivalStation());
+                    pair.setStartRegion(seg.getDepartureStation());
+                    pair.setEndRegion(seg.getArrivalStation());
+                    try {
+                        pair.setStartTime(LocalTime.parse(seg.getDepartureTime()));
+                    } catch (Exception e) {
+                        pair.setStartTime(LocalTime.of(0, 0));
+                    }
+                    try {
+                        pair.setEndTime(LocalTime.parse(seg.getArrivalTime()));
+                    } catch (Exception e) {
+                        pair.setEndTime(LocalTime.of(0, 0));
+                    }
+                    pair.setDayDiff(0);
+                    return pair;
+                })
+                .toList();
+        response.setSegments(segments);
+
+        // 票价映射（TransferSegment.priceMap 已经由 FareCalculationService 计算）
+        List<Map<String, BigDecimal>> priceMaps = transferResult.getSegments().stream()
+                .map(TransferSegment::getPriceMap)
+                .toList();
+        response.setPriceMap(priceMaps);
+
+        // 余票映射
+        List<Map<String, Integer>> remainingMaps = transferResult.getSegments().stream()
+                .map(TransferSegment::getRemainingMap)
+                .toList();
+        response.setRemainingTicketNumMap(remainingMaps);
+
+        return response;
     }
 
     private void fillTrainSearchResult(List<TrainSearchResponseDTO> results,String date){

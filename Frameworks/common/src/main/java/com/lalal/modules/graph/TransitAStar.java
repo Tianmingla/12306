@@ -77,9 +77,14 @@ public class TransitAStar {
      * @param weightTransfer 换乘权重（默认0.2）
      * @return 路径结果，null 表示无解
      */
-    public AStarResult aStar(String startStation, LocalDateTime departTime,
+    public AStarResult aStar(String startStation,
+                             LocalDateTime departTime,
                              String endStation,
-                             double weightTime, double weightCost, double weightTransfer) {
+                             Set<String> penalizedEdges,
+                             double weightTime,
+                             double weightCost,
+                             double weightTransfer,
+                             double weightPenalize) {
         // 1. 初始化
         String startKey = StationTimeNode.makeKey(startStation, departTime, true);
 
@@ -127,11 +132,12 @@ public class TransitAStar {
                 }
 
                 // g(n) = 实际时间 + 票价折算时间
-                double timeCost = edge.getDurationMinutes();
-                double costTime = edge.getCost() * 0.1; // 票价每100元=10分钟代价
+                double timeCost = edge.getDurationMinutes()*weightTime;
+                double costTime = edge.getCost() * weightCost;
                 int transferCost = edge.isWaitEdge() ? 1 : 0;
+                double penalizedCost= (penalizedEdges.contains(neighborKey)?1:0)*weightPenalize;
 
-                double tentativeG = current.g + timeCost + costTime + transferCost * 50;
+                double tentativeG = current.g + timeCost + costTime + transferCost*weightTransfer+penalizedCost;
 
                 Double existingG = gScore.get(neighborKey);
                 if (existingG == null || tentativeG < existingG) {
@@ -159,7 +165,7 @@ public class TransitAStar {
     }
 
     /**
-     * A* 批量搜索：找到多条候选路径
+     * A* 批量搜索：找到多条候选路径 惩罚法
      *
      * @param startStation  出发站
      * @param departTime    出发时间
@@ -169,73 +175,22 @@ public class TransitAStar {
      */
     public List<AStarResult> aStarMulti(String startStation, LocalDateTime departTime,
                                        String endStation, int maxResults) {
-        String startKey = StationTimeNode.makeKey(startStation, departTime, true);
-
-        if (!graph.hasNode(startKey)) {
-            startKey = findNearestDeparture(startStation, departTime);
-            if (startKey == null) return List.of();
-        }
-
-        gScore.put(startKey, 0.0);
-        fScore.put(startKey, estimateHeuristic(startStation, endStation));
-
-        PriorityQueue<AStarState> open = new PriorityQueue<>(
-                Comparator.comparingDouble(AStarState::getF)
-        );
-        open.offer(new AStarState(startKey, 0.0, estimateHeuristic(startStation, endStation),
-                0, departTime));
-
-        List<AStarResult> results = new ArrayList<>();
-        Set<String> addedResults = new HashSet<>();
-
-        while (!open.isEmpty() && results.size() < maxResults) {
-            AStarState current = open.poll();
-            String currentKey = current.nodeKey;
-
-            if (closed.contains(currentKey)) continue;
-            closed.add(currentKey);
-
-            StationTimeNode currentNode = graph.getNode(currentKey);
-
-            // 每到达一个新车站，记录一条路径
-            String stationKey = currentNode.getStation();
-            if (!addedResults.contains(stationKey)) {
-                addedResults.add(stationKey);
-                results.add(buildResult(startKey, currentKey, current.g, current.totalTransfers));
-            }
-
-            // 遍历出边
-            for (TransitEdge edge : graph.getEdges(currentKey)) {
-                String neighborKey = edge.getToKey();
-
-                if (closed.contains(neighborKey)) continue;
-
-                if (edge.isTrainEdge()) {
-                    TrainEdge trainEdge = (TrainEdge) edge;
-                    if (trainEdge.getDepartureTime().isBefore(current.time)) continue;
-                }
-
-                double tentativeG = current.g + edge.getDurationMinutes() + edge.getCost() * 0.1
-                        + (edge.isWaitEdge() ? 50 : 0);
-
-                if (gScore.getOrDefault(neighborKey, Double.MAX_VALUE) > tentativeG) {
-                    cameFrom.put(neighborKey, currentKey);
-                    gScore.put(neighborKey, tentativeG);
-
-                    StationTimeNode neighborNode = graph.getNode(neighborKey);
-                    double f = tentativeG + estimateHeuristic(neighborNode.getStation(), endStation);
-                    fScore.put(neighborKey, f);
-
-                    LocalDateTime neighborTime = edge.isTrainEdge()
-                            ? ((TrainEdge) edge).getArrivalTime()
-                            : current.time.plusMinutes(edge.getDurationMinutes());
-
-                    open.offer(new AStarState(neighborKey, tentativeG, f,
-                            current.totalTransfers + (edge.isWaitEdge() ? 1 : 0), neighborTime));
-                }
-            }
-        }
-
+        Set<String> penalizedEdges=new HashSet<>();
+       List<AStarResult> results=new ArrayList<>();
+       for(int i=0;i<maxResults;i++){
+           AStarResult result=aStar(
+                   startStation,
+                   departTime,
+                   endStation,
+                   penalizedEdges,
+                   0.6,
+                   0.4,
+                   100,
+                   1000
+           );
+           if (result==null) break;
+           results.add(result);
+       }
         // 按总耗时排序
         results.sort(Comparator.comparingDouble(AStarResult::getTotalMinutes));
         return results;

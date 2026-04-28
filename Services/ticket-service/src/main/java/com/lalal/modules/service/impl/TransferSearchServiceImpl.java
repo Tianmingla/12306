@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -139,7 +140,7 @@ public class TransferSearchServiceImpl implements TransferSearchService {
         LocalDate date = LocalDate.parse(request.getDate(), DATE_FMT);
         LocalDateTime departTime = request.getDepartureTime() != null
                 ? date.atTime(LocalDateTime.parse(request.getDepartureTime(), TIME_FMT).toLocalTime())
-                : date.atStartOfDay();
+                : date.atTime(LocalTime.now());
 
         // 1. 构建局部图
         TransitGraph graph = localGraphBuilder.buildLocalGraph(
@@ -152,8 +153,11 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             return Collections.emptyList();
         }
 
+
+
         // 2. 执行 A* 搜索
         TransitAStar aStar = new TransitAStar(graph);
+        aStar.setHeuristicCache();
         List<TransitAStar.AStarResult> rawResults = aStar.aStarMulti(
                 request.getFrom(), departTime, request.getTo(),
                 request.getLimit() * 3
