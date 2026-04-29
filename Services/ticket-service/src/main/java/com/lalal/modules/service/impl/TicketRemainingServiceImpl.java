@@ -8,18 +8,16 @@ import com.lalal.modules.constant.cache.CacheConstant;
 import com.lalal.modules.dto.TicketRemainingRequestDTO;
 import com.lalal.modules.dto.TicketRemainingResultDTO;
 import com.lalal.modules.entity.SeatDO;
-import com.lalal.modules.entity.StationDO;
-import com.lalal.modules.entity.TrainDO;
 import com.lalal.modules.entity.TrainStationDO;
 import com.lalal.modules.mapper.SeatMapper;
-import com.lalal.modules.mapper.StationMapper;
 import com.lalal.modules.mapper.TrainStationMapper;
+import com.lalal.modules.service.SeatService;
 import com.lalal.modules.service.TicketRemainingService;
+import com.lalal.modules.service.TrainStationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -71,6 +69,8 @@ import java.util.stream.Collectors;
 public class TicketRemainingServiceImpl implements TicketRemainingService {
 
     private final SeatMapper seatMapper;
+    private final SeatService seatService;
+    private final TrainStationService trainStationService;
     private final SafeCacheTemplate safeCacheTemplate;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -119,108 +119,94 @@ public class TicketRemainingServiceImpl implements TicketRemainingService {
     public Map<String, List<Integer>> batchCalculateRemaining(
             List<Long> trainIdList,
             String date,
-            List<Integer> seatTypes,
-            Map<Long, List<String>> stationsMap) {
+            Map<Long, List<Integer>> seatTypemap,
+            Map<Long, List<String>> stationsmap) {
 
-        if (trainIdList.isEmpty() || seatTypes.isEmpty()) {
+        if (trainIdList.isEmpty()) {
             return Collections.emptyMap();
         }
+        if(seatTypemap==null){
+            seatTypemap=seatService.batchGetSeatTypes(trainIdList);
+        }
+        if(stationsmap==null){
+            stationsmap=trainStationService.batchGetStationNames(trainIdList);
+        }
 
-        // Step 1: 构建批量缓存键
-        List<String> remainingKeys = trainIdList.stream()
-                .flatMap(trainId -> seatTypes.stream()
-                        .map(seatType -> CacheConstant.trainTicketRemainingKey(trainId, date, seatType)))
+        Map<Long, List<Integer>> finalSeatTypemap = seatTypemap;
+        List<String> remainingTicketKeys=trainIdList.stream()
+                .flatMap((t)->
+                        finalSeatTypemap.get(t).stream()
+                                .map(s->CacheConstant.trainTicketRemainingKey(
+                                        t,
+                                        date,
+                                        s
+                                ))
+                )
                 .toList();
-
-        // Step 2: 构建参数
-        List<Object[]> remainingArgs = trainIdList.stream()
-                .flatMap(trainId -> seatTypes.stream()
-                        .map(seatType -> new Object[]{trainId, seatType}))
+        List<Object[]> remainingTicketArgs=trainIdList.stream()
+                .flatMap((t)->
+                        finalSeatTypemap.get(t)
+                                .stream()
+                                .map(s->new Object[]{t,s})
+                )
                 .toList();
-
-        // Step 3: 构建索引 trainId_seatType → result 索引
-        Map<String, Integer> remainingIndex = new HashMap<>();
-        int idx = 0;
-        for (Long trainId : trainIdList) {
-            for (Integer seatType : seatTypes) {
-                remainingIndex.put(trainId + "_" + seatType, idx++);
+        Map<String,Integer> remainingTicketIndex=new HashMap<>();
+        int recordIdx=0;
+        for(int i=0;i<trainIdList.size();i++){
+            List<Integer> seatTypes=seatTypemap.get(trainIdList.get(i));
+            for(int j=0;j<seatTypes.size();j++){
+                remainingTicketIndex.put(
+                        trainIdList.get(i)+"_"+seatTypes.get(j),
+                        recordIdx++
+                );
             }
         }
-
-        // Step 4: 批量查询缓存 + 回填（对齐 fillTrainSearchResult lines 238-277）
-        List<List<Integer>> remainingList = safeCacheTemplate.safeBatchLGet(
-                remainingKeys,
-                (List<Object[]> args) -> {
-                    // Lambda 回填逻辑：批量查询 t_seat 获取座位总数
-
-                    // 1. 提取 trainIds 和 seatTypes
-                    Set<Long> trainIds = args.stream()
-                            .map(a -> (Long) a[0])
-                            .collect(Collectors.toSet());
-                    Set<Integer> seatTypeSet = args.stream()
-                            .map(a -> (Integer) a[1])
-                            .collect(Collectors.toSet());
-
-                    // 2. 初始化结果容器
-                    Map<String, Integer> indexMap = new HashMap<>();
-                    List<List<Integer>> result = new ArrayList<>(args.size());
-                    for (int i = 0; i < args.size(); i++) {
-                        indexMap.put(args.get(i)[0] + "_" + args.get(i)[1], i);
+        Map<Long, List<String>> finalStationsmap = stationsmap;
+        List<List<Integer>> remainingTicketList=safeCacheTemplate.safeBatchLGet(
+                remainingTicketKeys,
+                (List<Object[]> args)->{
+                    List<Long> trainIds=args.stream()
+                            .map(arg->(Long)arg[0])
+                            .toList();
+                    List<Integer> seatTypes=args.stream()
+                            .map(arg->(Integer)arg[1])
+                            .toList();
+                    Map<String,Integer> indexmap=new HashMap<>();
+                    List<List<Integer>> result=new ArrayList<>(args.size());
+                    for(int i=0;i<trainIds.size();i++){
+                        indexmap.put(trainIds.get(i)+"_"+seatTypes.get(i),i);
                         result.add(new ArrayList<>());
                     }
-
-                    // 3. 批量查询座位总数
-                    // SELECT train_id, seat_type, COUNT(*) as cnt
-                    // FROM t_seat
-                    // WHERE train_id IN (...) AND seat_type IN (...)
-                    // GROUP BY train_id, seat_type
-                    QueryWrapper<SeatDO> wrapper = new QueryWrapper<SeatDO>()
-                            .select("train_id", "seat_type", "COUNT(*) as cnt")
-                            .in("train_id", trainIds)
-                            .in("seat_type", seatTypeSet)
-                            .groupBy("train_id", "seat_type");
-
-                    List<Map<String, Object>> rows = seatMapper.selectMaps(wrapper);
-
-                    // 4. 填充结果（关键逻辑）
-                    for (Map<String, Object> row : rows) {
-                        Long trainId = (Long) row.get("train_id");
-                        Integer seatType = (Integer) row.get("seat_type");
-                        Integer seatCount = ((Long) row.get("cnt")).intValue();
-
-                        String key = trainId + "_" + seatType;
-                        Integer resultIdx = indexMap.get(key);
-                        if (resultIdx != null) {
-                            // 获取该车次的区间数 = 站点数 - 1
-                            List<String> stations = stationsMap.get(trainId);
-                            int segmentCount = (stations != null && stations.size() > 1)
-                                    ? stations.size() - 1
-                                    : 1;
-
-                            // 每个区间填充相同的座位总数
-                            for (int i = 0; i < segmentCount; i++) {
-                                result.get(resultIdx).add(seatCount);
-                            }
+                    //TODO 并不是任意匹配 但数据库不可能出现该火车id和其他座位类型的数据 因此只是性能浪费
+                    //等到不懒的时候推荐改成xml做（train_id,seat_type）in (...)
+                    QueryWrapper wrapper=new QueryWrapper<SeatDO>()
+                            .select("train_id","seat_type","count(*) as count")
+                            .in("train_id",trainIds)
+                            .in("seat_type",seatTypes)
+                            .groupBy("train_id","seat_type");
+                    List<Map<String,Object>> objs=seatMapper.selectMaps(wrapper);
+                    //TODO 高可用 暂时以缓存为中心 若没有说明全有票
+                    for(Map<String,Object> obj :objs){
+                        Long trainId=(Long) obj.get("train_id");
+                        Integer seatType=(Integer) obj.get("seat_type");
+                        Long count = (Long) obj.get("count");
+                        String indexKey=trainId + "_" + seatType;
+                        for(int i = 0; i< finalStationsmap.get(trainId).size()-1; i++) {
+                            result.get(indexmap.get(indexKey)).add(count.intValue());
                         }
                     }
-
                     return result;
                 },
-                new TypeReference<Integer>() {},
-                remainingArgs,
-                CACHE_EXPIRE_DAYS,
+                new TypeReference<Integer>(){},
+                remainingTicketArgs,
+                3,
                 TimeUnit.DAYS
         );
-
-        // Step 5: 重组结果
-        Map<String, List<Integer>> resultMap = new HashMap<>();
-        for (Map.Entry<String, Integer> entry : remainingIndex.entrySet()) {
-            String key = entry.getKey();
-            Integer listIdx = entry.getValue();
-            resultMap.put(key, remainingList.get(listIdx));
+        Map<String,List<Integer>> remainingTicketmap=new HashMap<>();
+        for(Map.Entry<String,Integer> idx:remainingTicketIndex.entrySet()){
+            remainingTicketmap.put(idx.getKey(),remainingTicketList.get(idx.getValue()));
         }
-
-        return resultMap;
+        return remainingTicketmap;
     }
 
     // ==================== 单区间查询 ====================

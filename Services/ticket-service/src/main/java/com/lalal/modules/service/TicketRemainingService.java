@@ -35,16 +35,16 @@ public interface TicketRemainingService {
      *
      * @param trainIdList   车次ID列表
      * @param date          乘车日期
-     * @param seatTypes     座位类型列表
-     * @param stationsMap   车次ID→站点列表映射
+     * @param seatTypemap     座位类型列表 可为空
+     * @param stationsmap   车次ID→站点列表映射 可为空
      * @return Map<"trainId_seatType", List<Integer>> 各区间余票列表
      */
     Map<String, List<Integer>> batchCalculateRemaining(
             List<Long> trainIdList,
             String date,
-            List<Integer> seatTypes,
-            Map<Long, List<String>> stationsMap
-    );
+            Map<Long, List<Integer>> seatTypemap,
+            Map<Long, List<String>> stationsmap);
+
 
     /**
      * 查询单个区间的余票

@@ -145,4 +145,14 @@ public class TrainStationServiceImpl extends ServiceImpl<TrainStationMapper, Tra
                 TimeUnit.DAYS
         );
     }
+
+    @Override
+    public Map<Long, List<String>> batchGetStationNames(List<Long> trainDOList) {
+        List<List<String>> stationsList=getStationNamesByTrainIds(trainDOList);
+        Map<Long,List<String>> stationsmap=new HashMap<>();
+        for (int i=0;i<trainDOList.size();i++){
+            stationsmap.put(trainDOList.get(i),stationsList.get(i));
+        }
+        return stationsmap;
+    }
 }

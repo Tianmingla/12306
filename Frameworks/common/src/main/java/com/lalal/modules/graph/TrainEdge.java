@@ -50,6 +50,10 @@ public class TrainEdge extends TransitEdge implements Serializable {
      * 到达时间
      */
     private final LocalDateTime arrivalTime;
+    /**
+     * 两站距离
+     */
+    private final Integer distance;
 
     /**
      * 可用座位类型列表
@@ -85,6 +89,7 @@ public class TrainEdge extends TransitEdge implements Serializable {
                      String arrivalStation,
                      LocalDateTime departureTime,
                      LocalDateTime arrivalTime,
+                     Integer distance,
                      List<Integer> seatTypes,
                      List<SeatPrice> seatPrices,
                      List<SeatRemaining> seatRemainings) {
@@ -98,6 +103,7 @@ public class TrainEdge extends TransitEdge implements Serializable {
         this.arrivalStation = arrivalStation;
         this.departureTime = departureTime;
         this.arrivalTime = arrivalTime;
+        this.distance=distance;
         this.seatTypes = seatTypes;
         this.seatPrices = seatPrices;
         this.seatRemainings = seatRemainings;

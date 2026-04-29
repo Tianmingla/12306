@@ -120,9 +120,10 @@ public class FareCalculationServiceImpl implements FareCalculationService {
     @Override
     public List<FareCalculationResultDTO> batchCalculateFare(List<FareCalculationRequestDTO> requests) {
         List<FareCalculationResultDTO> results = new ArrayList<>();
+        //请求因为包含座位类型 而distanceMap的构建不需要seatType可能重复
         List<FareCalculationRequestDTO> requestSets=requests.stream()
                 .collect(Collectors.toMap(
-                        FareCalculationRequestDTO::getTrainId,
+                        k->new CompositeKey3<Long,String,String>(k.getTrainId(),k.getDepartureStation(),k.getArrivalStation()),
                         Function.identity(),
                         (existing, replacement) -> existing,
                         LinkedHashMap::new

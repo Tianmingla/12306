@@ -12,7 +12,10 @@ import com.lalal.modules.graph.TrainEdge;
 import com.lalal.modules.graph.TransitGraph;
 import com.lalal.modules.mapper.*;
 import com.lalal.modules.service.FareCalculationService;
+import com.lalal.modules.service.SeatService;
 import com.lalal.modules.service.TicketRemainingService;
+import com.lalal.modules.template.CompositeKey3;
+import com.lalal.modules.template.CompositeKey4;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -46,7 +49,7 @@ public class LocalGraphBuilder {
     private final TrainStationMapper trainStationMapper;
     private final TrainMapper trainMapper;
     private final TrainFareConfigMapper trainFareConfigMapper;
-    private final SeatMapper seatMapper;
+    private final SeatService seatService;
     private final TrainRoutePairMapper trainRoutePairMapper;
     private final TicketRemainingService ticketRemainingService;
     private final FareCalculationService fareCalculationService;
@@ -135,13 +138,15 @@ public class LocalGraphBuilder {
 
         List<Long> trainIds=trains.stream().map(TrainDO::getId).toList();
 
-        Map<Long,List<Integer>> seatTypeMap= batchGetSeatTypes(trainIds);
+        Map<Long,List<Integer>> seatTypeMap= seatService.batchGetSeatTypes(trainIds);
 
         // 按车次分组
         Map<String, List<TrainStationDO>> stationsByTrain = allStations.stream()
                 .collect(Collectors.groupingBy(TrainStationDO::getTrainNumber));
 
-        Map<Long,List<FareCalculationResultDTO>> fareMap=batchGetSeatPrices(trains,stationsByTrain,seatTypeMap);
+        Map<CompositeKey4<Long, Integer, String, String>,FareCalculationResultDTO> fareMap=batchGetSeatPrices(trains,stationsByTrain,seatTypeMap);
+
+        Map<CompositeKey3<Long,String,String>,Integer> distancemap=batchGetDistanceMap(trains,stationsByTrain);
 
         // Step 4: 为每个车次的每段区间创建边
         for (Map.Entry<String, List<TrainStationDO>> entry : stationsByTrain.entrySet()) {
@@ -154,16 +159,21 @@ public class LocalGraphBuilder {
 
             // 获取座位类型和余票信息
             List<Integer> seatTypes = seatTypeMap.get(train.getId());
-            List<TrainEdge.SeatPrice> seatPrices = fareMap.get(train.getId()).stream()
-                    .map(f->new TrainEdge.SeatPrice(f.getSeatType(),f.getTotalFare()))
-                    .toList();
-            List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
-
 
             for (int i = 0; i < stations.size() - 1; i++) {
                 TrainStationDO fromStation = stations.get(i);
                 TrainStationDO toStation = stations.get(i + 1);
 
+                List<TrainEdge.SeatPrice> seatPrices = seatTypes.stream().map(s->{
+                    return new TrainEdge.SeatPrice(s,
+                            fareMap.get(new CompositeKey4<Long, Integer, String, String>(trainId,
+                                            s,fromStation.getStationName(),
+                                            toStation.getStationName())
+                                    ).getTotalFare());
+                }).toList();
+                Integer distance=distancemap.get(new CompositeKey3<Long,String,String>(trainId,fromStation.getStationName(),toStation.getStationName()));
+
+                List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
                 // 计算出发和到达时间（含日期偏移）
                 LocalDateTime departureDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
                 LocalDateTime arrivalDateTime = buildDateTime(date, toStation.getArrivalTime(),toStation.getArriveDayDiff());
@@ -182,6 +192,7 @@ public class LocalGraphBuilder {
                         departureDateTime,
                         toStation.getStationName(),
                         arrivalDateTime,
+                        distance,
                         seatTypes,
                         seatPrices,
                         seatRemainings
@@ -230,12 +241,14 @@ public class LocalGraphBuilder {
         Map<String,TrainDO> trainDOMap=trains.stream()
                 .collect(Collectors.toMap(TrainDO::getTrainNumber,t->t));
 
-        Map<Long,List<Integer>> seatTypeMap= batchGetSeatTypes(trainIds);
+        Map<Long,List<Integer>> seatTypeMap= seatService.batchGetSeatTypes(trainIds);
 
         Map<String, List<TrainStationDO>> stationsByTrain = allStations.stream()
                 .collect(Collectors.groupingBy(TrainStationDO::getTrainNumber));
 
-        Map<Long,List<FareCalculationResultDTO>> fareMap=batchGetSeatPrices(trains,stationsByTrain,seatTypeMap);
+        Map<CompositeKey4<Long, Integer, String, String>,FareCalculationResultDTO> fareMap=batchGetSeatPrices(trains,stationsByTrain,seatTypeMap);
+
+        Map<CompositeKey3<Long,String,String>,Integer> distancemap=batchGetDistanceMap(trains,stationsByTrain);
 
         for (Map.Entry<String, List<TrainStationDO>> entry : stationsByTrain.entrySet()) {
             String trainNumber = entry.getKey();
@@ -247,14 +260,21 @@ public class LocalGraphBuilder {
             if (train == null || stations.size() < 2) continue;
 
             List<Integer> seatTypes =seatTypeMap.get(train.getId());
-            List<TrainEdge.SeatPrice> seatPrices = fareMap.get(train.getId()).stream()
-                    .map(f->new TrainEdge.SeatPrice(f.getSeatType(),f.getTotalFare()))
-                    .toList();
-            List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
 
             for (int i = 0; i < stations.size() - 1; i++) {
                 TrainStationDO fromStation = stations.get(i);
                 TrainStationDO toStation = stations.get(i + 1);
+
+                List<TrainEdge.SeatPrice> seatPrices = seatTypes.stream().map(s->{
+                    return new TrainEdge.SeatPrice(s,
+                            fareMap.get(new CompositeKey4<Long, Integer, String, String>(trainId,
+                                    s,fromStation.getStationName(),
+                                    toStation.getStationName())
+                            ).getTotalFare());
+                }).toList();
+                Integer distance=distancemap.get(new CompositeKey3<Long,String,String>(trainId,fromStation.getStationName(),toStation.getStationName()));
+
+                List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
 
                 LocalDateTime departureDateTime = buildDateTime(date, fromStation.getDepartureTime(),
                         0);
@@ -269,6 +289,7 @@ public class LocalGraphBuilder {
                         departureDateTime,
                         toStation.getStationName(),
                         arrivalDateTime,
+                        distance,
                         seatTypes,
                         seatPrices,
                         seatRemainings
@@ -292,52 +313,7 @@ public class LocalGraphBuilder {
         return baseDate.plusDays(dayOffset).atTime(time!=null? time :LocalTime.now());
     }
 
-    /**
-     * 批量获取座位类型列表
-     */
-    private Map<Long,List<Integer>> batchGetSeatTypes(List<Long> tIds) {
-        List<String> seatTypeKeys=tIds.stream()
-                .map(CacheConstant::trainSeatType)
-                .toList();
-        List<Object[]> seatTypeArgs=tIds.stream()
-                .map(t-> new Object[]{t})
-                .toList();
 
-        List<List<Integer>> seatTypeList=safeCacheTemplate.safeBatchGet(
-                seatTypeKeys,
-                (List<Object[]> args)->{
-                    List<Long> trainIds=args.stream()
-                            .map(arg->(Long)arg[0])
-                            .toList();
-                    Map<Long,Integer> indexmap=new HashMap<>();
-                    List<List<Integer>> result=new ArrayList<>(args.size());
-                    for(int i=0;i<trainIds.size();i++){
-                        indexmap.put(trainIds.get(i),i);
-                        result.add(new ArrayList<>());
-                    }
-                    LambdaQueryWrapper<SeatDO> lambdaQueryWrapper=new LambdaQueryWrapper<SeatDO>()
-                            .select(SeatDO::getSeatType,SeatDO::getTrainId)
-                            .in(SeatDO::getTrainId,trainIds)
-                            .groupBy(SeatDO::getSeatType,SeatDO::getTrainId);
-                    List<Map<String,Object>> objects=seatMapper.selectMaps(lambdaQueryWrapper);
-                    for (Map<String,Object> objectMap:objects){
-                        result.get(indexmap.get(objectMap.get("train_id"))).add((Integer) objectMap.get("seat_type"));
-                    }
-                    return result;
-//
-                },
-                new TypeReference<List<Integer>>(){},
-                seatTypeArgs,
-                3,
-                TimeUnit.DAYS
-        );
-        Map<Long,List<Integer>> seatTypemap=new HashMap<>();
-        for (int i=0;i<tIds.size();i++){
-            seatTypemap.put(tIds.get(i),seatTypeList.get(i));
-        }
-
-        return seatTypemap;
-    }
 
     /**
      * 获取票价信息（按区间）
@@ -370,7 +346,7 @@ public class LocalGraphBuilder {
     /**
      * 批量获取票价信息（按区间）
      */
-    private Map<Long,List<FareCalculationResultDTO>> batchGetSeatPrices(List<TrainDO> trains,Map<String, List<TrainStationDO>> stations,Map<Long,List<Integer>> seatTypeMap) {
+    private Map<CompositeKey4<Long,Integer,String, String>,FareCalculationResultDTO> batchGetSeatPrices(List<TrainDO> trains, Map<String, List<TrainStationDO>> stations, Map<Long,List<Integer>> seatTypeMap) {
         List<FareCalculationRequestDTO> fareCalculationRequestDTOS=new ArrayList<>();
         for(int i=0;i<trains.size();i++){
             TrainDO train=trains.get(i);
@@ -396,7 +372,32 @@ public class LocalGraphBuilder {
         }
         return fareCalculationService.batchCalculateFare(fareCalculationRequestDTOS)
                 .stream()
-                .collect(Collectors.groupingBy(FareCalculationResultDTO::getTrainId));
+                .collect(Collectors.toMap(k->new CompositeKey4<>(k.getTrainId(),
+                        k.getSeatType(),
+                        k.getDepartureStation(),
+                        k.getArrivalStation()),
+                        v->v
+                        ));
+    }
+
+    private Map<CompositeKey3<Long, String, String>, Integer> batchGetDistanceMap(List<TrainDO> trains, Map<String, List<TrainStationDO>> stations) {
+        int size=stations.size()-trains.size();
+        List<String> departureStations=new ArrayList<>(size);
+        List<String> arrivalStations=new ArrayList<>(size);
+        List<Long>  trainIds=new ArrayList<>(size);
+
+        for(int i=0;i<trains.size();i++){
+            TrainDO train=trains.get(i);
+            String trainNumber=train.getTrainNumber();
+            for (int j = 0; j < stations.get(trainNumber).size() - 1; j++) {
+                String from = stations.get(trainNumber).get(j).getStationName();
+                String to = stations.get(trainNumber).get(j + 1).getStationName();
+                trainIds.add(train.getId());
+                departureStations.add(from);
+                arrivalStations.add(to);
+            }
+        }
+        return fareCalculationService.batchGetDistanceByCompositeKey3(trainIds,departureStations,arrivalStations);
     }
 
     /**

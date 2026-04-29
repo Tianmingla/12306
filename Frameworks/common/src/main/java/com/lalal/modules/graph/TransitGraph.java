@@ -103,6 +103,7 @@ public class TransitGraph implements Serializable {
                              LocalDateTime departureTime,
                              String arrivalStation,
                              LocalDateTime arrivalTime,
+                             Integer distance,
                              List<Integer> seatTypes,
                              List<TrainEdge.SeatPrice> seatPrices,
                              List<TrainEdge.SeatRemaining> seatRemainings) {
@@ -120,7 +121,7 @@ public class TransitGraph implements Serializable {
                 trainId,
                 trainNumber, trainType,
                 departureStation, arrivalStation,
-                departureTime, arrivalTime,
+                departureTime, arrivalTime,distance,
                 seatTypes, seatPrices, seatRemainings
         );
         addEdge(trainEdge);
