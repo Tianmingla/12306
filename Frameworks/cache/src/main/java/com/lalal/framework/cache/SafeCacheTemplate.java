@@ -1,21 +1,15 @@
 package com.lalal.framework.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lalal.framework.cache.RedisSerializer.DefaultValueRedisSerializer;
 import com.lalal.framework.cache.RedisSerializer.RawRedisSerializer;
 import com.lalal.framework.cache.RedisSerializer.ValueRedisSerializer;
-import lombok.AllArgsConstructor;
 import org.redisson.api.RLock;
 import org.redisson.api.RSemaphore;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -44,7 +38,8 @@ public class SafeCacheTemplate {
     private RedissonClient redissonClient;
 
     private static ValueRedisSerializer defaultValueSerializer;
-    private int batchSize=5; //大于这个的 走全局唯一批量获取令牌
+    private final int tokenMinSize =5; //大于这个的 走全局唯一批量获取令牌
+    private final int batchSize=5000;//数据库批量查询
     private String token="semaphore:batch:token"; //实际可以在根据类型细分令牌
     //多线程环境 线程独有  TODO在哪里清除 java spring为线程池环境
     private static final ThreadLocal<RedisType> redisTypeHolder = new ThreadLocal<RedisType>() {
@@ -617,7 +612,10 @@ public class SafeCacheTemplate {
                 arsFilted.add(args.get(i));
             }
             // 4. 调用回调加载数据
-            List<T> values = loader.apply(arsFilted);
+            List<T> values=new ArrayList<>(arsFilted.size());
+            for(int i=0;i<arsFilted.size();i+=batchSize) {
+                values.addAll(loader.apply(arsFilted.subList(i,Math.min(i+batchSize,arsFilted.size()))));
+            }
 
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
@@ -682,7 +680,7 @@ public class SafeCacheTemplate {
         RLock mLock=null;
         RLock[] locks=null;
         //新架构思路 唯一令牌批量获取
-        boolean useToken=nullKeys.size()>batchSize;
+        boolean useToken=nullKeys.size()> tokenMinSize;
         if(useToken) {
             semaphore = redissonClient.getSemaphore(token);
             semaphore.trySetPermits(10); // 最多 10 个并发加载
@@ -742,7 +740,10 @@ public class SafeCacheTemplate {
                 arsFilted.add(args.get(i));
             }
             // 4. 调用回调加载数据
-            List<T> values = loader.apply(arsFilted);
+            List<T> values=new ArrayList<>(arsFilted.size());
+            for(int i=0;i<arsFilted.size();i+=batchSize) {
+                values.addAll(loader.apply(arsFilted.subList(i,Math.min(i+batchSize,arsFilted.size()))));
+            }
 
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
@@ -804,7 +805,7 @@ public class SafeCacheTemplate {
         RLock mLock=null;
         RLock[] locks=null;
         //新架构思路 唯一令牌批量获取
-        boolean useToken=nullKeys.size()>batchSize;
+        boolean useToken=nullKeys.size()> tokenMinSize;
         if(useToken) {
             semaphore = redissonClient.getSemaphore(token);
             semaphore.trySetPermits(10); // 最多 10 个并发加载
@@ -949,7 +950,7 @@ public class SafeCacheTemplate {
         RLock mLock=null;
         RLock[] locks=null;
         //新架构思路 唯一令牌批量获取
-        boolean useToken=nullKeys.size()>batchSize;
+        boolean useToken=nullKeys.size()> tokenMinSize;
         if(useToken) {
             semaphore = redissonClient.getSemaphore(token);
             semaphore.trySetPermits(10); // 最多 10 个并发加载
@@ -1009,7 +1010,10 @@ public class SafeCacheTemplate {
                 arsFilted.add(args.get(i));
             }
             // 4. 调用回调加载数据
-            List<List<T>> values = loader.apply(arsFilted);
+            List<List<T>> values=new ArrayList<>(arsFilted.size());
+            for(int i=0;i<arsFilted.size();i+=batchSize) {
+                values.addAll(loader.apply(arsFilted.subList(i,Math.min(i+batchSize,arsFilted.size()))));
+            }
 
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
@@ -1075,7 +1079,7 @@ public class SafeCacheTemplate {
         RLock mLock=null;
         RLock[] locks=null;
         //新架构思路 唯一令牌批量获取
-        boolean useToken=nullKeys.size()>batchSize;
+        boolean useToken=nullKeys.size()> tokenMinSize;
         if(useToken) {
             semaphore = redissonClient.getSemaphore(token);
             semaphore.trySetPermits(10); // 最多 10 个并发加载
@@ -1135,7 +1139,10 @@ public class SafeCacheTemplate {
                 arsFilted.add(args.get(i));
             }
             // 4. 调用回调加载数据
-            List<List<T>> values = loader.apply(arsFilted);
+            List<List<T>> values=new ArrayList<>(arsFilted.size());
+            for(int i=0;i<arsFilted.size();i+=batchSize) {
+                values.addAll(loader.apply(arsFilted.subList(i,Math.min(i+batchSize,arsFilted.size()))));
+            }
 
             for(int i=0;i<nullKeysIndex.size();i++){
                 cached.set(nullKeysIndex.get(i),values.get(i));
