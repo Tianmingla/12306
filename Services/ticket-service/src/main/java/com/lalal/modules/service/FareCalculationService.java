@@ -2,6 +2,7 @@ package com.lalal.modules.service;
 
 import com.lalal.modules.dto.FareCalculationRequestDTO;
 import com.lalal.modules.dto.FareCalculationResultDTO;
+import com.lalal.modules.template.CompositeKey3;
 
 import java.util.List;
 import java.util.Map;
@@ -37,14 +38,23 @@ public interface FareCalculationService {
      */
     Integer getDistance(Long trainId, String departureStation, String arrivalStation);
     /**
-     * 获取站间距离
+     * 批量获取站间距离
      *
      * @param trainIds          列车ID
      * @param departureStations 出发站名称
      * @param arrivalStations   到达站名称
-     * @return 里程(公里)
+     * @return key:trainId_departureStation_arrivalStation value:站点距离
      */
     Map<String,Integer> batchGetDistance(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations);
+    /**
+     * 批量获取站间距离
+     *
+     * @param trainIds          列车ID
+     * @param departureStations 出发站名称
+     * @param arrivalStations   到达站名称
+     * @return key:CompositeKey3<Long,String,String> value:站点距离
+     */
+    Map<CompositeKey3<Long,String,String>,Integer> batchGetDistanceByCompositeKey3(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations);
 
     /**
      * 获取站间距离（通过车次号）

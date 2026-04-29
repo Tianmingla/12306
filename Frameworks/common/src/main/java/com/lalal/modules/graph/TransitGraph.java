@@ -4,10 +4,7 @@ import lombok.Getter;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -99,7 +96,8 @@ public class TransitGraph implements Serializable {
     /**
      * 添加一条乘车边（自动创建节点）
      */
-    public void addTrainEdge(String trainNumber,
+    public void addTrainEdge(Long trainId,
+                             String trainNumber,
                              int trainType,
                              String departureStation,
                              LocalDateTime departureTime,
@@ -119,6 +117,7 @@ public class TransitGraph implements Serializable {
         // 创建乘车边
         TrainEdge trainEdge = new TrainEdge(
                 departNode, arriveNode,
+                trainId,
                 trainNumber, trainType,
                 departureStation, arrivalStation,
                 departureTime, arrivalTime,
@@ -184,6 +183,31 @@ public class TransitGraph implements Serializable {
      */
     public List<String> getAllNodeKeys() {
         return new ArrayList<>(nodes.keySet());
+    }
+
+    /**
+     * 获取所有edge列表
+     */
+    public List<TransitEdge> getAllEdges() {
+        return adjacency.values().stream().flatMap(Collection::stream).toList();
+    }
+
+    /**
+     * 获取所有火车edge列表
+     */
+    public List<TrainEdge> getAllTrainEdges() {
+        return adjacency.values().stream()
+                .flatMap(l->l.stream()
+                        .filter(TransitEdge::isTrainEdge)
+                        .map(t->(TrainEdge)t)
+                )
+                .collect(Collectors.toMap(
+                        TrainEdge::getTrainNumber,
+                        edge -> edge,
+                        (existing, replacement) -> existing))
+                .values()
+                .stream()
+                .toList();
     }
 
     /**

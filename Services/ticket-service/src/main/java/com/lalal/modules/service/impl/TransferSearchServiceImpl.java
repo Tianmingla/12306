@@ -152,11 +152,13 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             log.warn("图为空，无法搜索: from={}, to={}", request.getFrom(), request.getTo());
             return Collections.emptyList();
         }
-
-
-
+        List<TrainEdge> edges=graph.getAllTrainEdges();
+        for(TrainEdge edge:edges){
+        }
+        edges.stream();
         // 2. 执行 A* 搜索
         TransitAStar aStar = new TransitAStar(graph);
+        fareCalculationService.batchGetDistanceByCompositeKey3()
         aStar.setHeuristicCache();
         List<TransitAStar.AStarResult> rawResults = aStar.aStarMulti(
                 request.getFrom(), departTime, request.getTo(),

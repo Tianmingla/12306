@@ -17,6 +17,11 @@ public class TrainEdge extends TransitEdge implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 车次id
+     */
+    private final Long trainId;
+
+    /**
      * 车次号
      */
     private final String trainNumber;
@@ -73,6 +78,7 @@ public class TrainEdge extends TransitEdge implements Serializable {
 
     public TrainEdge(StationTimeNode from,
                      StationTimeNode to,
+                     Long trainId,
                      String trainNumber,
                      int trainType,
                      String departureStation,
@@ -85,6 +91,7 @@ public class TrainEdge extends TransitEdge implements Serializable {
         super(from.getKey(), to.getKey(),
               (int) java.time.Duration.between(departureTime, arrivalTime).toMinutes(),
               0, EdgeType.TRAIN);
+        this.trainId=trainId;
         this.trainNumber = trainNumber;
         this.trainType = trainType;
         this.departureStation = departureStation;

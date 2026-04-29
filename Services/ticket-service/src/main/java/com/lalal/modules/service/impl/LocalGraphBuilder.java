@@ -146,6 +146,7 @@ public class LocalGraphBuilder {
         // Step 4: 为每个车次的每段区间创建边
         for (Map.Entry<String, List<TrainStationDO>> entry : stationsByTrain.entrySet()) {
             String trainNumber = entry.getKey();
+            Long trainId=entry.getValue().get(0).getTrainId();
             List<TrainStationDO> stations = entry.getValue();
             TrainDO train = trainMap.get(trainNumber);
 
@@ -174,6 +175,7 @@ public class LocalGraphBuilder {
 
                 // 添加乘车边
                 graph.addTrainEdge(
+                        trainId,
                         trainNumber,
                         train.getTrainType(),
                         fromStation.getStationName(),
@@ -237,6 +239,7 @@ public class LocalGraphBuilder {
 
         for (Map.Entry<String, List<TrainStationDO>> entry : stationsByTrain.entrySet()) {
             String trainNumber = entry.getKey();
+            Long trainId = entry.getValue().get(0).getTrainId();
             List<TrainStationDO> stations = entry.getValue();
 
             TrainDO train = trainDOMap.get(trainNumber);
@@ -259,6 +262,7 @@ public class LocalGraphBuilder {
                         toStation.getArriveDayDiff());
 
                 graph.addTrainEdge(
+                        trainId,
                         trainNumber,
                         train.getTrainType(),
                         fromStation.getStationName(),

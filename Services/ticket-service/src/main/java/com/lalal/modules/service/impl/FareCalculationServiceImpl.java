@@ -13,6 +13,7 @@ import com.lalal.modules.mapper.StationDistanceMapper;
 import com.lalal.modules.mapper.TrainFareConfigMapper;
 import com.lalal.modules.service.FareCalculationService;
 import com.lalal.framework.cache.SafeCacheTemplate;
+import com.lalal.modules.template.CompositeKey3;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -274,6 +275,79 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         for(int i=0;i<index.size();i++){
             int j=index.get(i);
             String key = trainIds.get(j) + "_" + departureStations.get(j) + "_" + arrivalStations.get(j);
+            batchResult.put(key,result.get(i));
+        }
+
+        return batchResult;
+    }
+
+    @Override
+    public Map<CompositeKey3<Long, String, String>, Integer> batchGetDistanceByCompositeKey3(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations) {
+        List<String> cacheKeys = new ArrayList<>(trainIds.size());
+        List<Object[]> disArgs=new ArrayList<>(trainIds.size());
+
+        for(int i=0;i<trainIds.size();i++){
+            String key=CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
+                    arrivalStations.get(i));
+            cacheKeys.add(key);
+        }
+
+        for(int i=0;i<trainIds.size();i++){
+            Object[] objects={trainIds.get(i),departureStations.get(i),arrivalStations.get(i)};
+            disArgs.add(objects);
+        }
+
+        List<Integer> result=safeCacheTemplate.safeBatchGet(
+                cacheKeys,
+                (args) -> {
+                    Map<CompositeKey3<Long,String,String>,Integer> idx=new HashMap<>();
+                    List<Long> trainIds_=args.stream().map(arg->(Long)arg[0]).toList();
+                    List<String> departureStations_=args.stream().map(arg->(String)arg[1]).toList();
+                    List<String> arrivalStations_=args.stream().map(arg->(String)arg[2]).toList();
+                    List<Integer> results=new ArrayList<>(disArgs.size());
+                    for(int i=0;i<args.size();i++){
+                        CompositeKey3<Long,String,String> key =new CompositeKey3<>(trainIds_.get(i),departureStations_.get(i),arrivalStations_.get(i));
+                        idx.put(key,i);
+                        results.add(null);
+                    }
+                    //TODO 这里批次太大了 数据库查询直接崩了 分批次 这种逻辑可以封装到safeBatchGetTemplate里面
+                    int batchSize=5000;
+                    List<StationDistanceDO> dbResults=new ArrayList<>(args.size());
+                    for(int i=0;i<args.size();i+=batchSize) {
+                        int finalI = i;
+                        LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
+                                .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
+                                .eq(StationDistanceDO::getDelFlag, 0)
+                                .and(w -> {
+                                    for (int z = finalI; z < Math.min(finalI+1000,args.size()); z++) {
+                                        final int j = z;
+                                        w.or(o -> {
+                                            o.eq(StationDistanceDO::getTrainId, trainIds_.get(j));
+                                            o.eq(StationDistanceDO::getDepartureStationName, departureStations_.get(j));
+                                            o.eq(StationDistanceDO::getArrivalStationName, arrivalStations_.get(j));
+                                        });
+                                    }
+                                });
+
+                        List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
+                        dbResults.addAll(dbResult);
+                    }
+
+                    for(StationDistanceDO sd:dbResults){
+                        CompositeKey3<Long,String,String> key = new CompositeKey3<>(sd.getTrainId(),sd.getDepartureStationName(),sd.getArrivalStationName());
+                        results.set(idx.get(key),sd.getDistance());
+                    }
+                    return results;
+                },
+                new TypeReference<Integer>() {},
+                disArgs,
+                24,
+                TimeUnit.HOURS
+        );
+        Map<CompositeKey3<Long,String,String>,Integer> batchResult=new HashMap<>();
+
+        for(int i=0;i<trainIds.size();i++){
+            CompositeKey3<Long,String,String> key = new CompositeKey3<>(trainIds.get(i),departureStations.get(i),arrivalStations.get(i));
             batchResult.put(key,result.get(i));
         }
 
