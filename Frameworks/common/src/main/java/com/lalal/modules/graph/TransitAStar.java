@@ -116,6 +116,11 @@ public class TransitAStar {
 
             // 到达目的地
             if (currentNode.getStation().equals(endStation)) {
+                String prevKey=currentKey;
+                while(prevKey!=null){
+                    penalizedEdges.add(prevKey);
+                    prevKey=cameFrom.getOrDefault(prevKey,null);
+                }
                 return buildResult(startKey, currentKey, current.g, current.totalTransfers);
             }
 

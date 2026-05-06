@@ -13,6 +13,7 @@ import com.lalal.modules.mapper.StationDistanceMapper;
 import com.lalal.modules.mapper.TrainFareConfigMapper;
 import com.lalal.modules.service.FareCalculationService;
 import com.lalal.framework.cache.SafeCacheTemplate;
+import com.lalal.modules.service.TrainStationService;
 import com.lalal.modules.template.CompositeKey3;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,7 @@ public class FareCalculationServiceImpl implements FareCalculationService {
     private final StationDistanceMapper stationDistanceMapper;
     private final TrainFareConfigMapper trainFareConfigMapper;
     private final SafeCacheTemplate safeCacheTemplate;
+    private final TrainStationService trainStationService;
 
     // ==================== 起码里程常量 ====================
     /**
@@ -135,7 +137,18 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         List<String> departureStations=requestSets.stream().map(FareCalculationRequestDTO::getDepartureStation).toList();
         List<String> arrivalStations=requestSets.stream().map(FareCalculationRequestDTO::getArrivalStation).toList();
         Map<String,Integer> distanceMap=batchGetDistance(trainIds,departureStations,arrivalStations);
-        Map<Long,SurchargeTypeEnum> surchargeTypeEnumMap=getBatchSurchargeType(requestSets);
+
+        List<FareCalculationRequestDTO> trainSets=requestSets.stream()
+                .collect(Collectors.toMap(
+                        FareCalculationRequestDTO::getTrainId,
+                        Function.identity(),
+                        (existing, replacement) -> existing,
+                        LinkedHashMap::new
+                ))
+                .values()
+                .stream()
+                .toList();
+        Map<Long,SurchargeTypeEnum> surchargeTypeEnumMap=getBatchSurchargeType(trainSets);
         for (FareCalculationRequestDTO request : requests) {
             FareCalculationResultDTO result = new FareCalculationResultDTO();
             result.setTrainId(request.getTrainId());
@@ -192,18 +205,44 @@ public class FareCalculationServiceImpl implements FareCalculationService {
             return null;
         }
 
-        String cacheKey = CacheConstant.stationDistanceKey(trainId, departureStation, arrivalStation);
+        String cacheKey = CacheConstant.stationDistanceKey(trainId);
 
-        return safeCacheTemplate.safeGet(
+        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(List.of(trainId));
+        List<Integer> result=safeCacheTemplate.safeLGet(
                 cacheKey,
                 () -> {
-                    StationDistanceDO distanceDO = stationDistanceMapper.selectByTrainAndStations(
-                            trainId, departureStation, arrivalStation);
-                    return distanceDO != null ? distanceDO.getDistance() : null;
+                    LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
+                            .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
+                            .eq(StationDistanceDO::getDelFlag, 0)
+                            .eq(StationDistanceDO::getTrainId,trainId);
+                    List<StationDistanceDO> distanceList = stationDistanceMapper.selectList(lambdaQueryWrapper);
+                    // 获取这趟火车在 stationsmap 里的标准站点顺序
+                    List<String> standardOrder = stationsmap.get(trainId);
+
+                    if (standardOrder != null && !standardOrder.isEmpty()) {
+                        // 对当前火车的 List 进行排序
+                        distanceList.sort(Comparator.comparingInt(item -> {
+                            // 假设按照“出发站名”在标准顺序里的位置来排
+                            int index_ = standardOrder.indexOf(item.getDepartureStationName());
+                            // 如果找不到该站点，就排到最后面
+                            return index_ == -1 ? Integer.MAX_VALUE : index_;
+                        }));
+                    }
+                    return distanceList.stream()
+                            .map(StationDistanceDO::getDistance)
+                            .collect(Collectors.toCollection(ArrayList::new));
                 },
                 new TypeReference<Integer>() {},
                 24, TimeUnit.HOURS
         );
+
+        int start=stationsmap.get(trainId).indexOf(departureStation);
+        int end=stationsmap.get(trainId).indexOf(arrivalStation);
+        int sum=0;
+        for(int j=start;j<end;j++){
+            sum+=result.get(j);
+        }
+        return sum;
     }
 
     public Map<String,Integer> batchGetDistance(List<Long> trainIds, List<String> departureStations, List<String> arrivalStations) {
@@ -211,58 +250,59 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         List<Object[]> disArgs=new ArrayList<>(trainIds.size());
 
 
-        List<Integer> index=new ArrayList<>();
+        Map<Long,Integer> idxmap= new HashMap<>();
         for(int i=0;i<trainIds.size();i++){
-            String key=CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
-                    arrivalStations.get(i));
-            index.add(i);
+            if(idxmap.containsKey(trainIds.get(i))) continue;
+            idxmap.put(trainIds.get(i),i);
+            String key=CacheConstant.stationDistanceKey(trainIds.get(i));
             cacheKeys.add(key);
         }
 
-        for(int i=0;i<index.size();i++){
-            Object[] objects={trainIds.get(index.get(i)),departureStations.get(index.get(i)),arrivalStations.get(index.get(i))};
+        for(Long id:idxmap.keySet()){
+            Object[] objects={id};
             disArgs.add(objects);
         }
-
-        List<Integer> result=safeCacheTemplate.safeBatchGet(
+        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(trainIds);
+        List<List<Integer>> result=safeCacheTemplate.safeBatchLGet(
                 cacheKeys,
                 (args) -> {
-                    Map<String,Integer> idx=new HashMap<>();
+                    Map<Long,Integer> idx=new HashMap<>();
                     List<Long> trainIds_=args.stream().map(arg->(Long)arg[0]).toList();
-                    List<String> departureStations_=args.stream().map(arg->(String)arg[1]).toList();
-                    List<String> arrivalStations_=args.stream().map(arg->(String)arg[2]).toList();
-                    List<Integer> results=new ArrayList<>(disArgs.size());
+                    List<List<Integer>> results=new ArrayList<>(disArgs.size());
                     for(int i=0;i<args.size();i++){
-                        String key = trainIds_.get(i) + "_" + departureStations_.get(i) + "_" + arrivalStations_.get(i);
-                        idx.put(key,i);
+                        idx.put(trainIds_.get(i),i);
                         results.add(null);
                     }
-                    //这里批次太大了 数据库查询直接崩了 分批次
-                    int batchSize=5000;
-                    List<StationDistanceDO> dbResults=new ArrayList<>(args.size());
-                    for(int i=0;i<args.size();i+=batchSize) {
-                        int finalI = i;
-                        LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
-                                .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
-                                .eq(StationDistanceDO::getDelFlag, 0)
-                                .and(w -> {
-                                    for (int z = finalI; z < Math.min(finalI+1000,args.size()); z++) {
-                                        final int j = z;
-                                        w.or(o -> {
-                                            o.eq(StationDistanceDO::getTrainId, trainIds_.get(j));
-                                            o.eq(StationDistanceDO::getDepartureStationName, departureStations_.get(j));
-                                            o.eq(StationDistanceDO::getArrivalStationName, arrivalStations_.get(j));
-                                        });
-                                    }
-                                });
+                    //debug发现这里有漏洞 数据库只存了 a-b b-c的距离直接查出问题
+                    //修复要么数据库加数据 要么这里redis也只记录a-b b-c 显然第二种思路更好
+                    //维护a-b b-c然后在计算 缓存命中率极高
+                    LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
+                            .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
+                            .eq(StationDistanceDO::getDelFlag, 0)
+                            .in(StationDistanceDO::getTrainId,trainIds_);
 
-                        List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
-                        dbResults.addAll(dbResult);
-                    }
+                    List<StationDistanceDO> dbResults = stationDistanceMapper.selectList(lambdaQueryWrapper);
 
-                    for(StationDistanceDO sd:dbResults){
-                        String key = sd.getTrainId() + "_" +sd.getDepartureStationName() + "_" + sd.getArrivalStationName();
-                        results.set(idx.get(key),sd.getDistance());
+                    Map<Long, List<StationDistanceDO>> dbResultsByTrainId = dbResults.stream()
+                            .collect(Collectors.groupingBy(StationDistanceDO::getTrainId));
+
+                    // 遍历每一趟火车的数据
+                    for (Map.Entry<Long, List<StationDistanceDO>> entry : dbResultsByTrainId.entrySet()) {
+                        Long trainId = entry.getKey();
+                        List<StationDistanceDO> distanceList = entry.getValue();
+                        // 获取这趟火车在 stationsmap 里的标准站点顺序
+                        List<String> standardOrder = stationsmap.get(trainId);
+
+                        if (standardOrder != null && !standardOrder.isEmpty()) {
+                            // 对当前火车的 List 进行排序
+                            distanceList.sort(Comparator.comparingInt(item -> {
+                                // 假设按照“出发站名”在标准顺序里的位置来排
+                                int index_ = standardOrder.indexOf(item.getDepartureStationName());
+                                // 如果找不到该站点，就排到最后面
+                                return index_ == -1 ? Integer.MAX_VALUE : index_;
+                            }));
+                        }
+                        results.set(idx.get(entry.getKey()),distanceList.stream().map(StationDistanceDO::getDistance).collect(Collectors.toCollection(ArrayList::new)));
                     }
                     return results;
                 },
@@ -273,10 +313,15 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         );
         Map<String,Integer> batchResult=new HashMap<>();
 
-        for(int i=0;i<index.size();i++){
-            int j=index.get(i);
-            String key = trainIds.get(j) + "_" + departureStations.get(j) + "_" + arrivalStations.get(j);
-            batchResult.put(key,result.get(i));
+        for(int i=0;i<trainIds.size();i++){
+            String key = trainIds.get(i) + "_" + departureStations.get(i) + "_" + arrivalStations.get(i);
+            int start=stationsmap.get(trainIds.get(i)).indexOf(departureStations.get(i));
+            int end=stationsmap.get(trainIds.get(i)).indexOf(arrivalStations.get(i));
+            int sum=0;
+            for(int j=start;j<end;j++){
+                sum+=result.get(idxmap.get(trainIds.get(i))).get(j);
+            }
+            batchResult.put(key,sum);
         }
 
         return batchResult;
@@ -287,56 +332,61 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         List<String> cacheKeys = new ArrayList<>(trainIds.size());
         List<Object[]> disArgs=new ArrayList<>(trainIds.size());
 
+
+
+        Map<Long,Integer> idxmap= new HashMap<>();
         for(int i=0;i<trainIds.size();i++){
-            String key=CacheConstant.stationDistanceKey(trainIds.get(i), departureStations.get(i),
-                    arrivalStations.get(i));
+            if(idxmap.containsKey(trainIds.get(i))) continue;
+            idxmap.put(trainIds.get(i),i);
+            String key=CacheConstant.stationDistanceKey(trainIds.get(i));
             cacheKeys.add(key);
         }
 
-        for(int i=0;i<trainIds.size();i++){
-            Object[] objects={trainIds.get(i),departureStations.get(i),arrivalStations.get(i)};
+        for(Long id:idxmap.keySet()){
+            Object[] objects={id};
             disArgs.add(objects);
         }
-
-        List<Integer> result=safeCacheTemplate.safeBatchGet(
+        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(trainIds);
+        List<List<Integer>> result=safeCacheTemplate.safeBatchLGet(
                 cacheKeys,
                 (args) -> {
-                    Map<CompositeKey3<Long,String,String>,Integer> idx=new HashMap<>();
+                    Map<Long,Integer> idx=new HashMap<>();
                     List<Long> trainIds_=args.stream().map(arg->(Long)arg[0]).toList();
-                    List<String> departureStations_=args.stream().map(arg->(String)arg[1]).toList();
-                    List<String> arrivalStations_=args.stream().map(arg->(String)arg[2]).toList();
-                    List<Integer> results=new ArrayList<>(disArgs.size());
+                    List<List<Integer>> results=new ArrayList<>(disArgs.size());
                     for(int i=0;i<args.size();i++){
-                        CompositeKey3<Long,String,String> key =new CompositeKey3<>(trainIds_.get(i),departureStations_.get(i),arrivalStations_.get(i));
-                        idx.put(key,i);
+                        idx.put(trainIds_.get(i),i);
                         results.add(null);
                     }
-                    //TODO 这里批次太大了 数据库查询直接崩了 分批次 这种逻辑可以封装到safeBatchGetTemplate里面
-                    int batchSize=5000;
-                    List<StationDistanceDO> dbResults=new ArrayList<>(args.size());
-                    for(int i=0;i<args.size();i+=batchSize) {
-                        int finalI = i;
-                        LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
-                                .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
-                                .eq(StationDistanceDO::getDelFlag, 0)
-                                .and(w -> {
-                                    for (int z = finalI; z < Math.min(finalI+1000,args.size()); z++) {
-                                        final int j = z;
-                                        w.or(o -> {
-                                            o.eq(StationDistanceDO::getTrainId, trainIds_.get(j));
-                                            o.eq(StationDistanceDO::getDepartureStationName, departureStations_.get(j));
-                                            o.eq(StationDistanceDO::getArrivalStationName, arrivalStations_.get(j));
-                                        });
-                                    }
-                                });
+                    //debug发现这里有漏洞 数据库只存了 a-b b-c的距离直接查出问题
+                    //修复要么数据库加数据 要么这里redis也只记录a-b b-c 显然第二种思路更好
+                    //维护a-b b-c然后在计算 缓存命中率极高
+                    LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
+                            .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
+                            .eq(StationDistanceDO::getDelFlag, 0)
+                            .in(StationDistanceDO::getTrainId,trainIds_);
 
-                        List<StationDistanceDO> dbResult = stationDistanceMapper.selectList(lambdaQueryWrapper);
-                        dbResults.addAll(dbResult);
-                    }
+                    List<StationDistanceDO> dbResults = stationDistanceMapper.selectList(lambdaQueryWrapper);
 
-                    for(StationDistanceDO sd:dbResults){
-                        CompositeKey3<Long,String,String> key = new CompositeKey3<>(sd.getTrainId(),sd.getDepartureStationName(),sd.getArrivalStationName());
-                        results.set(idx.get(key),sd.getDistance());
+                    Map<Long, List<StationDistanceDO>> dbResultsByTrainId = dbResults.stream()
+                            .collect(Collectors.groupingBy(StationDistanceDO::getTrainId));
+
+                    // 遍历每一趟火车的数据
+                    for (Map.Entry<Long, List<StationDistanceDO>> entry : dbResultsByTrainId.entrySet()) {
+                        Long trainId = entry.getKey();
+                        List<StationDistanceDO> distanceList = entry.getValue();
+                        // 获取这趟火车在 stationsmap 里的标准站点顺序
+                        List<String> standardOrder = stationsmap.get(trainId);
+
+                        if (standardOrder != null && !standardOrder.isEmpty()) {
+                            // 对当前火车的 List 进行排序
+                            distanceList.sort(Comparator.comparingInt(item -> {
+                                // 假设按照“出发站名”在标准顺序里的位置来排
+                                int index_ = standardOrder.indexOf(item.getDepartureStationName());
+                                // 如果找不到该站点，就排到最后面
+                                return index_ == -1 ? Integer.MAX_VALUE : index_;
+                            }));
+                        }
+                        results.set(idx.get(entry.getKey()),distanceList.stream().map(StationDistanceDO::getDistance).collect(Collectors.toCollection(ArrayList::new)));
                     }
                     return results;
                 },
@@ -349,7 +399,13 @@ public class FareCalculationServiceImpl implements FareCalculationService {
 
         for(int i=0;i<trainIds.size();i++){
             CompositeKey3<Long,String,String> key = new CompositeKey3<>(trainIds.get(i),departureStations.get(i),arrivalStations.get(i));
-            batchResult.put(key,result.get(i));
+            int start=stationsmap.get(trainIds.get(i)).indexOf(departureStations.get(i));
+            int end=stationsmap.get(trainIds.get(i)).indexOf(arrivalStations.get(i));
+            int sum=0;
+            for(int j=start;j<end;j++){
+                sum+=result.get(idxmap.get(trainIds.get(i))).get(j);
+            }
+            batchResult.put(key,sum);
         }
 
         return batchResult;
@@ -426,7 +482,7 @@ public class FareCalculationServiceImpl implements FareCalculationService {
         );
         return trainFareConfigDOS.stream()
                 .collect(Collectors.toMap(
-                        TrainFareConfigDO::getId,
+                        TrainFareConfigDO::getTrainId,
                         t->SurchargeTypeEnum.fromCode(t.getSurchargeType())
                 ));
 

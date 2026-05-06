@@ -164,13 +164,11 @@ public class LocalGraphBuilder {
                 TrainStationDO fromStation = stations.get(i);
                 TrainStationDO toStation = stations.get(i + 1);
 
-                List<TrainEdge.SeatPrice> seatPrices = seatTypes.stream().map(s->{
-                    return new TrainEdge.SeatPrice(s,
-                            fareMap.get(new CompositeKey4<Long, Integer, String, String>(trainId,
-                                            s,fromStation.getStationName(),
-                                            toStation.getStationName())
-                                    ).getTotalFare());
-                }).toList();
+                List<TrainEdge.SeatPrice> seatPrices = seatTypes.stream().map(s-> new TrainEdge.SeatPrice(s,
+                        fareMap.get(new CompositeKey4<Long, Integer, String, String>(trainId,
+                                        s,fromStation.getStationName(),
+                                        toStation.getStationName())
+                                ).getTotalFare())).toList();
                 Integer distance=distancemap.get(new CompositeKey3<Long,String,String>(trainId,fromStation.getStationName(),toStation.getStationName()));
 
                 List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
@@ -381,7 +379,8 @@ public class LocalGraphBuilder {
     }
 
     private Map<CompositeKey3<Long, String, String>, Integer> batchGetDistanceMap(List<TrainDO> trains, Map<String, List<TrainStationDO>> stations) {
-        int size=stations.size()-trains.size();
+        int sumSize=stations.values().stream().map(List::size).mapToInt(Integer::intValue).sum();
+        int size=sumSize-trains.size();
         List<String> departureStations=new ArrayList<>(size);
         List<String> arrivalStations=new ArrayList<>(size);
         List<Long>  trainIds=new ArrayList<>(size);
