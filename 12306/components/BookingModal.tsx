@@ -1,8 +1,10 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { TrainTicket } from '../types';
+import { SEAT_TYPE_CODE_MAP } from '../types';
 import { X, UserPlus, Check, CreditCard, AlertCircle, Clock } from 'lucide-react';
 import { purchaseTicket, checkTicketPurchaseStatus } from '../services/ticketService';
+import { createWaitlist } from '../services/stationService';
 import { listPassengers } from '../services/passengerService';
 import type { PassengerApi } from '../types';
 
@@ -13,6 +15,8 @@ interface BookingModalProps {
   travelDate: string;
   /** 下单成功，跳转订单详情 */
   onPurchaseSuccess?: (orderSn: string) => void;
+  /** 是否为候补模式（无票时提交候补） */
+  isWaitlist?: boolean;
 }
 
 function passengerTypeLabel(t: number): string {
@@ -24,7 +28,7 @@ function passengerTypeLabel(t: number): string {
   }
 }
 
-const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate,seatType, onPurchaseSuccess }) => {
+const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate, seatType, isWaitlist, onPurchaseSuccess }) => {
   const [passengers, setPassengers] = useState<PassengerApi[]>([]);
   const [passengersLoading, setPassengersLoading] = useState(false);
   const [selectedPassengers, setSelectedPassengers] = useState<string[]>([]);
@@ -118,6 +122,42 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
       return;
     }
 
+    // 候补购票流程
+    if (isWaitlist) {
+      setStep('paying');
+      try {
+        const seatTypeCode = SEAT_TYPE_CODE_MAP[seatType as string];
+        if (seatTypeCode === undefined) {
+          throw new Error('未知的座位类型: ' + seatType);
+        }
+        const prepayAmount = getSeatPrice(ticket, seatType as string) * selectedPassengers.length;
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 24);
+
+        const waitlistSn = await createWaitlist({
+          trainNumber: ticket.trainNumber.includes('→')
+            ? ticket.trainNumber.split('→')[0].trim()
+            : ticket.trainNumber,
+          startStation: ticket.fromStation,
+          endStation: ticket.toStation,
+          travelDate,
+          seatTypes: [seatTypeCode],
+          passengerIds: selectedPassengers.map(Number),
+          prepayAmount,
+          deadline: deadline.toISOString(),
+        });
+
+        alert(`候补订单提交成功！订单号: ${waitlistSn}`);
+        onClose();
+      } catch (error: unknown) {
+        console.error(error);
+        setErrorMessage(error instanceof Error ? error.message : '候补提交失败，请重试');
+        setStep('error');
+      }
+      return;
+    }
+
+    // 普通购票流程
     setStep('paying');
     try {
       const IDCardCodelist = selectedPassengers.map((id) => Number(id));
@@ -235,6 +275,12 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             {step === 'fill' && (
                 <div className="space-y-6">
+                  {isWaitlist && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3 rounded-lg flex items-start gap-2">
+                      <Clock className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span>该座位类型当前无票，提交候补后系统将在有票时自动为您购票。</span>
+                    </div>
+                  )}
                   {!localStorage.getItem('token') && (
                     <div className="bg-amber-50 border border-amber-100 text-amber-800 text-sm px-4 py-3 rounded-lg">
                       请先登录后再选择乘车人并提交订单。
@@ -281,7 +327,26 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                   </div>
 
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                    <h3 className="font-bold text-gray-800 mb-4">选座服务 <span className="text-xs font-normal text-gray-500 ml-2">(仅供参考，余票不足时随机分配)</span></h3>
+                    <h3 className="font-bold text-gray-800 mb-4">
+                      {isWaitlist ? '候补信息确认' : '选座服务'}
+                      {!isWaitlist && <span className="text-xs font-normal text-gray-500 ml-2">(仅供参考，余票不足时随机分配)</span>}
+                    </h3>
+                    {isWaitlist ? (
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-gray-500">座位类型</span>
+                          <span className="font-medium text-gray-800">{seatType}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-gray-100">
+                          <span className="text-gray-500">预付金额</span>
+                          <span className="font-medium text-orange-600">¥{getSeatPrice(ticket, seatType as string)}/人</span>
+                        </div>
+                        <div className="flex justify-between py-2">
+                          <span className="text-gray-500">兑现截止</span>
+                          <span className="font-medium text-gray-800">24小时内</span>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="flex justify-center space-x-6">
                       {['A', 'B', 'C', '过道', 'D', 'F'].map((seat, i) => {
                         if (seat === '过道') return <div key={i} className="w-8 flex items-center justify-center text-gray-300 text-xs">|</div>;
@@ -310,6 +375,8 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                       <span className="flex items-center"><div className="w-3 h-3 bg-gray-200 rounded mr-1"></div> 过道</span>
                       <span className="flex items-center"><div className="w-3 h-3 bg-gray-200 rounded mr-1"></div> 靠窗</span>
                     </div>
+                    </div>
+                    )}
                   </div>
 
                   <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
@@ -373,9 +440,13 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                     type="button"
                     onClick={() => void handleSubmit()}
                     disabled={selectedPassengers.length === 0 || !localStorage.getItem('token')}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-orange-500/30 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`px-8 py-3 rounded-xl font-bold shadow-lg transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isWaitlist
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/30'
+                        : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/30'
+                    }`}
                 >
-                  提交订单
+                  {isWaitlist ? '提交候补订单' : '提交订单'}
                 </button>
               </div>
           )}

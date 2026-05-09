@@ -292,6 +292,25 @@ export interface StationScreenResponse {
 
 // ============= 候补购票相关类型 =============
 
+/** 座位类型中文描述 → 枚举code 映射（与后端 SeatType 枚举一致） */
+export const SEAT_TYPE_CODE_MAP: Record<string, number> = {
+  '二等座': 0,
+  '一等座': 1,
+  '商务座': 2,
+  '软卧': 3,
+  '硬卧': 4,
+  '硬座': 5,
+  '无座': 6,
+  '软座': 7,
+  '硬卧上铺': 8,
+  '硬卧中铺': 9,
+  '硬卧下铺': 10,
+  '软卧上铺': 11,
+  '软卧下铺': 12,
+  '高级软卧上铺': 13,
+  '高级软卧下铺': 14,
+};
+
 export interface WaitlistCreateRequest {
   trainNumber: string;
   startStation: string;

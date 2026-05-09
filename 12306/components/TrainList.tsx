@@ -127,6 +127,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   // States for interaction
   const [selectedTicketForBooking, setSelectedTicketForBooking] = useState<TrainTicket | null>(null);
   const [selectedSeatType, setSelectedSeatType] = useState<String | null>(null);
+  const [isWaitlistBooking, setIsWaitlistBooking] = useState(false);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [stopoverInfo, setStopoverInfo] = useState<{isOpen: boolean, trainNumber: string} | null>(null);
 
@@ -199,10 +200,11 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
     setExpandedTicketId(prev => prev === id ? null : id);
   };
 
-  const handleBook = (e: React.MouseEvent, ticket: TrainTicket,seatType:String) => {
+  const handleBook = (e: React.MouseEvent, ticket: TrainTicket, seatType: String, isWaitlist: boolean) => {
     e.stopPropagation();
     setSelectedTicketForBooking(ticket);
     setSelectedSeatType(seatType);
+    setIsWaitlistBooking(isWaitlist);
   };
 
   // Get the minimum price from ticket's prices
@@ -369,13 +371,21 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
                         </span>
                      </div>
                      <div className="w-1/4 text-right">
-                       <button
-                         onClick={(e) => handleBook(e, ticket,type)}
-                         disabled={Number(count) <= 0}
-                         className="px-5 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                       >
-                         预订
-                       </button>
+                       {Number(count) > 0 ? (
+                         <button
+                           onClick={(e) => handleBook(e, ticket, type, false)}
+                           className="px-5 py-1.5 bg-orange-500 text-white rounded text-sm font-medium hover:bg-orange-600 transition-colors"
+                         >
+                           预订
+                         </button>
+                       ) : (
+                         <button
+                           onClick={(e) => handleBook(e, ticket, type, true)}
+                           className="px-5 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors"
+                         >
+                           候补
+                         </button>
+                       )}
                      </div>
                   </div>
                 ))}
@@ -517,11 +527,12 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
         </div>
       )}
 
-      <BookingModal 
-        ticket={selectedTicketForBooking} 
-        onClose={() => setSelectedTicketForBooking(null)}
+      <BookingModal
+        ticket={selectedTicketForBooking}
+        onClose={() => { setSelectedTicketForBooking(null); setIsWaitlistBooking(false); }}
         travelDate={searchParams.date}
         seatType={selectedSeatType}
+        isWaitlist={isWaitlistBooking}
         onPurchaseSuccess={onPurchaseSuccess}
       />
       
