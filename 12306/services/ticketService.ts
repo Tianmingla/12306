@@ -3,12 +3,19 @@ import { SearchParams, TrainTicket, ApiResponse, ApiRoute, TicketSegment } from 
 import { API_BASE, authHeaders } from './http';
 
 /**
- * Helper to format ISO date string to HH:mm
+ * Helper to format time string to HH:mm
+ * Accepts both ISO datetime strings and "HH:mm" / "HH:mm:ss" format
  */
-const formatTime = (isoString: string | null): string => {
-  if (!isoString) return '--:--';
+const formatTime = (timeStr: string | null): string => {
+  if (!timeStr) return '--:--';
+  // Already in HH:mm or HH:mm:ss format
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(timeStr)) {
+    return timeStr.substring(0, 5);
+  }
+  // ISO datetime string
   try {
-    const date = new Date(isoString);
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return '--:--';
     return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
   } catch (e) {
     return '--:--';
@@ -34,19 +41,9 @@ const getTrainType = (trainNumber: string): 'G' | 'D' | 'K' | 'Z' => {
 };
 
 /**
- * Map Chinese seat names to English keys
- */
-const mapSeatsToEnglish = (seats: Record<string, number>): Record<string, number> => ({
-  business: seats['商务座'] ?? 0,
-  first: seats['一等座'] ?? seats['软卧'] ?? 0,
-  second: seats['二等座'] ?? seats['硬卧'] ?? seats['硬座'] ?? 0,
-  standing: seats['无座'] ?? 0,
-});
-
-/**
  * Adapts backend route data to frontend TrainTicket model
  */
-const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
+const adaptRouteToTicket = (route: ApiRoute, routeIndex: number): TrainTicket | null => {
   const firstSegment = route.segments[0];
   if (!firstSegment) return null;
 
@@ -54,12 +51,8 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
   const pricesArray = route.priceMap || [];
   const isTransfer = route.segments.length > 1;
 
-  // Build segment details
+  // Build segment details - keep backend Chinese keys as-is
   const ticketSegments: TicketSegment[] = route.segments.map((seg, idx) => {
-    const seats = seatsArray[idx] || {};
-    const prices = pricesArray[idx] || {};
-
-    // Calculate segment duration (approximate from times)
     const depTime = seg.startTime ? formatTime(seg.startTime) : '00:00';
     const arrTime = seg.endTime ? formatTime(seg.endTime) : '00:00';
 
@@ -69,9 +62,9 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
       toStation: seg.arrivalStation,
       departureTime: depTime,
       arrivalTime: arrTime,
-      duration: '', // Will be calculated if needed
-      seatsAvailable: seats,
-      prices: prices,
+      duration: '',
+      seatsAvailable: seatsArray[idx] || {},
+      prices: pricesArray[idx] || {},
       type: getTrainType(seg.trainNumber),
     };
   });
@@ -96,17 +89,20 @@ const adaptRouteToTicket = (route: ApiRoute): TrainTicket | null => {
 
   const lastSegment = route.segments[route.segments.length - 1];
 
+  // Get the lowest price for default display
+  const minPrice = Object.values(mergedPrices).filter(p => p > 0).sort((a, b) => a - b)[0] || 0;
+
   return {
-    id: route.planId || firstSegment.id.toString(),
+    id: route.planId || `${firstSegment.trainId}-${routeIndex}`,
     trainNumber: isTransfer
       ? `${firstSegment.trainNumber} → ${lastSegment.trainNumber}`
       : firstSegment.trainNumber,
     fromStation: firstSegment.departureStation,
     toStation: lastSegment.arrivalStation,
-    departureTime: route.firstDepartureTime || formatTime(firstSegment.startTime),
-    arrivalTime: route.finalArrivalTime || formatTime(lastSegment.endTime),
+    departureTime: formatTime(route.firstDepartureTime) || formatTime(firstSegment.startTime),
+    arrivalTime: formatTime(route.finalArrivalTime) || formatTime(lastSegment.endTime),
     duration: formatDuration(route.totalDurationMinutes),
-    price: mergedPrices['二等座'] || mergedPrices['硬座'] || 0,
+    price: minPrice,
     type: getTrainType(firstSegment.trainNumber),
     seatsAvailable: mergedSeats,
     prices: mergedPrices,
@@ -142,7 +138,7 @@ export const searchTickets = async (params: SearchParams): Promise<TrainTicket[]
   }
 
   const validTickets = json.data
-    .map(adaptRouteToTicket)
+    .map((route, idx) => adaptRouteToTicket(route, idx))
     .filter((t): t is TrainTicket => t !== null);
 
   if (params.onlyHighSpeed) {

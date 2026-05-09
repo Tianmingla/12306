@@ -54,7 +54,11 @@ const StopoverModal: React.FC<{
 
   const formatTime = (time: string | null) => {
     if (!time) return '----';
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(time)) {
+      return time.substring(0, 5);
+    }
     const date = new Date(time);
+    if (isNaN(date.getTime())) return '----';
     return date.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' });
   };
 
@@ -201,22 +205,6 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
     setSelectedSeatType(seatType);
   };
 
-  // Helper to map English seat keys to Chinese labels
-  const seatMap: Record<string, string> = {
-    business: '商务座',
-    first: '一等座',
-    second: '二等座',
-    standing: '无座'
-  };
-
-  // Map English seat key to Chinese key for price lookup
-  const seatKeyToChinese: Record<string, string> = {
-    business: '商务座',
-    first: '一等座',
-    second: '二等座',
-    standing: '无座'
-  };
-
   // Get the minimum price from ticket's prices
   const getMinPrice = (ticket: TrainTicket): number => {
     if (ticket.prices) {
@@ -229,23 +217,15 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   // Get price for a specific seat type
   const getSeatPrice = (ticket: TrainTicket, seatType: string): number => {
     if (ticket.prices) {
-  
       const price = ticket.prices[seatType];
       if (price !== undefined && price > 0) return price;
     }
     return ticket.price || 0;
   };
 
-  // Get price for a segment's seat type
-  const getSegmentSeatPrice = (segment: TicketSegment, seatType: string): number => {
-    const chineseKey = seatKeyToChinese[seatType];
-    const price = segment.prices[chineseKey];
-    return price !== undefined && price > 0 ? price : 0;
-  };
-
   // Render segment detail for transfer ticket
   const renderSegmentDetail = (segment: TicketSegment, idx: number, totalSegments: number) => (
-    <div key={idx} className="bg-white rounded-lg border border-gray-200 p-4 mb-3">
+    <div key={`seg-${idx}`} className="bg-white rounded-lg border border-gray-200 p-4 mb-3">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-blue-600 font-medium">第{idx + 1}程</span>
         <span className="text-xs text-gray-400 flex items-center">
@@ -275,13 +255,13 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
       <div className="space-y-2">
         {Object.entries(segment.seatsAvailable).map(([type, count]) => (
           <div key={type} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-            <span className="text-gray-700">{seatMap[type] || type}</span>
+            <span className="text-gray-700">{type}</span>
             <div className="flex items-center gap-4">
               <span className={`font-medium ${Number(count) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                 {Number(count) > 0 ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
               </span>
               <span className="font-bold text-orange-500 w-16 text-right">
-                ¥{getSegmentSeatPrice(segment, type)}
+                ¥{segment.prices[type] ?? 0}
               </span>
             </div>
           </div>
@@ -291,14 +271,14 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   );
 
   // Render single ticket card
-  const renderTicketCard = (ticket: TrainTicket) => {
+  const renderTicketCard = (ticket: TrainTicket, index: number) => {
     const isExpanded = expandedTicketId === ticket.id;
     const minPrice = getMinPrice(ticket);
     const isTransfer = (ticket.transferCount ?? 0) > 0 && ticket.segments && ticket.segments.length > 1;
 
     return (
       <div
-        key={ticket.id}
+        key={`ticket-${index}-${ticket.id}`}
         onClick={() => toggleExpand(ticket.id)}
         className={`bg-white rounded-xl shadow-sm border border-gray-100 transition-all duration-300 overflow-hidden cursor-pointer ${isExpanded ? 'ring-2 ring-blue-500/20 shadow-md' : 'hover:shadow-md'}`}
       >
@@ -378,7 +358,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
                 {Object.entries(ticket.seatsAvailable).map(([type, count]) => (
                   <div key={type} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 hover:border-blue-200 transition-colors">
                      <div className="w-1/4 font-medium text-gray-800 flex items-center">
-                       {seatMap[type] || type}
+                       {type}
                      </div>
                      <div className="w-1/4 font-bold text-orange-500 text-lg">
                        <span className="text-xs">¥</span>{getSeatPrice(ticket, type)}
@@ -423,7 +403,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
             <p className="text-gray-500">暂无车次</p>
           </div>
         ) : (
-          ticketList.map(renderTicketCard)
+          ticketList.map((t, i) => renderTicketCard(t, i))
         )}
       </div>
     </div>
@@ -533,7 +513,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
       ) : (
         /* Single/Transfer: Normal list */
         <div className="space-y-4">
-          {filteredTickets.map(renderTicketCard)}
+          {filteredTickets.map((t, i) => renderTicketCard(t, i))}
         </div>
       )}
 
