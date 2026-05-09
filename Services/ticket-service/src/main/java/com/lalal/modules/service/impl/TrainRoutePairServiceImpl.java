@@ -237,8 +237,8 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         results.forEach(result-> result.getSegments().forEach(seg->{
             String startStation=seg.getDepartureStation();
             String endStation=seg.getArrivalStation();
-            fareRequests.addAll(trainDOList.stream()
-                    .flatMap(t->seatTypemap.get(t)
+            Long t=seg.getTrainId();
+            fareRequests.addAll(seatTypemap.get(t)
                             .stream()
                             .map(s->{
                                 FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
@@ -250,8 +250,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                                 fareRequest.setPassengerType(0);
                                 return fareRequest;
                             })
-                    )
-                    .toList()
+                            .toList()
             );
         }));
         Map<CompositeKey4<Long,Integer,String,String>,BigDecimal> fareCalculationCachemap=new HashMap<>();

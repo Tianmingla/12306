@@ -131,25 +131,72 @@ def load_existing_distances() -> Set[Tuple[int, str, str]]:
 # =============================================================================
 # 距离计算
 # =============================================================================
-
+#
+# def calculate_distances(train_data: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+#     """
+#     计算每列车任意两站之间的距离。
+#
+#     距离计算方式：
+#     - 假设相邻站点间距为 AVG_ADJACENT_DISTANCE 公里
+#     - 实际生产环境应从铁路数据获取真实里程
+#
+#     Args:
+#         train_data: 车次站点数据
+#
+#     Returns:
+#         站间距离记录列表
+#     """
+#     logger.info("计算站间距离...")
+#
+#     distance_records = []
+#     total_pairs = 0
+#
+#     for train_number, stations in train_data.items():
+#         if len(stations) < 2:
+#             continue
+#
+#         train_id = stations[0]['train_id']
+#
+#         # 计算每对站点之间的距离
+#         for i in range(len(stations)):
+#             for j in range(i + 1, len(stations)):
+#                 dep_station = stations[i]
+#                 arr_station = stations[j]
+#
+#                 # 计算站序差，估算距离
+#                 seq_diff = arr_station['sequence'] - dep_station['sequence']
+#                 estimated_distance = seq_diff * AVG_ADJACENT_DISTANCE
+#
+#                 distance_records.append({
+#                     'train_id': train_id,
+#                     'train_number': train_number,
+#                     'departure_station_id': dep_station['station_id'],
+#                     'departure_station_name': dep_station['station_name'],
+#                     'arrival_station_id': arr_station['station_id'],
+#                     'arrival_station_name': arr_station['station_name'],
+#                     'distance': estimated_distance,
+#                     'line_name': None  # 线路名称需要后续补充
+#                 })
+#                 total_pairs += 1
+#
+#         # 进度日志
+#         if len(distance_records) % 100000 == 0:
+#             logger.info(f"已计算 {len(distance_records)} 条站间距离...")
+#
+#     logger.info(f"计算完成: {len(distance_records)} 条站间距离记录，来自 {len(train_data)} 个车次")
+#     return distance_records
 def calculate_distances(train_data: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
-    计算每列车任意两站之间的距离。
-
-    距离计算方式：
-    - 假设相邻站点间距为 AVG_ADJACENT_DISTANCE 公里
-    - 实际生产环境应从铁路数据获取真实里程
+    计算每列车相邻站点之间的距离（仅计算连续站点）。
 
     Args:
         train_data: 车次站点数据
 
     Returns:
-        站间距离记录列表
+        站间距离记录列表（仅包含相邻区间）
     """
-    logger.info("计算站间距离...")
-
+    logger.info("计算相邻站间距离...")
     distance_records = []
-    total_pairs = 0
 
     for train_number, stations in train_data.items():
         if len(stations) < 2:
@@ -157,33 +204,31 @@ def calculate_distances(train_data: Dict[str, List[Dict[str, Any]]]) -> List[Dic
 
         train_id = stations[0]['train_id']
 
-        # 计算每对站点之间的距离
-        for i in range(len(stations)):
-            for j in range(i + 1, len(stations)):
-                dep_station = stations[i]
-                arr_station = stations[j]
+        # 只计算相邻站点 (i 和 i+1)
+        for i in range(len(stations) - 1):  # 注意这里变成了 len - 1，防止越界
+            dep_station = stations[i]
+            arr_station = stations[i + 1]  # 只取下一个站点
 
-                # 计算站序差，估算距离
-                seq_diff = arr_station['sequence'] - dep_station['sequence']
-                estimated_distance = seq_diff * AVG_ADJACENT_DISTANCE
+            # 计算距离（相邻站点差值为1，所以距离就是 AVG_ADJACENT_DISTANCE）
+            # 也可以保留 * 1 的计算逻辑，或者直接赋值
+            estimated_distance = AVG_ADJACENT_DISTANCE
 
-                distance_records.append({
-                    'train_id': train_id,
-                    'train_number': train_number,
-                    'departure_station_id': dep_station['station_id'],
-                    'departure_station_name': dep_station['station_name'],
-                    'arrival_station_id': arr_station['station_id'],
-                    'arrival_station_name': arr_station['station_name'],
-                    'distance': estimated_distance,
-                    'line_name': None  # 线路名称需要后续补充
-                })
-                total_pairs += 1
+            distance_records.append({
+                'train_id': train_id,
+                'train_number': train_number,
+                'departure_station_id': dep_station['station_id'],
+                'departure_station_name': dep_station['station_name'],
+                'arrival_station_id': arr_station['station_id'],
+                'arrival_station_name': arr_station['station_name'],
+                'distance': estimated_distance,
+                'line_name': None
+            })
 
         # 进度日志
-        if len(distance_records) % 100000 == 0:
-            logger.info(f"已计算 {len(distance_records)} 条站间距离...")
+        if len(distance_records) % 10000 == 0:
+            logger.info(f"已计算 {len(distance_records)} 条相邻站间距离...")
 
-    logger.info(f"计算完成: {len(distance_records)} 条站间距离记录，来自 {len(train_data)} 个车次")
+    logger.info(f"计算完成: {len(distance_records)} 条相邻站间距离记录，来自 {len(train_data)} 个车次")
     return distance_records
 
 

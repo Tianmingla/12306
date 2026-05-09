@@ -251,18 +251,18 @@ public class FareCalculationServiceImpl implements FareCalculationService {
 
 
         Map<Long,Integer> idxmap= new HashMap<>();
+        int cnt=0;
         for(int i=0;i<trainIds.size();i++){
             if(idxmap.containsKey(trainIds.get(i))) continue;
-            idxmap.put(trainIds.get(i),i);
+            idxmap.put(trainIds.get(i),cnt);
+            cnt++;
             String key=CacheConstant.stationDistanceKey(trainIds.get(i));
             cacheKeys.add(key);
-        }
-
-        for(Long id:idxmap.keySet()){
-            Object[] objects={id};
+            Object[] objects={trainIds.get(i)};
             disArgs.add(objects);
         }
-        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(trainIds);
+
+        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(idxmap.keySet().stream().toList());
         List<List<Integer>> result=safeCacheTemplate.safeBatchLGet(
                 cacheKeys,
                 (args) -> {
@@ -335,18 +335,18 @@ public class FareCalculationServiceImpl implements FareCalculationService {
 
 
         Map<Long,Integer> idxmap= new HashMap<>();
+        int cnt=0;
         for(int i=0;i<trainIds.size();i++){
             if(idxmap.containsKey(trainIds.get(i))) continue;
-            idxmap.put(trainIds.get(i),i);
+            idxmap.put(trainIds.get(i),cnt);
+            cnt++;
             String key=CacheConstant.stationDistanceKey(trainIds.get(i));
             cacheKeys.add(key);
-        }
-
-        for(Long id:idxmap.keySet()){
-            Object[] objects={id};
+            Object[] objects={trainIds.get(i)};
             disArgs.add(objects);
         }
-        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(trainIds);
+
+        Map<Long, List<String>> stationsmap = trainStationService.batchGetStationNames(idxmap.keySet().stream().toList());
         List<List<Integer>> result=safeCacheTemplate.safeBatchLGet(
                 cacheKeys,
                 (args) -> {
@@ -357,9 +357,6 @@ public class FareCalculationServiceImpl implements FareCalculationService {
                         idx.put(trainIds_.get(i),i);
                         results.add(null);
                     }
-                    //debug发现这里有漏洞 数据库只存了 a-b b-c的距离直接查出问题
-                    //修复要么数据库加数据 要么这里redis也只记录a-b b-c 显然第二种思路更好
-                    //维护a-b b-c然后在计算 缓存命中率极高
                     LambdaQueryWrapper<StationDistanceDO> lambdaQueryWrapper = new LambdaQueryWrapper<StationDistanceDO>()
                             .select(StationDistanceDO::getTrainId, StationDistanceDO::getDistance, StationDistanceDO::getDepartureStationName, StationDistanceDO::getArrivalStationName)
                             .eq(StationDistanceDO::getDelFlag, 0)
