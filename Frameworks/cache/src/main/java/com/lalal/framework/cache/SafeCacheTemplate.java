@@ -101,6 +101,7 @@ public class SafeCacheTemplate {
                 case LIST:
                     List<?> valueList=(List<?>) value;
                     int size=valueList.size();
+                    if(size==0) break;
                     byte[][] valueListBytes=new byte[size][];
                     for(int i=0;i<size;i++){
                         valueListBytes[i]= curValueSerializer.get().serialize(valueList.get(i));
@@ -172,6 +173,7 @@ public class SafeCacheTemplate {
                     for(int i=0;i<keys.size();i++){
                         List<?> valueList=(List<?>) values.get(i);
                         int size=valueList.size();
+                        if(size==0) continue;
                         byte[][] valueListBytes=new byte[size][];
                         byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(keys.get(i));
                         for(int j=0;j<size;j++){

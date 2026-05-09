@@ -145,8 +145,10 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 3,
                 TimeUnit.DAYS
         );
-        //合并结果
+        //合并结果（限制笛卡尔积大小防止超时）
+        int maxResults = 200;
         List<TrainSearchResponseDTO> result=new ArrayList<>();
+        outer:
         for(int i=0;i<firstLeg.size();i++){
             for(int j=0;j<secondLeg.size();j++){
                 //保证结果是同站换乘
@@ -155,6 +157,9 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                     trainSearchResponseDTO.setSegments(List.of(firstLeg.get(i), secondLeg.get(j)));
                     trainSearchResponseDTO.setTransferCount(2);
                     result.add(trainSearchResponseDTO);
+                    if (result.size() >= maxResults) {
+                        break outer;
+                    }
                 }
             }
         }
@@ -216,6 +221,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
         List<Long> trainDOList = results.stream()
                 .flatMap(e -> e.getSegments().stream())
                 .map(TrainRoutePairDO::getTrainId)
+                .distinct()
                 .toList();
 
 
@@ -238,15 +244,15 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             String startStation=seg.getDepartureStation();
             String endStation=seg.getArrivalStation();
             Long t=seg.getTrainId();
-            fareRequests.addAll(seatTypemap.get(t)
-                            .stream()
+            List<Integer> seatTypes=seatTypemap.get(t);
+            if(seatTypes==null) return;
+            fareRequests.addAll(seatTypes.stream()
                             .map(s->{
                                 FareCalculationRequestDTO fareRequest = new FareCalculationRequestDTO();
                                 fareRequest.setTrainId(t);
                                 fareRequest.setDepartureStation(startStation);
                                 fareRequest.setArrivalStation(endStation);
                                 fareRequest.setSeatType(s);
-                                // 默认成人票
                                 fareRequest.setPassengerType(0);
                                 return fareRequest;
                             })
@@ -274,48 +280,39 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             result.setTransferCount(transferCount);
 
 
-            LocalDateTime firstDeparture = result.getSegments().get(0).getStartTime().atDate(LocalDate.now()); // 必须是 Date
+            LocalDateTime firstDeparture = result.getSegments().get(0).getStartTime().atDate(LocalDate.now());
             result.setFirstDepartureTime(DateUtils.format(firstDeparture,"HH:mm"));
 
-            //所有火车线路的dayDiff之和
             int dayDiff=result.getSegments()
                     .stream()
                     .mapToInt(TrainRoutePairDO::getDayDiff)
                     .sum();
-            LocalDateTime finalArrival = result.getSegments().get(transferCount - 1).getEndTime().atDate(LocalDate.now().plusDays(dayDiff)); // 必须是 Date 要算偏移
+            LocalDateTime finalArrival = result.getSegments().get(transferCount - 1).getEndTime().atDate(LocalDate.now().plusDays(dayDiff));
             result.setFinalArrivalTime(DateUtils.format(finalArrival,"HH:mm"));
             result.setTotalDurationMinutes(DateUtils.diffMinutes(firstDeparture,finalArrival));
 
-            // 每段行程的列车的各个座位的价格
             List<Map<String, BigDecimal>> totalPriceBySeatType = new ArrayList<>();
-            //每段行程的列车的各个座位的余票
             List<Map<String,Integer>> remainingTickets=new ArrayList<>();
 
-            //获取车次
-            //获取区间
-            //获取座位类型
-            //批量获取该区间与座位类型的余票
             result.getSegments().forEach((segment)->{
-                //获取车次
-                String trainNum=segment.getTrainNumber();
                 Long trainId=segment.getTrainId();
-                //获取座位类型
                 List<Integer> seatTypes=seatTypemap.get(trainId);
-                //获取站点
                 List<String> stations=stationsmap.get(trainId);
+                if(seatTypes==null||stations==null) return;
                 String startStation=segment.getDepartureStation();
                 String endStation=segment.getArrivalStation();
-                //获取区间
                 int i=stations.indexOf(startStation);
                 int j=stations.indexOf(endStation);
+                if(i<0||j<0||i>=j) return;
 
-                //该段车次的各个座位种类的余票
                 HashMap<String,Integer> remainingTicket=new HashMap<>();
-
-                //判断这个区间是否再缓存存在
                 seatTypes.forEach((seatType)->{
-                    Integer count=remainingTicketmap
-                            .get(trainId+"_"+seatType)
+                    List<Integer> remainingList=remainingTicketmap.get(trainId+"_"+seatType);
+                    if(remainingList==null){
+                        remainingTicket.put(SeatType.getDescByCode(seatType),0);
+                        return;
+                    }
+                    Integer count=remainingList
                             .stream()
                             .skip(i)
                             .limit(j-i)
@@ -323,13 +320,9 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                             .orElse(0);
                     remainingTicket.put(SeatType.getDescByCode(seatType),count);
                 });
-                //填充该段余票
                 remainingTickets.add(remainingTicket);
 
-                //该段车次的各个座位种类的价格
                 HashMap<String,BigDecimal> priceTicket=new HashMap<>();
-
-                // 计算该段票价
                 seatTypes.forEach((seatType)->{
                     BigDecimal fare = fareCalculationCachemap.get(new CompositeKey4<>(
                             trainId,
@@ -342,10 +335,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                 totalPriceBySeatType.add(priceTicket);
             });
 
-            // 设置余票
             result.setRemainingTicketNumMap(remainingTickets);
-
-            // 设置票价
             result.setPriceMap(totalPriceBySeatType);
         });
     }
