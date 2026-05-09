@@ -6,6 +6,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * A* 最短路径算法（启发式搜索版）
  *
@@ -19,6 +21,7 @@ import java.util.*;
  * 适用于：已知目的地，快速找到最优路径（铁路换乘场景）
  */
 @Getter
+@Slf4j
 public class TransitAStar {
 
     /**
@@ -57,6 +60,11 @@ public class TransitAStar {
      */
     private static final double AVG_SPEED_KMH = 200.0;
 
+    /**
+     * 最大搜索节点数（防止死循环）
+     */
+    private static final int MAX_EXPLORED = 100_000;
+
     public TransitAStar(TransitGraph graph) {
         this.graph = graph;
         this.gScore = new HashMap<>();
@@ -85,13 +93,17 @@ public class TransitAStar {
                              double weightCost,
                              double weightTransfer,
                              double weightPenalize) {
-        // 1. 初始化
-        String startKey = StationTimeNode.makeKey(startStation, departTime, true);
-
-        if (!graph.hasNode(startKey)) {
-            startKey = findNearestDeparture(startStation, departTime);
+        // 1. 初始化：找到出发站最近的出发节点
+        String startKey = findNearestDeparture(startStation, departTime);
+        if (startKey == null) {
+            // 精确匹配失败，尝试模糊匹配（如 "成都" 匹配 "成都东"）
+            startKey = findNearestDepartureFuzzy(startStation, departTime);
             if (startKey == null) return null;
         }
+
+        // 使用节点实际时间而非参数时间，避免时间约束判断错误
+        LocalDateTime actualStartTime = graph.getNode(startKey).getTime();
+        log.debug("[A*] 起始节点: key={}, actualTime={}, 终点站={}", startKey, actualStartTime, endStation);
 
         gScore.put(startKey, 0.0);
         double hStart = estimateHeuristic(startStation, endStation);
@@ -101,10 +113,18 @@ public class TransitAStar {
         PriorityQueue<AStarState> open = new PriorityQueue<>(
                 Comparator.comparingDouble(AStarState::getF)
         );
-        open.offer(new AStarState(startKey, 0.0, hStart, 0, departTime));
+        open.offer(new AStarState(startKey, 0.0, hStart, 0, actualStartTime));
 
         // 2. 主循环
+        int explored = 0;
         while (!open.isEmpty()) {
+            explored++;
+            lastExploredCount = explored;
+            if (explored > MAX_EXPLORED) {
+                log.debug("[A*] 超过最大搜索节点数 {}, 终止", MAX_EXPLORED);
+                break;
+            }
+
             AStarState current = open.poll();
             String currentKey = current.nodeKey;
 
@@ -114,8 +134,10 @@ public class TransitAStar {
 
             StationTimeNode currentNode = graph.getNode(currentKey);
 
-            // 到达目的地
-            if (currentNode.getStation().equals(endStation)) {
+            // 到达目的地（精确匹配 或 模糊匹配：终点站名包含/被包含于当前站名）
+            if (currentNode.getStation().equals(endStation)
+                    || currentNode.getStation().contains(endStation)
+                    || endStation.contains(currentNode.getStation())) {
                 String prevKey=currentKey;
                 while(prevKey!=null){
                     penalizedEdges.add(prevKey);
@@ -130,7 +152,7 @@ public class TransitAStar {
 
                 if (closed.contains(neighborKey)) continue;
 
-                // 时间约束检查
+                // 时间约束检查：跳过已开走的列车（出发时间 < 当前时间）
                 if (edge.isTrainEdge()) {
                     TrainEdge trainEdge = (TrainEdge) edge;
                     if (trainEdge.getDepartureTime().isBefore(current.time)) continue;
@@ -158,7 +180,9 @@ public class TransitAStar {
 
                     LocalDateTime neighborTime = edge.isTrainEdge()
                             ? ((TrainEdge) edge).getArrivalTime()
-                            : current.time.plusMinutes(edge.getDurationMinutes());
+                            : edge.getToKey() != null && graph.hasNode(edge.getToKey())
+                                ? graph.getNode(edge.getToKey()).getTime()
+                                : current.time.plusMinutes(edge.getDurationMinutes());
 
                     open.offer(new AStarState(neighborKey, tentativeG, f,
                             current.totalTransfers + transferCost, neighborTime));
@@ -168,6 +192,15 @@ public class TransitAStar {
 
         return null; // 无解
     }
+
+    /**
+     * 获取最后搜索探索的节点数（调试用）
+     */
+    public int getLastExploredCount() {
+        return lastExploredCount;
+    }
+
+    private int lastExploredCount = 0;
 
     /**
      * A* 批量搜索：找到多条候选路径 惩罚法
@@ -183,6 +216,12 @@ public class TransitAStar {
         Set<String> penalizedEdges=new HashSet<>();
        List<AStarResult> results=new ArrayList<>();
        for(int i=0;i<maxResults;i++){
+           // 每轮搜索重置状态
+           gScore.clear();
+           fScore.clear();
+           cameFrom.clear();
+           closed.clear();
+
            AStarResult result=aStar(
                    startStation,
                    departTime,
@@ -190,8 +229,8 @@ public class TransitAStar {
                    penalizedEdges,
                    0.6,
                    0.4,
-                   100,
-                   1000
+                   4000,
+                   2000
            );
            if (result==null) break;
            results.add(result);
@@ -256,6 +295,23 @@ public class TransitAStar {
     }
 
     /**
+     * 模糊匹配出发节点：站名包含关系（如 "成都" 匹配 "成都东"）
+     */
+    private String findNearestDepartureFuzzy(String station, LocalDateTime time) {
+        // 优先匹配图中站名包含查询站的（"成都" ⊂ "成都东"）
+        List<StationTimeNode> candidates = graph.getNodes().values().stream()
+                .filter(n -> n.isDeparture() && !n.getTime().isBefore(time))
+                .filter(n -> n.getStation().contains(station) || station.contains(n.getStation()))
+                .sorted(Comparator.comparing(StationTimeNode::getTime))
+                .toList();
+
+        if (candidates.isEmpty()) return null;
+
+        // 优先选包含关系更精确的（"成都东".contains("成都") 优于 "成都西".contains("成都")，取最早时间）
+        return candidates.get(0).getKey();
+    }
+
+    /**
      * 重建结果
      */
     private AStarResult buildResult(String startKey, String endKey, double totalG, int transfers) {
@@ -266,8 +322,6 @@ public class TransitAStar {
             String prevKey = cameFrom.get(currentKey);
             if (prevKey == null) break;
 
-            PathInfo info = gScore.containsKey(currentKey) ? null : null;
-            // 从 gScore 反推边（简化版）
             TransitEdge edge = findEdge(prevKey, currentKey);
             if (edge != null) {
                 edges.add(0, edge);
@@ -275,12 +329,14 @@ public class TransitAStar {
             currentKey = prevKey;
         }
 
+        StationTimeNode startNode = graph.getNode(startKey);
         StationTimeNode endNode = graph.getNode(endKey);
+        long actualMinutes = java.time.Duration.between(startNode.getTime(), endNode.getTime()).toMinutes();
         return AStarResult.builder()
                 .endStation(endNode.getStation())
                 .endTime(endNode.getTime())
-                .totalMinutes((long) totalG)
-                .totalCost(edges.stream().mapToDouble(TransitEdge::getCost).sum())
+                .totalMinutes(actualMinutes)
+                .totalCost(edges.stream().filter(TransitEdge::isTrainEdge).mapToDouble(TransitEdge::getCost).sum())
                 .edges(edges)
                 .transferCount(transfers)
                 .build();

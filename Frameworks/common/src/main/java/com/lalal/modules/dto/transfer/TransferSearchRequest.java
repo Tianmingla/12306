@@ -43,13 +43,13 @@ public class TransferSearchRequest implements Serializable {
      * 最大换乘次数（默认3）
      */
     @Builder.Default
-    private int maxTransfer = 3;
+    private int maxTransfer = 20;
 
     /**
      * 最大历时（分钟，默认480=8小时）
      */
     @Builder.Default
-    private int maxDuration = 480;
+    private int maxDuration = 1440;
 
     /**
      * 最小换乘等待时间（分钟，默认30）

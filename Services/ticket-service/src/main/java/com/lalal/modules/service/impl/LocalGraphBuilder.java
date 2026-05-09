@@ -99,12 +99,12 @@ public class LocalGraphBuilder {
 //            relevantTrainNumbers.add(ts.getTrainNumber());
 //        }
 
-        // 1.3 路过出发站和目的站的所有列车（可能有更优方案）
-        // 找出所有经过 from 或 to 的列车，减少到一定程度的车次
-        List<TrainStationDO> viaTrains =trainStationMapper.selectList(
+        // 1.3 路过出发站和目的站的所有列车（模糊匹配站名，如 "成都" 匹配 "成都东"）
+        List<TrainStationDO> viaTrains = trainStationMapper.selectList(
                 new LambdaQueryWrapper<TrainStationDO>()
-                        .in(TrainStationDO::getStationName, Arrays.asList(from, to))
-//                        .eq(TrainStationDO::getRunDate, date)
+                        .and(w -> w.like(TrainStationDO::getStationName, from)
+                                .or()
+                                .like(TrainStationDO::getStationName, to))
         );
 
         for (TrainStationDO ts : viaTrains) {
@@ -203,7 +203,8 @@ public class LocalGraphBuilder {
             graph.addTransferWaitEdges(station);
         }
 
-        log.info("构建局部图完成: nodes={}, edges={}", graph.nodeCount(), graph.edgeCount());
+        log.info("构建局部图完成: nodes={}, edges={}, stations={}", graph.nodeCount(), graph.edgeCount(),
+                graph.getAllStations().size());
         return graph;
     }
 

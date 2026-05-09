@@ -136,12 +136,13 @@ public class TransferSearchServiceImpl implements TransferSearchService {
 
     /**
      * A* 实现
+     * 使用惩罚法 + 多出发时间策略搜索多条候选路径
      */
     private List<TransferRouteResult> searchByAStarImpl(TransferSearchRequest request) {
         LocalDate date = LocalDate.parse(request.getDate(), DATE_FMT);
         LocalDateTime departTime = request.getDepartureTime() != null
                 ? date.atTime(LocalDateTime.parse(request.getDepartureTime(), TIME_FMT).toLocalTime())
-                : date.atTime(LocalTime.now());
+                : date.atTime(LocalTime.MIN);
 
         // 1. 构建局部图
         TransitGraph graph = localGraphBuilder.buildLocalGraph(
@@ -153,26 +154,96 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             log.warn("图为空，无法搜索: from={}, to={}", request.getFrom(), request.getTo());
             return Collections.emptyList();
         }
-        // 2. 执行 A* 搜索
-        TransitAStar aStar = new TransitAStar(graph);
 
-        // 2.1 预加载启发函数距离数据（各站→终点站）
+        // 2. 执行 A* 搜索（惩罚法 + 多出发时间）
+        Set<String> seenRoutes = new HashSet<>();
+        List<TransitAStar.AStarResult> rawResults = new ArrayList<>();
+
+        log.info("[A*] 开始搜索: from={}, to={}, nodes={}, edges={}",
+                request.getFrom(), request.getTo(), graph.nodeCount(), graph.edgeCount());
+
+        // 2.1 惩罚法：从同一出发时间搜索多条路径
+        TransitAStar aStar = new TransitAStar(graph);
         loadHeuristicCache(aStar, graph, request.getTo());
 
-        List<TransitAStar.AStarResult> rawResults = aStar.aStarMulti(
+        List<TransitAStar.AStarResult> penaltyResults = aStar.aStarMulti(
                 request.getFrom(), departTime, request.getTo(),
-                request.getLimit() * 3
+                request.getLimit()
         );
+        for (TransitAStar.AStarResult r : penaltyResults) {
+            String routeKey = buildRouteKey(r);
+            if (seenRoutes.add(routeKey)) {
+                rawResults.add(r);
+            }
+        }
+
+        // 2.2 多出发时间策略：每隔2小时搜索一次，覆盖不同时段
+        int[] hourOffsets = {2, 4, 6, 8, 10};
+        for (int offset : hourOffsets) {
+            LocalDateTime altDepartTime = departTime.plusHours(offset);
+            if (altDepartTime.toLocalDate().isAfter(date)) break;
+
+            // 每个出发时间创建新的 A* 实例，避免状态污染
+            TransitAStar altAStar = new TransitAStar(graph);
+            loadHeuristicCache(altAStar, graph, request.getTo());
+
+            List<TransitAStar.AStarResult> altResults = altAStar.aStarMulti(
+                    request.getFrom(), altDepartTime, request.getTo(),
+                    Math.max(2, request.getLimit() / 2)
+            );
+            for (TransitAStar.AStarResult r : altResults) {
+                String routeKey = buildRouteKey(r);
+                if (seenRoutes.add(routeKey)) {
+                    rawResults.add(r);
+                }
+            }
+        }
+
+        if (rawResults.isEmpty()) {
+            log.info("[A*] 未找到任何路径: from={}, to={}, explored={}", request.getFrom(), request.getTo(), aStar.getLastExploredCount());
+            return Collections.emptyList();
+        }
+
+        log.info("[A*] 找到 {} 条候选路径: from={}, to={}", rawResults.size(), request.getFrom(), request.getTo());
 
         // 3. 过滤和转换
-        return rawResults.stream()
-                .filter(r -> !r.getEndStation().equals(request.getFrom()))
+        String fromStation = request.getFrom();
+        String toStation = request.getTo();
+
+        // 调试：检查每条路径被哪个 filter 过滤
+        List<TransferRouteResult> converted = rawResults.stream()
+                .peek(r -> {
+                    boolean endMatch = r.getEndStation().equals(fromStation)
+                            || r.getEndStation().contains(fromStation)
+                            || fromStation.contains(r.getEndStation());
+                    boolean durationOk = r.getTotalMinutes() <= request.getMaxDuration();
+                    boolean transferOk = r.getTransferCount() <= request.getMaxTransfer();
+                    if (endMatch || !durationOk || !transferOk) {
+                        log.info("[A*] 过滤掉路径: endStation={}, totalMinutes={}, transfers={}, endMatch={}, durationOk={}, transferOk={}",
+                                r.getEndStation(), r.getTotalMinutes(), r.getTransferCount(), endMatch, durationOk, transferOk);
+                    }
+                })
+                .filter(r -> !r.getEndStation().equals(fromStation) && !r.getEndStation().contains(fromStation) && !fromStation.contains(r.getEndStation()))
                 .filter(r -> r.getTotalMinutes() <= request.getMaxDuration())
                 .filter(r -> r.getTransferCount() <= request.getMaxTransfer())
                 .map(r -> convertToResult(r, request.getTo(), request.getDate()))
                 .sorted(Comparator.comparingDouble(TransferRouteResult::getScore))
                 .limit(request.getLimit())
                 .collect(Collectors.toList());
+
+        log.info("[A*] 过滤后剩余 {} 条路径", converted.size());
+        return converted;
+    }
+
+    /**
+     * 构建路径唯一标识（用于去重）
+     * 由各段车次号序列组成
+     */
+    private String buildRouteKey(TransitAStar.AStarResult result) {
+        return result.getEdges().stream()
+                .filter(TransitEdge::isTrainEdge)
+                .map(e -> ((TrainEdge) e).getTrainNumber())
+                .collect(Collectors.joining("->"));
     }
 
     /**
