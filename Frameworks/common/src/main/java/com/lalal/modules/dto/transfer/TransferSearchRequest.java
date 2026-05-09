@@ -42,30 +42,36 @@ public class TransferSearchRequest implements Serializable {
     /**
      * 最大换乘次数（默认3）
      */
+    @Builder.Default
     private int maxTransfer = 3;
 
     /**
      * 最大历时（分钟，默认480=8小时）
      */
+    @Builder.Default
     private int maxDuration = 480;
 
     /**
      * 最小换乘等待时间（分钟，默认30）
      */
+    @Builder.Default
     private int minTransferWait = 30;
 
     /**
      * 最大换乘等待时间（分钟，默认120）
      */
+    @Builder.Default
     private int maxTransferWait = 120;
 
     /**
      * 搜索算法：Dijkstra / AStar
      */
+    @Builder.Default
     private String algorithm = "AStar";
 
     /**
      * 返回方案数量上限（默认10）
      */
+    @Builder.Default
     private int limit = 10;
 }

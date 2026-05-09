@@ -57,9 +57,10 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
     TransferSearchService transferSearchService;
     @Override
     public List<TrainSearchResponseDTO> searchTrains(String from, String mid, String to, String date) {
+        List<TrainSearchResponseDTO> result=new ArrayList<>();
         // 1. mid不为空，查找 from->mid->to
         if (mid != null && !mid.isEmpty()) {
-            List<TrainSearchResponseDTO> result=handleMidMerge(from,mid,to);
+            result.addAll(handleMidMerge(from,mid,to));
             fillTrainSearchResult(result,date);
             return result;
         }
@@ -87,7 +88,7 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                     return d.getStartTime().isAfter(LocalTime.now());
                 }).toList();
             }
-            List<TrainSearchResponseDTO> result=direct
+            result.addAll(direct
                     .stream()
                     .map((e)->{
                         TrainSearchResponseDTO trainSearchResponseDTO=new TrainSearchResponseDTO();
@@ -95,9 +96,12 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
                         trainSearchResponseDTO.setTransferCount(1);
                         return trainSearchResponseDTO;
                     })
-                    .toList();
+                    .toList()
+            );
             fillTrainSearchResult(result,date);
-            return result;
+            if(result.size()>=8){
+                return result;
+            }
         }
         // 3. 无直达，调用智能中转服务
         log.info("无直达线路，启动智能中转搜索: from={}, to={}, date={}", from, to, date);
@@ -107,10 +111,10 @@ public class TrainRoutePairServiceImpl extends ServiceImpl<TrainRoutePairMapper,
             return List.of();
         }
         log.info("智能中转找到 {} 条线路", transferResults.size());
-        List<TrainSearchResponseDTO> result=transferResults.stream()
+        result.addAll(transferResults.stream()
                 .map(this::convertTransferResultToResponseDTO)
-                .toList();
-        fillTrainSearchResult(result,date);
+                .toList()
+        );
         return result;
     }
     private List<TrainSearchResponseDTO> handleMidMerge(String from,
