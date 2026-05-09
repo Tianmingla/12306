@@ -156,6 +156,9 @@ public class TransferSearchServiceImpl implements TransferSearchService {
         // 2. 执行 A* 搜索
         TransitAStar aStar = new TransitAStar(graph);
 
+        // 2.1 预加载启发函数距离数据（各站→终点站）
+        loadHeuristicCache(aStar, graph, request.getTo());
+
         List<TransitAStar.AStarResult> rawResults = aStar.aStarMulti(
                 request.getFrom(), departTime, request.getTo(),
                 request.getLimit() * 3
@@ -360,5 +363,77 @@ public class TransferSearchServiceImpl implements TransferSearchService {
         double transferScore = result.getTransferCount() * WEIGHT_TRANSFER * 100; // 换乘惩罚
 
         return timeScore + costScore + transferScore;
+    }
+
+    /**
+     * 预加载 A* 启发函数的距离数据
+     * 从图中提取所有区段距离，Dijkstra 反向计算各站到终点的最短铁路距离
+     */
+    private void loadHeuristicCache(TransitAStar aStar, TransitGraph graph, String endStation) {
+        List<String> stations = graph.getAllStations();
+        if (stations.size() < 2) return;
+
+        // 1. 从图中所有 TrainEdge 提取区段距离，构建简化距离图（对相同站对取最短距离）
+        Map<String, Map<String, Integer>> distGraph = new HashMap<>();
+        for (TransitEdge edge : graph.getAllEdges()) {
+            if (!edge.isTrainEdge()) continue;
+            TrainEdge te = (TrainEdge) edge;
+            if (te.getDistance() == null) continue;
+            distGraph.computeIfAbsent(te.getDepartureStation(), k -> new HashMap<>())
+                    .merge(te.getArrivalStation(), te.getDistance(), Math::min);
+        }
+
+        // 2. Dijkstra 反向计算各站到终点的最短铁路距离
+        Map<String, Double> heuristicData = dijkstraReverse(distGraph, endStation);
+
+        if (!heuristicData.isEmpty()) {
+            aStar.setHeuristicCache(heuristicData);
+            log.info("[A*] 启发函数距离数据已加载: {} 条, 终点站={}", heuristicData.size(), endStation);
+        }
+    }
+
+    /**
+     * 反向 Dijkstra：从终点站出发，计算各站到终点的最短铁路距离
+     * 用于 A* 启发函数 h(n) = distance(n, target) / AVG_SPEED
+     */
+    private Map<String, Double> dijkstraReverse(Map<String, Map<String, Integer>> distGraph, String target) {
+        // 构建反向图：arriveStation -> departStation
+        Map<String, Map<String, Integer>> reverseGraph = new HashMap<>();
+        for (var entry : distGraph.entrySet()) {
+            for (var inner : entry.getValue().entrySet()) {
+                reverseGraph.computeIfAbsent(inner.getKey(), k -> new HashMap<>())
+                        .merge(entry.getKey(), inner.getValue(), Math::min);
+            }
+        }
+
+        Map<String, Integer> dist = new HashMap<>();
+        PriorityQueue<Map.Entry<String, Integer>> pq = new PriorityQueue<>(Comparator.comparingInt(Map.Entry::getValue));
+        dist.put(target, 0);
+        pq.offer(Map.entry(target, 0));
+
+        while (!pq.isEmpty()) {
+            var curr = pq.poll();
+            String u = curr.getKey();
+            int d = curr.getValue();
+            if (d > dist.getOrDefault(u, Integer.MAX_VALUE)) continue;
+
+            for (var neighbor : reverseGraph.getOrDefault(u, Map.of()).entrySet()) {
+                String v = neighbor.getKey();
+                int newDist = d + neighbor.getValue();
+                if (newDist < dist.getOrDefault(v, Integer.MAX_VALUE)) {
+                    dist.put(v, newDist);
+                    pq.offer(Map.entry(v, newDist));
+                }
+            }
+        }
+
+        // 转换为 heuristicData：key="站A_终点站" value=距离(km)
+        Map<String, Double> result = new HashMap<>();
+        for (var entry : dist.entrySet()) {
+            if (!entry.getKey().equals(target)) {
+                result.put(entry.getKey() + "_" + target, entry.getValue().doubleValue());
+            }
+        }
+        return result;
     }
 }
