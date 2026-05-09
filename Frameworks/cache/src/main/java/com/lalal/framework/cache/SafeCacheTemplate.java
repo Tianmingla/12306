@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -200,7 +201,7 @@ public class SafeCacheTemplate {
             byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
             T result=null;
             byte[] valueBytes=connection.get(keyBytes);
-            if(valueBytes==null){
+            if(valueBytes==null||new String(valueBytes, StandardCharsets.UTF_8).equals(NULL)){
                 return null;
             }
             result=curValueSerializer.get().deserialize(valueBytes,typeReference);
@@ -1205,6 +1206,6 @@ public class SafeCacheTemplate {
 
     public Boolean setIfAbsent(String key, Object value, long expireHours, TimeUnit timeUnit) {
         return redisTemplate.opsForValue()
-                .setIfAbsent(key, value, expireHours, timeUnit);
+                .setIfAbsent(key, curValueSerializer.get().serialize(value), expireHours, timeUnit);
     }
 }
