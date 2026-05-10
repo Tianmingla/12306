@@ -347,6 +347,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                         </div>
                       </div>
                     ) : (
+                    <>
                     <div className="flex justify-center space-x-6">
                       {['A', 'B', 'C', '过道', 'D', 'F'].map((seat, i) => {
                         if (seat === '过道') return <div key={i} className="w-8 flex items-center justify-center text-gray-300 text-xs">|</div>;
@@ -375,7 +376,7 @@ const BookingModal: React.FC<BookingModalProps> = ({ ticket, onClose, travelDate
                       <span className="flex items-center"><div className="w-3 h-3 bg-gray-200 rounded mr-1"></div> 过道</span>
                       <span className="flex items-center"><div className="w-3 h-3 bg-gray-200 rounded mr-1"></div> 靠窗</span>
                     </div>
-                    </div>
+                    </>
                     )}
                   </div>
 
