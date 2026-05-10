@@ -6,10 +6,12 @@ import com.lalal.modules.constant.cache.WaitlistCacheConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -18,7 +20,7 @@ import java.util.Set;
  * <p>使用 Redis ZSet 实现优先级队列：
  * - member: waitlistSn
  * - score: 优先级分数（越大越优先）
- * - 使用 ZPOPMAX 原子操作取出最高优先级订单
+ * - 出队使用 Lua 脚本原子执行 ZPOPMAX（避免 Redisson 3.21 + Spring Data Redis 3.0 的 popMax 兼容性 bug）
  */
 @Slf4j
 @Service
@@ -29,12 +31,20 @@ public class WaitlistQueueServiceImpl implements WaitlistQueueService {
 
     private static final long QUEUE_TTL_DAYS = 10;
 
+    /** Lua 脚本：原子 ZPOPMAX，返回弹出成员的 value（或 nil） */
+    private static final DefaultRedisScript<String> ZPOPMAX_SCRIPT = new DefaultRedisScript<>(
+            "local result = redis.call('ZPOPMAX', KEYS[1], 1) " +
+            "if #result == 0 then return nil end " +
+            "return result[1]",
+            String.class
+    );
+
     private String buildKey(String trainNumber, String travelDate) {
         return WaitlistCacheConstant.waitlistQueueKey(trainNumber, travelDate, null);
     }
 
     @Override
-    public void enqueue(WaitlistOrderDO order, java.math.BigDecimal priority) {
+    public void enqueue(WaitlistOrderDO order, BigDecimal priority) {
         String key = buildKey(order.getTrainNumber(), order.getTravelDate().toString());
         stringRedisTemplate.opsForZSet().add(key, order.getWaitlistSn(), priority.doubleValue());
         stringRedisTemplate.expire(key, Duration.ofDays(QUEUE_TTL_DAYS));
@@ -44,20 +54,20 @@ public class WaitlistQueueServiceImpl implements WaitlistQueueService {
     @Override
     public String dequeue(String trainNumber, String travelDate) {
         String key = buildKey(trainNumber, travelDate);
-        // ZPOPMAX 原子弹出分数最高的成员
-        Set<ZSetOperations.TypedTuple<String>> popped = stringRedisTemplate.opsForZSet().popMax(key, 1);
-        if (popped == null || popped.isEmpty()) {
-            return null;
+        // Lua 脚本原子 ZPOPMAX，绕过 Redisson Spring Data 集成的 popMax bug
+        String waitlistSn = stringRedisTemplate.execute(
+                ZPOPMAX_SCRIPT,
+                Collections.singletonList(key)
+        );
+        if (waitlistSn != null) {
+            log.info("[候补队列] 出队: waitlistSn={}", waitlistSn);
         }
-        String waitlistSn = popped.iterator().next().getValue();
-        log.info("[候补队列] 出队: waitlistSn={}", waitlistSn);
         return waitlistSn;
     }
 
     @Override
     public String peek(String trainNumber, String travelDate) {
         String key = buildKey(trainNumber, travelDate);
-        // ZREVRANGE 获取最高分数但不弹出
         Set<String> top = stringRedisTemplate.opsForZSet().reverseRange(key, 0, 0);
         return top != null && !top.isEmpty() ? top.iterator().next() : null;
     }
@@ -78,7 +88,7 @@ public class WaitlistQueueServiceImpl implements WaitlistQueueService {
 
     @Override
     public void updatePriority(String waitlistSn, String trainNumber, String travelDate,
-                               java.math.BigDecimal newPriority) {
+                               BigDecimal newPriority) {
         String key = buildKey(trainNumber, travelDate);
         stringRedisTemplate.opsForZSet().add(key, waitlistSn, newPriority.doubleValue());
         log.debug("[候补队列] 更新优先级: waitlistSn={}, priority={}", waitlistSn, newPriority);
@@ -93,9 +103,7 @@ public class WaitlistQueueServiceImpl implements WaitlistQueueService {
     @Override
     public Long getQueuePosition(String waitlistSn, String trainNumber, String travelDate) {
         String key = buildKey(trainNumber, travelDate);
-        // ZREVRANK 返回分数从高到低的排名（0-based）
         Long rank = stringRedisTemplate.opsForZSet().reverseRank(key, waitlistSn);
-        // 转换为1-based排名
         return rank != null ? rank + 1 : null;
     }
 }
