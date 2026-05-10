@@ -38,6 +38,7 @@ TOPICS=(
     "travel-reminder-topic"
     "seat-release-topic"
     "waitlist-fulfill-topic"
+    "waitlist-seat-result-topic"
 )
 
 # Topic 描述
@@ -50,6 +51,7 @@ DESCS=(
     "出行提醒 Topic（延迟消息）"
     "座位释放 Topic"
     "候补兑现触发 Topic"
+    "候补选座结果 Topic"
 )
 
 echo "========================================"

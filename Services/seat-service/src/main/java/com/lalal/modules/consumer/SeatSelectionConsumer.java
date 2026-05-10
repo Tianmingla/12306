@@ -59,7 +59,7 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
     private final TrainStationMapper trainStationMapper;
 
     private static final String SEAT_SELECTION_RESULT_TOPIC = "seat-selection-result-topic";
-
+    private static final String WAITLIST_SEAT_RESULT_TOPIC="waitlist-seat-result-topic";
     // 候补订单座位锁定时间（分钟）- 比普通购票更短
     private static final int WAITLIST_SEAT_LOCK_MINUTES = 10;
     private static final int NORMAL_SEAT_LOCK_MINUTES = 30;
@@ -115,7 +115,11 @@ public class SeatSelectionConsumer extends RocketMQBaseConsumer {
             fillPlanTimes(resultMsg, message.getTrainNum(), message.getStartStation(),
                     message.getEndStation(), message.getDate());
 
-            messageQueueService.send(SEAT_SELECTION_RESULT_TOPIC, "result", resultMsg);
+            if(isWaitlist){
+                messageQueueService.send(WAITLIST_SEAT_RESULT_TOPIC, "result", resultMsg);
+            }else {
+                messageQueueService.send(SEAT_SELECTION_RESULT_TOPIC, "result", resultMsg);
+            }
 
             log.info("[座位选择] 处理成功: requestId={}, seatCount={}",
                     requestId, selectedSeats.getItems().size());

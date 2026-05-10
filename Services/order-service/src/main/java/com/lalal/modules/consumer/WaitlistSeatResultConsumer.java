@@ -3,6 +3,8 @@ package com.lalal.modules.consumer;
 import com.lalal.modules.dto.OrderCreationRequestMessage;
 import com.lalal.modules.dto.SeatSelectionResultMessage;
 import com.lalal.modules.entity.WaitlistOrderDO;
+import com.lalal.modules.remote.UserServiceClient;
+import com.lalal.modules.result.Result;
 import com.lalal.modules.service.PriorityCalculator;
 import com.lalal.modules.service.WaitlistQueueService;
 import com.lalal.modules.service.WaitlistService;
@@ -15,8 +17,10 @@ import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.text.DateFormat;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -32,12 +36,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @MessageConsumer(
-        topic = "seat-selection-result-topic",
+        topic = "waitlist-seat-result-topic",
         tag = "*",
         consumerGroup = "waitlist-seat-result-consumer"
 )
 @RocketMQMessageListener(
-        topic = "seat-selection-result-topic",
+        topic = "waitlist-seat-result-topic",
         consumerGroup = "waitlist-seat-result-consumer",
         selectorExpression = "*"
 )
@@ -47,6 +51,7 @@ public class WaitlistSeatResultConsumer extends RocketMQBaseConsumer {
     private final WaitlistQueueService waitlistQueueService;
     private final MessageQueueService messageQueueService;
     private final PriorityCalculator priorityCalculator;
+    private final UserServiceClient userServiceClient;
 
     private static final String ORDER_CREATION_TOPIC = "order-creation-topic";
     private static final BigDecimal FAILURE_PENALTY = BigDecimal.valueOf(10);
@@ -98,19 +103,45 @@ public class WaitlistSeatResultConsumer extends RocketMQBaseConsumer {
      * 选座成功：发送订单创建请求
      */
     private void handleSuccess(WaitlistOrderDO order, SeatSelectionResultMessage result) {
-        // 构建订单创建消息
-        BigDecimal aPrice=order.getPrepayAmount().divide(BigDecimal.valueOf(result.getSelectedSeats().size()));
+        // 1. 通过 Feign 查询乘客信息（realName, idCard）
+        Map<Long, UserServiceClient.PassengerRemoteVO> passengerMap;
+        try {
+            // 先根据手机号解析 userId
+            Long userId = resolveUserId(order.getUsername());
+            UserServiceClient.PassengersBatchRequest batchReq = new UserServiceClient.PassengersBatchRequest();
+            batchReq.setUserId(userId);
+            batchReq.setPassengerIds(Arrays.stream(order.getPassengerIds().split(","))
+                    .map(Long::parseLong).toList());
+            Result<List<UserServiceClient.PassengerRemoteVO>> passengerResult = userServiceClient.batchPassengers(batchReq);
+            passengerMap = passengerResult != null && passengerResult.getData() != null
+                    ? passengerResult.getData().stream()
+                    .collect(Collectors.toMap(UserServiceClient.PassengerRemoteVO::getId, p -> p, (a, b) -> a))
+                    : Map.of();
+        } catch (Exception e) {
+            log.error("[候补选座结果] 查询乘客信息失败: waitlistSn={}", order.getWaitlistSn(), e);
+            passengerMap = Map.of();
+        }
+
+        // 2. 构建订单创建消息
+        BigDecimal aPrice = order.getPrepayAmount().divide(BigDecimal.valueOf(result.getSelectedSeats().size()));
         OrderCreationRequestMessage orderMsg = new OrderCreationRequestMessage();
         orderMsg.setWaitlistSn(order.getWaitlistSn());
+        Map<Long, UserServiceClient.PassengerRemoteVO> finalPassengerMap = passengerMap;
         orderMsg.setItems(result.getSelectedSeats()
                 .stream()
-                .map((item)->{
-                    OrderCreationRequestMessage.OrderItem orderItem=new OrderCreationRequestMessage.OrderItem();
+                .map((item) -> {
+                    OrderCreationRequestMessage.OrderItem orderItem = new OrderCreationRequestMessage.OrderItem();
                     orderItem.setAmount(aPrice);
                     orderItem.setSeatType(item.getSeatType());
                     orderItem.setCarriageNumber(item.getCarriageNum());
                     orderItem.setSeatNumber(item.getSeatNum());
                     orderItem.setPassengerId(item.getPassengerId());
+                    // 填充乘客姓名和身份证
+                    UserServiceClient.PassengerRemoteVO passenger = finalPassengerMap.get(item.getPassengerId());
+                    if (passenger != null) {
+                        orderItem.setRealName(passenger.getRealName());
+                        orderItem.setIdCard(passenger.getIdCardNumber());
+                    }
                     return orderItem;
                 }).toList());
         orderMsg.setEndStation(order.getEndStation());
@@ -155,5 +186,23 @@ public class WaitlistSeatResultConsumer extends RocketMQBaseConsumer {
 
         log.warn("[候补选座结果] 选座失败: waitlistSn={}, reason={}",
                 order.getWaitlistSn(), errorMsg);
+    }
+
+    /**
+     * 根据手机号解析 userId（候补订单只存 username=手机号，需查 user-service）
+     */
+    private Long resolveUserId(String phone) {
+        try {
+            Result<Map<String, Object>> result = userServiceClient.resolveUserId(Map.of("phone", phone));
+            if (result != null && result.getData() != null) {
+                Object userId = result.getData().get("userId");
+                if (userId instanceof Number) {
+                    return ((Number) userId).longValue();
+                }
+            }
+        } catch (Exception e) {
+            log.error("[候补选座结果] 解析用户ID失败: phone={}", phone, e);
+        }
+        return null;
     }
 }

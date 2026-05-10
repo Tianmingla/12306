@@ -25,6 +25,7 @@ TOPICS=(
     "travel-reminder-topic:4:4"
     "seat-release-topic:4:4"
     "waitlist-fulfill-topic:4:4"
+    "waitlist-seat-result-topic:4:4"
 )
 
 echo "[信息] NameServer: $NAMESRV_ADDR"

@@ -20,6 +20,8 @@ import com.lalal.modules.mapper.TrainMapper;
 import com.lalal.modules.model.Carriage;
 import com.lalal.modules.strategy.SeatSelectionStrategy;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -34,6 +36,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SeatSelectionServiceImpl implements SeatSelectionService {
     private final TrainMapper trainMapper;
     private final CarriageMapper carriageMapper;
@@ -69,7 +72,7 @@ public class SeatSelectionServiceImpl implements SeatSelectionService {
         List<String> remainingTicketsKey=request
                 .getPassengers()
                 .stream()
-                .map(passenger -> CacheConstant.trainTicketRemainingKey(train.getId(),request.getDate(), SeatType.findByDesc(passenger.getSeatType()).getCode()))
+                .map(passenger -> CacheConstant.trainTicketRemainingKey(train.getId(),request.getDate(), resolveSeatType(passenger.getSeatType()).getCode()))
                 .toList();
         List<Integer> countsBySeatType=safeCacheTemplate.safeBatchLGet(
                 remainingTicketsKey,
@@ -90,13 +93,7 @@ public class SeatSelectionServiceImpl implements SeatSelectionService {
         // 2. 确定座位类型
         // 这里简化处理：假设一次请求中的所有乘客选择相同的座位类型
         //TODO 分组
-        int seatType;
-        try {
-            seatType = SeatType.findByDesc(request.getPassengers().get(0).getSeatType()).getCode();
-        } catch (NumberFormatException e) {
-            // 如果是字符串描述，可能需要转换，这里假设是数字字符串
-            return null;
-        }
+        int seatType = resolveSeatType(request.getPassengers().get(0).getSeatType()).getCode();
 
         // 3. 获取对应车厢
         List<CarriageDO> carriages=safeCacheTemplate.safeGet(
@@ -154,5 +151,24 @@ public class SeatSelectionServiceImpl implements SeatSelectionService {
         if (strategy == null) return null;
 
         return strategy.select(request, carriages);
+    }
+
+    /**
+     * 解析座位类型：兼容数字 code（如 "0"）和中文描述（如 "二等座"）
+     */
+    private SeatType resolveSeatType(String seatTypeStr) {
+        if (seatTypeStr == null) return SeatType.SECOND_CLASS;
+        // 先尝试按 code 解析（候补订单传入的是数字字符串如 "0", "1"）
+        try {
+            int code = Integer.parseInt(seatTypeStr.trim());
+            SeatType byCode = SeatType.findByCode(code);
+            if (byCode != null) return byCode;
+        } catch (NumberFormatException ignored) {
+        }
+        // 再按描述解析（普通购票传入的是中文如 "二等座"）
+        SeatType byDesc = SeatType.findByDesc(seatTypeStr.trim());
+        if (byDesc != null) return byDesc;
+        log.warn("[选座] 无法解析座位类型: {}, 默认使用二等座", seatTypeStr);
+        return SeatType.SECOND_CLASS;
     }
 }
