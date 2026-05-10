@@ -35,4 +35,9 @@ public interface OrderService {
      * 取消订单（仅限待支付的订单）内部接口
      */
     void cancelOrder(String orderSn);
+
+    /**
+     * 改签：将已支付订单改为新车次，返回新订单号
+     */
+    String changeOrder(String originalOrderSn, String phone, OrderCreateRequestDTO newOrderRequest);
 }

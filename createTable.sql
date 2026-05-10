@@ -114,39 +114,6 @@ CREATE TABLE `t_station` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `t_ticket`
---
-
-DROP TABLE IF EXISTS `t_ticket`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `t_ticket` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `username` varchar(64) NOT NULL COMMENT '用户名',
-  `train_id` bigint NOT NULL COMMENT '列车ID',
-  `carriage_number` varchar(10) NOT NULL COMMENT '车厢号',
-  `seat_number` varchar(10) NOT NULL COMMENT '座位号',
-  `seat_type` int NOT NULL COMMENT '座位类型（冗余）',
-  `passenger_id` varchar(32) NOT NULL COMMENT '乘车人ID',
-  `travel_date` datetime NOT NULL COMMENT '乘车出发时间',
-  `departure_station` varchar(32) NOT NULL COMMENT '出发站点',
-  `arrival_station` varchar(32) NOT NULL COMMENT '到达站点',
-  `ticket_status` int NOT NULL DEFAULT '0' COMMENT '车票状态（0:未支付, 1:已支付, 2:已退票等）',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_time` datetime DEFAULT NULL COMMENT '修改时间',
-  `del_flag` int NOT NULL DEFAULT '0' COMMENT '删除标志（0:正常, 1:已删除）',
-  PRIMARY KEY (`id`),
-  KEY `idx_username` (`username`),
-  KEY `idx_train_id` (`train_id`),
-  KEY `idx_travel_date` (`travel_date`),
-  KEY `idx_departure_arrival` (`departure_station`,`arrival_station`),
-  KEY `idx_passenger_id` (`passenger_id`),
-  KEY `idx_del_flag` (`del_flag`),
-  KEY `t_ticket_detail` (`id`,`train_id`,`travel_date`,`carriage_number`,`seat_type`,`del_flag`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='车票表（含冗余字段）';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
 -- Table structure for table `t_train`
 --
 
@@ -285,7 +252,8 @@ CREATE TABLE `t_order` (
   `run_date` date NOT NULL COMMENT '乘车日期',
   `total_amount` DECIMAL(10,2) NOT NULL COMMENT '订单总金额',
   `pay_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '支付时间',
-  `status` INT NOT NULL DEFAULT 0 COMMENT '订单状态：0-待支付, 1-已支付, 2-已取消, 3-已退票',
+  `status` INT NOT NULL DEFAULT 0 COMMENT '订单状态：0-待支付, 1-已支付, 2-已取消, 3-已退票, 4-已改签',
+  `original_order_sn` VARCHAR(64) DEFAULT NULL COMMENT '改签来源订单号',
 
   -- BaseDO 字段
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

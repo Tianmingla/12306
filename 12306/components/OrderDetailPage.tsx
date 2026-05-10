@@ -8,9 +8,13 @@ import {
   Train,
   User,
   Armchair,
+  RotateCcw,
+  XCircle,
+  ArrowRightLeft,
 } from 'lucide-react';
 import type { OrderDetailVO } from '../types';
-import { getOrderDetail, payOrder, submitAlipayForm } from '../services/orderService';
+import { cancelOrder, getOrderDetail, payOrder, refundOrder, submitAlipayForm } from '../services/orderService';
+import ChangeTicketModal from './ChangeTicketModal';
 
 interface OrderDetailPageProps {
   orderSn: string;
@@ -35,12 +39,21 @@ function seatTypeLabel(t: number | null | undefined): string {
   return m[t] ?? `类型${t}`;
 }
 
+function isBeforeDeparture(runDate: string | Date | null | undefined): boolean {
+  if (!runDate) return true;
+  const date = typeof runDate === 'string' ? new Date(runDate) : runDate;
+  return date > new Date();
+}
+
 const OrderDetailPage: React.FC<OrderDetailPageProps> = ({ orderSn, onBack }) => {
   const [detail, setDetail] = useState<OrderDetailVO | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [payError, setPayError] = useState('');
   const [paying, setPaying] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [showChangeModal, setShowChangeModal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +90,34 @@ const OrderDetailPage: React.FC<OrderDetailPageProps> = ({ orderSn, onBack }) =>
       setPayError(e instanceof Error ? e.message : '支付失败');
     } finally {
       setPaying(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!confirm('确定要退款吗？退票后将释放座位。')) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      await refundOrder(orderSn);
+      await load();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : '退款失败');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!confirm('确定要取消订单吗？')) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      await cancelOrder(orderSn);
+      await load();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : '取消失败');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -123,7 +164,9 @@ const OrderDetailPage: React.FC<OrderDetailPageProps> = ({ orderSn, onBack }) =>
                           ? 'bg-amber-400/90 text-amber-950'
                           : detail.status === 1
                             ? 'bg-emerald-400/90 text-emerald-950'
-                            : 'bg-white/20 text-white'
+                            : detail.status === 4
+                              ? 'bg-purple-400/90 text-purple-950'
+                              : 'bg-white/20 text-white'
                       }`}
                     >
                       {detail.statusText}
@@ -212,25 +255,72 @@ const OrderDetailPage: React.FC<OrderDetailPageProps> = ({ orderSn, onBack }) =>
                       <CreditCard className="h-4 w-4" />
                       使用支付宝沙箱完成支付（需在 order-service 配置密钥）
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => void handlePay()}
-                      disabled={paying}
-                      className="inline-flex justify-center items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg shadow-orange-500/30 hover:from-orange-600 hover:to-amber-600 disabled:opacity-60 transition-all"
-                    >
-                      {paying ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-                      {paying ? '跳转中…' : '去支付'}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleCancel()}
+                        disabled={actionLoading}
+                        className="inline-flex justify-center items-center gap-2 px-6 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60 transition-all"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        取消订单
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handlePay()}
+                        disabled={paying}
+                        className="inline-flex justify-center items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-lg shadow-orange-500/30 hover:from-orange-600 hover:to-amber-600 disabled:opacity-60 transition-all"
+                      >
+                        {paying ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                        {paying ? '跳转中…' : '去支付'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {detail.status === 1 && (
-                  <p className="text-center text-emerald-600 font-medium py-4">
-                    支付成功，祝您旅途愉快。
-                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-gray-100">
+                    <p className="text-sm text-emerald-600 font-medium">支付成功，祝您旅途愉快。</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowChangeModal(true)}
+                        className="inline-flex justify-center items-center gap-2 px-6 py-3 rounded-xl border border-blue-200 text-blue-600 font-medium hover:bg-blue-50 disabled:opacity-60 transition-all"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                        改签
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRefund()}
+                        disabled={actionLoading}
+                        className="inline-flex justify-center items-center gap-2 px-6 py-3 rounded-xl border border-red-200 text-red-600 font-medium hover:bg-red-50 disabled:opacity-60 transition-all"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        退票
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {actionError && (
+                  <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                    {actionError}
+                  </div>
                 )}
               </div>
             </div>
+
+            {showChangeModal && detail && (
+              <ChangeTicketModal
+                order={detail}
+                onClose={() => setShowChangeModal(false)}
+                onChanged={() => {
+                  setShowChangeModal(false);
+                  void load();
+                }}
+              />
+            )}
           </>
         )}
       </div>

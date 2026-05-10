@@ -98,6 +98,22 @@ public class OrderController {
         }
     }
 
+    /**
+     * 改签接口（仅限已支付且未发车的订单）
+     */
+    @PostMapping("/change/{orderSn}")
+    public Result<String> changeOrder(
+            @PathVariable String orderSn,
+            @RequestHeader(value = "X-User-Name", required = false) String phone,
+            @RequestBody OrderCreateRequestDTO request) {
+        try {
+            String newOrderSn = orderService.changeOrder(orderSn, phone, request);
+            return Result.success(newOrderSn);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return Result.fail(e.getMessage(), ReturnCode.fail.code());
+        }
+    }
+
     @PostMapping("/pay")
     public Result<PayOrderVO> pay(
             @RequestHeader(value = "X-User-Name", required = false) String phone,

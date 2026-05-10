@@ -92,6 +92,7 @@ public class SeatReleaseMessage implements Serializable {
     public enum ReleaseType {
         CANCEL,   // 用户主动取消
         REFUND,   // 退票
-        TIMEOUT   // 超时自动取消
+        TIMEOUT,  // 超时自动取消
+        CHANGE    // 改签
     }
 }

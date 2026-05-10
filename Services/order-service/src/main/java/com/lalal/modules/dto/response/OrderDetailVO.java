@@ -16,8 +16,9 @@ public class OrderDetailVO {
     private String endStation;
     private LocalDate runDate;
     private BigDecimal totalAmount;
-    /** 0 待支付 1 已支付 2 已取消 3 已退票 */
+    /** 0 待支付 1 已支付 2 已取消 3 已退票 4 已改签 */
     private Integer status;
     private String statusText;
+    private String originalOrderSn;
     private List<OrderItemVO> items;
 }

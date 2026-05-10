@@ -24,5 +24,6 @@ public class OrderDO extends BaseDO {
     private String endStation;
     private LocalDate runDate;
     private BigDecimal totalAmount;
-    private Integer status; // 0: 待支付, 1: 已支付, 2: 已取消, 3: 已退票
+    private Integer status; // 0: 待支付, 1: 已支付, 2: 已取消, 3: 已退票, 4: 已改签
+    private String originalOrderSn; // 改签来源订单号，null=正常订单
 }

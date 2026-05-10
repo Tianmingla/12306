@@ -1,5 +1,5 @@
 import { API_BASE, authHeaders } from './http';
-import type { OrderDetailVO, OrderListVO, PayOrderVO } from '../types';
+import type { ChangeOrderRequest, OrderDetailVO, OrderListVO, PayOrderVO } from '../types';
 
 const ORDER_BASE = `${API_BASE}/order`;
 
@@ -60,6 +60,19 @@ export async function cancelOrder(orderSn: string): Promise<void> {
   if (json.code !== 200) {
     throw new Error(json.message || '取消订单失败');
   }
+}
+
+export async function changeOrder(originalOrderSn: string, request: ChangeOrderRequest): Promise<string> {
+  const response = await fetch(`${ORDER_BASE}/change/${encodeURIComponent(originalOrderSn)}`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const json = await response.json();
+  if (json.code !== 200) {
+    throw new Error(json.message || '改签失败');
+  }
+  return json.data;
 }
 
 export function submitAlipayForm(payFormHtml: string): void {

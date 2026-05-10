@@ -206,6 +206,7 @@ export interface OrderDetailVO {
   totalAmount: string | number | null;
   status: number;
   statusText: string;
+  originalOrderSn?: string | null;
   items: OrderItemVO[];
 }
 
@@ -338,4 +339,14 @@ export interface WaitlistOrderVO {
   createTime: string;
   queuePosition: number;
   successRate: number;
+}
+
+export interface ChangeOrderRequest {
+  trainNumber: string;
+  startStation: string;
+  endStation: string;
+  runDate: string;
+  passengerIds: number[];
+  seatTypelist: string[];
+  chooseSeats?: string[];
 }

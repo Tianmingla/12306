@@ -172,6 +172,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         vo.setTotalAmount(order.getTotalAmount());
         vo.setStatus(order.getStatus());
         vo.setStatusText(statusText(order.getStatus()));
+        vo.setOriginalOrderSn(order.getOriginalOrderSn());
         vo.setItems(rows.stream().map(this::toItemVo).collect(Collectors.toList()));
         return vo;
     }
@@ -265,6 +266,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
             case 1 -> "已支付";
             case 2 -> "已取消";
             case 3 -> "已退票";
+            case 4 -> "已改签";
             default -> "未知";
         };
     }
@@ -340,12 +342,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         if (!Objects.equals(order.getStatus(), 1)) {
             throw new IllegalStateException("只有已支付的订单才能退款");
         }
-        // 检查是否已发车
-        if (order.getRunDate() != null) {
-            if (order.getRunDate().isBefore(LocalDate.now())) {
-                throw new IllegalStateException("列车已发车，无法退款");
-            }
-        }
 
         // 如果支付宝功能启用，调用退款接口
         if (alipayProperties.isEnabled() && order.getTotalAmount() != null) {
@@ -395,5 +391,71 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, OrderDO> implemen
         // 发送座位释放消息
         sendSeatReleaseMessage(order, SeatReleaseMessage.ReleaseType.CANCEL);
         reminderService.handleOrderCancel(orderSn);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String changeOrder(String originalOrderSn, String phone, OrderCreateRequestDTO newOrderRequest) {
+        OrderDO original = findByOrderSn(originalOrderSn);
+        if (original == null) {
+            throw new IllegalArgumentException("原订单不存在");
+        }
+        if (!StringUtils.hasText(phone) || !phone.equals(original.getUsername())) {
+            throw new IllegalArgumentException("无权操作该订单");
+        }
+        if (!Objects.equals(original.getStatus(), 1)) {
+            throw new IllegalStateException("只有已支付的订单才能改签");
+        }
+
+        // 从原订单的 items 构建新订单项（保持相同乘客，新座位由选座服务分配）
+        LambdaQueryWrapper<OrderItemDO> itemQw = new LambdaQueryWrapper<>();
+        itemQw.eq(OrderItemDO::getOrderSn, originalOrderSn);
+        List<OrderItemDO> originalItems = orderItemMapper.selectList(itemQw);
+
+        List<OrderCreateRequestDTO.OrderItemRequestDTO> newItems = originalItems.stream().map(oi -> {
+            OrderCreateRequestDTO.OrderItemRequestDTO item = new OrderCreateRequestDTO.OrderItemRequestDTO();
+            item.setPassengerId(oi.getPassengerId());
+            item.setRealName(oi.getPassengerName());
+            item.setIdCard(oi.getIdCard());
+            item.setAmount(oi.getAmount());
+            // 座位信息由选座服务重新分配，这里暂用原值占位
+            item.setCarriageNumber(oi.getCarriageNumber());
+            item.setSeatNumber(oi.getSeatNumber());
+            item.setSeatType(oi.getSeatType());
+            return item;
+        }).toList();
+
+        // 构建新订单请求，补充前端未传的字段
+        newOrderRequest.setUsername(phone);
+        newOrderRequest.setItems(newItems);
+        if (newOrderRequest.getStartStation() == null) {
+            newOrderRequest.setStartStation(original.getStartStation());
+        }
+        if (newOrderRequest.getEndStation() == null) {
+            newOrderRequest.setEndStation(original.getEndStation());
+        }
+        if (newOrderRequest.getRunDate() == null) {
+            newOrderRequest.setRunDate(original.getRunDate());
+        }
+
+        // 创建新订单
+        String newOrderSn = createOrder(newOrderRequest);
+
+        // 标记新订单为改签来源
+        OrderDO newOrder = findByOrderSn(newOrderSn);
+        newOrder.setOriginalOrderSn(originalOrderSn);
+        this.updateById(newOrder);
+
+        // 标记原订单为已改签
+        original.setStatus(4);
+        this.updateById(original);
+
+        // 发送座位释放消息（改签类型）
+        sendSeatReleaseMessage(original, SeatReleaseMessage.ReleaseType.CHANGE);
+
+        // 取消原订单出行提醒
+        reminderService.handleOrderCancel(originalOrderSn);
+
+        return newOrderSn;
     }
 }
