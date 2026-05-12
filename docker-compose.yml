@@ -316,6 +316,31 @@ services:
     networks:
       - 12306-network
 
+  # ==================== Frontend ====================
+  frontend:
+    build:
+      context: .
+      dockerfile: 12306/Dockerfile
+    container_name: 12306-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway-service
+    networks:
+      - 12306-network
+
+  admin-frontend:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    container_name: 12306-admin-frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - gateway-service
+    networks:
+      - 12306-network
+
 volumes:
   mysql_data:
   redis_data:
