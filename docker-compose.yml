@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+  # ==================== nginx ====================
+  nginx-gateway:
+      build:
+        context: .
+        dockerfile: ./nginx/Dockerfile
+      container_name: 12306-nginx-gateway
+      ports:
+        - "80:80" 
+      depends_on:
+        - frontend
+        - admin-frontend
+        - gateway-service
+        - nacos
+      networks:
+        - 12306-network
   # ==================== Infrastructure ====================
   mysql:
     image: mysql:8.0
@@ -324,8 +339,6 @@ services:
     container_name: 12306-frontend
     ports:
       - "3000:80"
-    depends_on:
-      - gateway-service
     networks:
       - 12306-network
 
@@ -336,8 +349,6 @@ services:
     container_name: 12306-admin-frontend
     ports:
       - "5174:80"
-    depends_on:
-      - gateway-service
     networks:
       - 12306-network
 

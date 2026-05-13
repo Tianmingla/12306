@@ -6,6 +6,7 @@ import { ArcoResolver } from 'unplugin-vue-components/resolvers'
 import { resolve } from 'path'
 
 export default defineConfig({
+  base: '/admin/',
   plugins: [
     vue(),
     AutoImport({
