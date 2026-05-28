@@ -22,11 +22,33 @@ end
 local function build_and_not_masks(seat_indices, s, e, sc)
     local masks = {}
     for _, idx in ipairs(seat_indices) do
-        for i = s, e do
-            local bit_pos = idx * sc + i
-            local byte_pos = math.floor(bit_pos / 8) + 1
-            local bit_offset = 7 - (bit_pos % 8)
-            masks[byte_pos] = bit.bor(masks[byte_pos] or 0, bit.lshift(1, bit_offset))
+        -- 计算当前座位覆盖的全局绝对比特范围 [global_start, global_end]
+        local global_start = idx * sc + s
+        local global_end   = idx * sc + e
+
+        -- 计算起始和结束所在的字节索引（0-based）
+        local start_byte_idx = math.floor(global_start / 8)
+        local end_byte_idx   = math.floor(global_end / 8)
+
+        -- 遍历受影响的每一个字节
+        for byte_idx = start_byte_idx, end_byte_idx do
+            -- 将 0-based 转为 1-based 作为 Lua table 的 key
+            local byte_pos = byte_idx + 1
+
+            -- 计算当前字节内的局部起始和结束比特位置 (0-7, LSB=0)
+            local local_start_in_byte = global_start - byte_idx * 8
+            local local_end_in_byte   = global_end - byte_idx * 8
+
+            -- 限制在当前字节的 [0, 7] 范围内
+            local clamped_start = math.max(local_start_in_byte, 0)
+            local clamped_end   = math.min(local_end_in_byte, 7)
+
+            -- 【核心优化】使用减法技巧生成该字节内的连续掩码 (LSB=0 视角)
+            -- 生成 clamped_end+1 个 1，然后减去 clamped_start 个 1
+            local local_mask_lsb0 = (bit.lshift(1, clamped_end + 1) - 1) - (bit.lshift(1, clamped_start) - 1)
+
+            -- 累加到总掩码中
+            masks[byte_pos] = bit.bor(masks[byte_pos] or 0, local_mask_lsb0)
         end
     end
     return masks
