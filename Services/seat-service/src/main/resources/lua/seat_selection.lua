@@ -15,43 +15,74 @@ local groups_str = ARGV[4]
 local seg_count = tonumber(ARGV[5])
 
 local bitmap = redis.call('GET', detail_key)
--- if not bitmap then return nil end
 if not bitmap then
     redis.call('SETBIT', detail_key, 0, 0)
     bitmap = redis.call('GET', detail_key)
 end
--- Helper to check if a seat is free for segments [start_seg, end_seg]
-local function is_free(current_bitmap, seat_idx,s, e, sc)
-    for i = s, e do
-        local bit_pos = seat_idx * sc + i
-        local byte_pos = math.floor(bit_pos / 8) + 1
-        local bit_offset = 7 - (bit_pos % 8)
-        local byte = string.byte(current_bitmap, byte_pos) or 0
-        if bit.band(byte, bit.lshift(1, bit_offset)) ~= 0 then
+
+-- Precompute: for each seat index, build a per-byte OR mask covering [start_seg, end_seg]
+-- This replaces the inner loop of is_free / mark_occupied with a single bitwise check per byte
+local function build_byte_masks(seat_indices, s, e, sc)
+    -- masks[byte_pos] = OR of all bits that need to be checked/set for all seats in this byte
+    local masks = {}
+    for _, idx in ipairs(seat_indices) do
+        for i = s, e do
+            local bit_pos = idx * sc + i
+            local byte_pos = math.floor(bit_pos / 8) + 1
+            local bit_offset = 7 - (bit_pos % 8)
+            masks[byte_pos] = bit.bor(masks[byte_pos] or 0, bit.lshift(1, bit_offset))
+        end
+    end
+    return masks
+end
+
+-- Check if all bits in masks are 0 in the bitmap (all seats free)
+local function check_free(bm, masks)
+    for byte_pos, mask in pairs(masks) do
+        local byte = string.byte(bm, byte_pos) or 0
+        if bit.band(byte, mask) ~= 0 then
             return false
         end
     end
     return true
 end
 
--- Helper to mark a seat as occupied
-local function mark_occupied(current_bitmap, seat_idx, s, e, sc)
-    local new_bitmap = current_bitmap
-    for i = s, e do
-        local bit_pos = seat_idx * sc + i
-        local byte_pos = math.floor(bit_pos / 8) + 1
-        local bit_offset = 7 - (bit_pos % 8)
-        local byte = string.byte(new_bitmap, byte_pos) or 0
-        byte = bit.bor(byte, bit.lshift(1, bit_offset))
-        new_bitmap = string.sub(new_bitmap, 1, byte_pos - 1) .. string.char(byte) .. string.sub(new_bitmap, byte_pos + 1)
+-- Apply OR masks to mark seats occupied, return new bitmap
+local function apply_or_masks(bm, masks)
+    -- Collect byte positions and sort for deterministic processing
+    local positions = {}
+    for pos, _ in pairs(masks) do
+        table.insert(positions, pos)
     end
-    return new_bitmap
+    table.sort(positions)
+
+    if #positions == 0 then return bm end
+
+    -- Build new bitmap by splicing only the changed bytes
+    local result = {}
+    local prev_end = 0
+    for _, pos in ipairs(positions) do
+        local mask = masks[pos]
+        local byte = string.byte(bm, pos) or 0
+        local new_byte = bit.bor(byte, mask)
+        -- Add unchanged segment before this byte
+        if pos - 1 > prev_end then
+            table.insert(result, string.sub(bm, prev_end + 1, pos - 1))
+        end
+        table.insert(result, string.char(new_byte))
+        prev_end = pos
+    end
+    -- Add remaining unchanged tail
+    if prev_end < #bm then
+        table.insert(result, string.sub(bm, prev_end + 1))
+    end
+    return table.concat(result)
 end
 
--- Parse groups and try to find a successful one
+-- Parse groups
 local function split(inputstr, sep)
     if sep == nil then sep = "%s" end
-    local t={}
+    local t = {}
     for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
         table.insert(t, str)
     end
@@ -60,36 +91,30 @@ end
 
 local groups = split(groups_str, ";")
 for _, group_str in ipairs(groups) do
-    local seat_indices = split(group_str, ",")
-    if #seat_indices == num_seats then
-        local all_free = true
-        for _, idx_str in ipairs(seat_indices) do
-            local idx = tonumber(idx_str)
-            if not is_free(bitmap, idx, start_seg, end_seg, seg_count) then
-                all_free = false
-                break
-            end
+    local seat_strs = split(group_str, ",")
+    if #seat_strs == num_seats then
+        local seat_indices = {}
+        for _, s in ipairs(seat_strs) do
+            table.insert(seat_indices, tonumber(s))
         end
 
-        if all_free then
-            -- Found a group! Mark them and update inventory
-            local updated_bitmap = bitmap
-            for _, idx_str in ipairs(seat_indices) do
-                updated_bitmap = mark_occupied(updated_bitmap, tonumber(idx_str), start_seg, end_seg, seg_count)
-            end
-            
-            -- Update BitMap
+        -- Build mask for all seats in this group at once
+        local masks = build_byte_masks(seat_indices, start_seg, end_seg, seg_count)
+
+        if check_free(bitmap, masks) then
+            -- Mark occupied using the same masks
+            local updated_bitmap = apply_or_masks(bitmap, masks)
             redis.call('SET', detail_key, updated_bitmap)
-            
-            -- Update Inventory Count (Remaining tickets)
+
+            -- Update Inventory Count
             for i = start_seg, end_seg do
                 local count = tonumber(redis.call('LINDEX', remaining_key, i))
                 if count and count > 0 then
-                    redis.call('LSET', remaining_key, i, count - 1)
+                    redis.call('LSET', remaining_key, i, count - num_seats)
                 end
             end
-            
-            return group_str -- Return the selected seat indices
+
+            return group_str
         end
     end
 end
