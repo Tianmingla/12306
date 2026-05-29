@@ -24,14 +24,6 @@ import java.util.stream.Collectors;
  * 原因如下
  * 关闭@class类型信息 避免文件改动缓存失效 以及一些列安全问题+缓存瘦身
  * 因为业务复杂度 需要手动处理序列化管理 redisTemplate设计的对称序列化 以及全局都公用一个序列化管理器 无法自由定义序列化
- * 封装思路总结 就是函数回调+参数量增加 由于参数增加 故封装上下文
- * TODO 拓展思路封装 加入观察者 当进行set/get某个具体键前/后 发出对应事件 用于其他系统交互(如日志) 加入拦截器 对set.get参数处理 如时间随机化 同一key前后缀
- * 上下文总结场景
- * 1.如现在 参数较多 业务逻辑复杂
- * 2.某个接口函数/类 如游戏引擎给的worldContext 或java 重写jackson模块的自定义反序列化 给出的序列化上下文参数
- *  总结就是这个开放接口/或者设计类关系调用的时候 涉及参数多+不确定
- * 事件驱动思想总结
- * 。。。。TODO
  */
 public class SafeCacheTemplate {
     private RedisTemplate<String, Object> redisTemplate;
@@ -201,9 +193,6 @@ public class SafeCacheTemplate {
             byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
             T result=null;
             byte[] valueBytes=connection.get(keyBytes);
-            if(valueBytes==null||new String(valueBytes, StandardCharsets.UTF_8).equals(NULL)){
-                return null;
-            }
             result=curValueSerializer.get().deserialize(valueBytes,typeReference);
             return result;
         });
@@ -213,9 +202,6 @@ public class SafeCacheTemplate {
             byte[] keyBytes =((RedisSerializer<String>)redisTemplate.getKeySerializer()).serialize(key);
             List<T> result=new ArrayList<>();
             List<byte[]> valueBytes=connection.listCommands().lRange(keyBytes,0,-1);
-            if(valueBytes==null){
-                return null;
-            }
             for(byte[] valueByte:valueBytes){
                 result.add(curValueSerializer.get().deserialize(valueByte,typeReference));
             }
@@ -254,12 +240,8 @@ public class SafeCacheTemplate {
         // 6. 手动反序列化（此时 rawResults 中每个非 null 元素是 byte[]）
         List<T> results = new ArrayList<>(rawResults.size());
         for (Object obj : rawResults) {
-            if (obj == null) {
-                results.add(null);
-            } else {
-                T value = curValueSerializer.get().deserialize((byte[]) obj, typeRef);
-                results.add(value);
-            }
+            T value = curValueSerializer.get().deserialize((byte[]) obj, typeRef);
+            results.add(value);
         }
 
         return results;
@@ -348,12 +330,8 @@ public class SafeCacheTemplate {
             } else {
                 List<T> innerList = new ArrayList<>(byteList.size());
                 for (byte[] bytes : byteList) {
-                    if (bytes == null) {
-                        innerList.add(null);
-                    } else {
-                        T value = curValueSerializer.get().deserialize(bytes, typeReference);
-                        innerList.add(value);
-                    }
+                    T value = curValueSerializer.get().deserialize(bytes, typeReference);
+                    innerList.add(value);
                 }
                 results.add(innerList);
             }

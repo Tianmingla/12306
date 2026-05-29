@@ -30,6 +30,9 @@ public class DefaultValueRedisSerializer implements ValueRedisSerializer{
     @Override
     public <T> T deserialize(byte[] bytes, TypeReference<T> typeReference) throws SerializationException {
         try {
+            if(bytes==null||new String(bytes).equals("\"NULL\"")){
+                return null;
+            }
             return mapper.readValue(bytes,typeReference);
         } catch (IOException e) {
             throw new SerializationException(e.getMessage());
