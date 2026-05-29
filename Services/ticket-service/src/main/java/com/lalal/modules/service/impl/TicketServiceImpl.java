@@ -248,7 +248,7 @@ public class TicketServiceImpl implements TicketService {
         orderRequest.setRunDate(LocalDate.parse(date));
 
         // 查询发车和到达时间
-        fillPlanTimes(orderRequest, trainDO, date);
+//        fillPlanTimes(orderRequest, trainDO, date);
 
         List<OrderServiceClient.OrderCreateRemoteRequestDTO.OrderItemRemoteRequestDTO> orderItems = new ArrayList<>();
         for (int i = 0; i < selectedSeats.getItems().size(); i++) {
