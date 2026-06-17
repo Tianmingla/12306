@@ -4,11 +4,27 @@ WORKDIR /build
 
 # Copy pom files first for better caching
 COPY pom.xml .
-COPY Frameworks ./Frameworks
-COPY Services ./Services
+COPY Frameworks/pom.xml ./Frameworks/pom.xml
+COPY Frameworks/cache/pom.xml ./Frameworks/cache/pom.xml
+COPY Frameworks/common/pom.xml ./Frameworks/common/pom.xml
+COPY Frameworks/database/pom.xml ./Frameworks/database/pom.xml
+COPY Frameworks/Idempotent/pom.xml ./Frameworks/Idempotent/pom.xml
+COPY Frameworks/log/pom.xml ./Frameworks/log/pom.xml
+COPY Frameworks/mq/pom.xml ./Frameworks/mq/pom.xml
+COPY Services/pom.xml ./Services/pom.xml
+COPY Services/order-service/pom.xml ./Services/order-service/pom.xml
+COPY Services/ticket-service/pom.xml ./Services/ticket-service/pom.xml
+COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
+COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
+COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
+COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
 
+#Download dependencies
+RUN mvn dependency:go-offline -B
+# Copy files 
+COPY Services ./Services
+COPY Frameworks ./Frameworks
 # Build with dependencies
-RUN mvn dependency:go-offline -B || true
 RUN mvn clean package -pl Services/user-service -am -DskipTests
 
 # Runtime stage

@@ -37,7 +37,7 @@ rocketmq:
     group: seat-release-consumer
 
 task:
-  manualUpdateTrainRoutePair: false
+  manualUpdateTrainRoutePair: true
 
 # Actuator endpoints for monitoring
 management:
