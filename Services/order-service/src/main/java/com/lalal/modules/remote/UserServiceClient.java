@@ -1,0 +1,38 @@
+package com.lalal.modules.remote;
+
+import com.lalal.modules.result.Result;
+import lombok.Data;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
+import java.util.List;
+import java.util.Map;
+
+@FeignClient(name = "user-service", contextId = "orderUserServiceClient")
+@Service
+public interface UserServiceClient {
+
+    @PostMapping("/api/user/internal/passengers/batch")
+    Result<List<PassengerRemoteVO>> batchPassengers(@RequestBody PassengersBatchRequest request);
+
+    @PostMapping("/api/user/internal/resolve-user-id")
+    Result<Map<String, Object>> resolveUserId(@RequestBody Map<String, String> request);
+
+    @Data
+    class PassengersBatchRequest {
+        private Long userId;
+        private List<Long> passengerIds;
+    }
+
+    @Data
+    class PassengerRemoteVO {
+        private Long id;
+        private String realName;
+        private Integer idCardType;
+        private String idCardNumber;
+        private Integer passengerType;
+        private String phone;
+    }
+}
