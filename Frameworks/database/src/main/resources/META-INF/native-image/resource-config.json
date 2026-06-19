@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qcom/baomidou/mybatisplus/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\Qorg/apache/ibatis/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\Qmybatis/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\Qmapper/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\QMETA-INF/spring/\\E.*"},
+      {"pattern": "\\QMETA-INF/spring.factories\\E"},
+      {"pattern": ".*\\Qapplication.yml\\E"},
+      {"pattern": ".*\\Qapplication-docker.yml\\E"}
+    ]
+  }
+}

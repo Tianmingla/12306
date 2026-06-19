@@ -1,0 +1,89 @@
+[
+  {
+    "name": "org.springframework.cloud.openfeign.FeignClientFactoryBean",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "feign.ReflectiveFeign",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "feign.Contract$Default",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.openfeign.FeignAutoConfiguration",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.openfeign.clientconfig.FeignClientConfigurer",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.loadbalancer.annotation.LoadBalancerClientConfiguration",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.loadbalancer.core.RoundRobinLoadBalancer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.loadbalancer.config.LoadBalancerAutoConfiguration",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "com.alibaba.cloud.nacos.discovery.NacosDiscoveryClient",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "com.alibaba.cloud.nacos.registry.NacosRegistration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.alibaba.nacos.client.naming.NacosNamingService",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.jsonwebtoken.impl.DefaultJwtBuilder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.jsonwebtoken.impl.DefaultJwtParser",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "io.jsonwebtoken.Jwts",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cn.hutool.core.util.ReflectUtil",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "cn.hutool.core.bean.BeanUtil",
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.projectlombok.launch.Main",
+    "allDeclaredMethods": true
+  }
+]

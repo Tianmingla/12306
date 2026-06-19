@@ -1,0 +1,16 @@
+[
+  ["com.lalal.modules.remote.OrderServiceClient"],
+  ["com.lalal.modules.remote.SeatServiceClient"],
+  ["com.lalal.modules.remote.UserServiceClient"],
+  ["com.lalal.modules.mapper.CarriageMapper"],
+  ["com.lalal.modules.mapper.RegionMapper"],
+  ["com.lalal.modules.mapper.SeatMapper"],
+  ["com.lalal.modules.mapper.StationDistanceMapper"],
+  ["com.lalal.modules.mapper.StationMapper"],
+  ["com.lalal.modules.mapper.TicketAsyncRequestMapper"],
+  ["com.lalal.modules.mapper.TicketMapper"],
+  ["com.lalal.modules.mapper.TrainFareConfigMapper"],
+  ["com.lalal.modules.mapper.TrainMapper"],
+  ["com.lalal.modules.mapper.TrainRoutePairMapper"],
+  ["com.lalal.modules.mapper.TrainStationMapper"]
+]

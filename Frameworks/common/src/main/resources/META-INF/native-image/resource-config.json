@@ -1,0 +1,21 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qapplication.yml\\E"},
+      {"pattern": "\\Qapplication-docker.yml\\E"},
+      {"pattern": "\\Qapplication-native.yml\\E"},
+      {"pattern": "\\Qbootstrap.yml\\E"},
+      {"pattern": "\\QMETA-INF/spring/\\E.*\\Q.imports\\E"},
+      {"pattern": "\\QMETA-INF/spring.factories\\E"},
+      {"pattern": "\\QMETA-INF/spring-configuration-metadata.json\\E"},
+      {"pattern": "\\QMETA-INF/additional-spring-configuration-metadata.json\\E"},
+      {"pattern": "\\Qorg/springframework/\\E.*\\Qfactories\\E"},
+      {"pattern": "\\Qcom/alibaba/\\E.*\\Q.properties\\E"},
+      {"pattern": "\\Qfeign/\\E.*"},
+      {"pattern": "\\Qstatic/\\E.*"},
+      {"pattern": "\\Qmapper/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\Qmybatis/\\E.*\\Q.xml\\E"},
+      {"pattern": "\\Qtemplates/\\E.*"}
+    ]
+  }
+}

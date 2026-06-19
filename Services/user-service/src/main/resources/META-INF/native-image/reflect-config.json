@@ -1,0 +1,14 @@
+[
+  {"name": "com.lalal.modules.user.UserServiceApplication", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.controller.UserController", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.service.impl.UserServiceImpl", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.dto.UserLoginDTO", "allDeclaredConstructors": true, "allPublicConstructors": true, "allDeclaredMethods": true, "allPublicMethods": true, "allDeclaredFields": true, "allPublicFields": true},
+  {"name": "com.lalal.modules.user.dto.UserRegisterDTO", "allDeclaredConstructors": true, "allPublicConstructors": true, "allDeclaredMethods": true, "allPublicMethods": true, "allDeclaredFields": true, "allPublicFields": true},
+  {"name": "com.lalal.modules.user.dto.PassengerDTO", "allDeclaredConstructors": true, "allPublicConstructors": true, "allDeclaredMethods": true, "allPublicMethods": true, "allDeclaredFields": true, "allPublicFields": true},
+  {"name": "com.lalal.modules.user.mapper.UserMapper", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.mapper.PassengerMapper", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.entity.User", "allDeclaredConstructors": true, "allPublicConstructors": true, "allDeclaredMethods": true, "allPublicMethods": true, "allDeclaredFields": true, "allPublicFields": true},
+  {"name": "com.lalal.modules.user.entity.Passenger", "allDeclaredConstructors": true, "allPublicConstructors": true, "allDeclaredMethods": true, "allPublicMethods": true, "allDeclaredFields": true, "allPublicFields": true},
+  {"name": "com.lalal.modules.user.utils.JwtUtil", "allDeclaredMethods": true, "allPublicMethods": true},
+  {"name": "com.lalal.modules.user.dao.UserDao", "allDeclaredMethods": true, "allPublicMethods": true}
+]

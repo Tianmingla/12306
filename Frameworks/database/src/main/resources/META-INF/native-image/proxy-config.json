@@ -1,0 +1,9 @@
+[
+  ["com.baomidou.mybatisplus.core.mapper.BaseMapper"],
+  ["org.apache.ibatis.binding.MapperProxy"],
+  ["org.mybatis.spring.mapper.MapperFactoryBean"],
+  ["com.zaxxer.hikari.pool.HikariProxyConnection"],
+  ["com.zaxxer.hikari.pool.HikariProxyStatement"],
+  ["com.zaxxer.hikari.pool.HikariProxyPreparedStatement"],
+  ["com.zaxxer.hikari.pool.HikariProxyResultSet"]
+]

@@ -1,0 +1,7 @@
+[
+  {"name":"com.lalal.modules.GatewayApplication","allDeclaredMethods":true},
+  {"name":"com.lalal.modules.config.GatewayConfig","allDeclaredMethods":true},
+  {"name":"com.lalal.modules.config.SecurityConfig","allDeclaredMethods":true},
+  {"name":"com.lalal.modules.filter.AuthFilter","allDeclaredMethods":true},
+  {"name":"com.lalal.modules.filter.AdminAuthFilter","allDeclaredMethods":true}
+]

@@ -1,0 +1,37 @@
+# GraalVM Native Image Build for order-service (linux/amd64, Ubuntu 24.04)
+FROM ghcr.io/graalvm/native-image-community:17-ol9 AS builder
+WORKDIR /build
+RUN microdnf install -y maven && microdnf clean all
+COPY pom.xml .
+COPY Frameworks/pom.xml ./Frameworks/pom.xml
+COPY Frameworks/cache/pom.xml ./Frameworks/cache/pom.xml
+COPY Frameworks/common/pom.xml ./Frameworks/common/pom.xml
+COPY Frameworks/database/pom.xml ./Frameworks/database/pom.xml
+COPY Frameworks/Idempotent/pom.xml ./Frameworks/Idempotent/pom.xml
+COPY Frameworks/log/pom.xml ./Frameworks/log/pom.xml
+COPY Frameworks/mq/pom.xml ./Frameworks/mq/pom.xml
+COPY Services/pom.xml ./Services/pom.xml
+COPY Services/order-service/pom.xml ./Services/order-service/pom.xml
+COPY Services/ticket-service/pom.xml ./Services/ticket-service/pom.xml
+COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
+COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
+COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
+COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
+RUN mvn dependency:go-offline -B -pl Services/order-service -am || true
+COPY Frameworks ./Frameworks
+COPY Services ./Services
+RUN mvn -Pnative package -pl Services/order-service -am -DskipTests -Dmaven.test.skip=true
+
+FROM ubuntu:noble AS runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd -r appuser && useradd -r -g appuser -d /app appuser
+WORKDIR /app
+COPY --from=builder /build/Services/order-service/target/order-service /app/server
+RUN chown -R appuser:appuser /app
+USER appuser
+EXPOSE 8083
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8083/actuator/health || exit 1
+ENTRYPOINT ["/app/server"]

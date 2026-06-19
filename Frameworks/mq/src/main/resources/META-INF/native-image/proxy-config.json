@@ -1,0 +1,5 @@
+[
+  ["org.apache.rocketmq.client.producer.MQProducer"],
+  ["org.apache.rocketmq.client.consumer.MQConsumer"],
+  ["com.lalal.framework.mq.MessageQueueService"]
+]

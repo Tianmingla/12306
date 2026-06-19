@@ -177,11 +177,11 @@ services:
     networks:
       - 12306-network
 
-  # ==================== Application Services ====================
+  # ==================== Application Services (GraalVM Native) ====================
   gateway-service:
     build:
       context: .
-      dockerfile: Services/gateway-service/Dockerfile
+      dockerfile: Services/gateway-service/Dockerfile.native
     container_name: 12306-gateway
     ports:
       - "8080:8080"
@@ -190,7 +190,6 @@ services:
       - NACOS_SERVER_ADDR=nacos:8848
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       nacos:
         condition: service_healthy
@@ -202,7 +201,7 @@ services:
   user-service:
     build:
       context: .
-      dockerfile: Services/user-service/Dockerfile
+      dockerfile: Services/user-service/Dockerfile.native
     container_name: 12306-user
     ports:
       - "8084:8084"
@@ -213,7 +212,6 @@ services:
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
         condition: service_healthy
@@ -227,7 +225,7 @@ services:
   ticket-service:
     build:
       context: .
-      dockerfile: Services/ticket-service/Dockerfile
+      dockerfile: Services/ticket-service/Dockerfile.native
     container_name: 12306-ticket
     ports:
       - "8081:8081"
@@ -239,7 +237,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
         condition: service_healthy
@@ -255,7 +252,7 @@ services:
   seat-service:
     build:
       context: .
-      dockerfile: Services/seat-service/Dockerfile
+      dockerfile: Services/seat-service/Dockerfile.native
     container_name: 12306-seat
     ports:
       - "8082:8082"
@@ -267,7 +264,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
         condition: service_healthy
@@ -281,7 +277,7 @@ services:
   order-service:
     build:
       context: .
-      dockerfile: Services/order-service/Dockerfile
+      dockerfile: Services/order-service/Dockerfile.native
     container_name: 12306-order
     ports:
       - "8083:8083"
@@ -293,7 +289,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
         condition: service_healthy
@@ -309,7 +304,7 @@ services:
   admin-service:
     build:
       context: .
-      dockerfile: Services/admin-service/Dockerfile
+      dockerfile: Services/admin-service/Dockerfile.native
     container_name: 12306-admin
     ports:
       - "8085:8085"
@@ -320,7 +315,6 @@ services:
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
         condition: service_healthy

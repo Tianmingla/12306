@@ -1,0 +1,10 @@
+[
+  ["org.redisson.api.RedissonClient"],
+  ["org.redisson.api.RMap"],
+  ["org.redisson.api.RLock"],
+  ["org.redisson.api.RBucket"],
+  ["org.springframework.data.redis.connection.RedisConnection"],
+  ["org.springframework.data.redis.core.RedisOperations"],
+  ["org.springframework.data.redis.core.ValueOperations"],
+  ["com.lalal.framework.cache.SafeCacheTemplate"]
+]

@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qorg/redisson/\\E.*"},
+      {"pattern": "\\QMETA-INF/spring/\\E.*"},
+      {"pattern": "\\QMETA-INF/spring.factories\\E"}
+    ]
+  }
+}

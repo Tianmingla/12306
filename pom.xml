@@ -40,7 +40,8 @@
         <micrometer-registry-prometheus.version>1.10.6</micrometer-registry-prometheus.version>
         <springdoc-openapi>2.6.0</springdoc-openapi>
 
-        <spring-boot-maven-plugin>2.7.18</spring-boot-maven-plugin>
+        <spring-boot-maven-plugin>3.0.7</spring-boot-maven-plugin>
+        <native-maven-plugin.version>0.9.28</native-maven-plugin.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -205,6 +206,20 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot-maven-plugin}</version>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.graalvm.buildtools</groupId>
+                    <artifactId>native-maven-plugin</artifactId>
+                    <version>${native-maven-plugin.version}</version>
+                    <extensions>true</extensions>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qorg/apache/rocketmq/\\E.*"},
+      {"pattern": "\\QMETA-INF/spring/\\E.*"},
+      {"pattern": "\\QMETA-INF/spring.factories\\E"}
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+[
+  ["com.lalal.modules.remote.UserServiceClient"],
+  ["com.lalal.modules.mapper.OrderItemMapper"],
+  ["com.lalal.modules.mapper.OrderMapper"],
+  ["com.lalal.modules.mapper.WaitlistLogMapper"],
+  ["com.lalal.modules.mapper.WaitlistOrderMapper"]
+]
