@@ -32,68 +32,22 @@
         </dependency>
 
     </dependencies>
-<build>
-    <plugins>
-        <plugin>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-maven-plugin</artifactId>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>repackage</goal>
-                    </goals>
-                </execution>
-            </executions>
-            <configuration>
-                <image>
-                    <builder>paketobuildpacks/builder:tiny</builder>
-                </image>
-            </configuration>
-        </plugin>
-        <plugin>
-            <groupId>org.graalvm.buildtools</groupId>
-            <artifactId>native-maven-plugin</artifactId>
-        </plugin>
-    </plugins>
-</build>
-
-<profiles>
-    <profile>
-        <id>native</id>
-        <build>
-            <plugins>
-                <plugin>
-                    <groupId>org.graalvm.buildtools</groupId>
-                    <artifactId>native-maven-plugin</artifactId>
-                    <executions>
-                        <execution>
-                            <id>build-native</id>
-                            <goals>
-                                <goal>compile-no-fork</goal>
-                            </goals>
-                            <phase>package</phase>
-                        </execution>
-                    </executions>
-                    <configuration>
-                        <imageName>${project.artifactId}</imageName>
-                        <mainClass>${native.mainClass}</mainClass>
-                        <buildArgs>
-                            <buildArg>-Ob</buildArg>
-                            <buildArg>-march=compatibility</buildArg>
-                            <buildArg>--no-fallback</buildArg>
-                            <buildArg>-H:+ReportExceptionStackTraces</buildArg>
-                            <buildArg>-H:MaxRAMPercentage=75.0</buildArg>
-                            <buildArg>--enable-url-protocols=http,https</buildArg>
-                            <buildArg>-H:+AddAllCharsets</buildArg>
-                            <buildArg>-H:IncludeLocales=en,zh</buildArg>
-                        </buildArgs>
-                        <metadataRepository>
-                            <enabled>true</enabled>
-                        </metadataRepository>
-                    </configuration>
-                </plugin>
-            </plugins>
-        </build>
-    </profile>
-</profiles>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
