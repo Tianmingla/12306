@@ -18,9 +18,9 @@
         <maven.compiler.target>22</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>17</java.version>
-        <spring-boot.version>3.0.7</spring-boot.version>
-        <spring-cloud.version>2022.0.3</spring-cloud.version>
-        <spring-cloud-alibaba.version>2022.0.0.0-RC2</spring-cloud-alibaba.version>
+        <spring-boot.version>3.3.1</spring-boot.version>
+        <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version>
         <mybatis-spring-boot-starter.version>3.0.2</mybatis-spring-boot-starter.version>
         <shardingsphere.version>5.3.2</shardingsphere.version>
         <jjwt.version>0.9.1</jjwt.version>
@@ -40,8 +40,8 @@
         <micrometer-registry-prometheus.version>1.10.6</micrometer-registry-prometheus.version>
         <springdoc-openapi>2.6.0</springdoc-openapi>
 
-        <spring-boot-maven-plugin>3.0.7</spring-boot-maven-plugin>
-        <native-maven-plugin.version>0.9.28</native-maven-plugin.version>
+        <spring-boot-maven-plugin>${spring-boot.version}</spring-boot-maven-plugin>
+        <native-maven-plugin.version>0.10.4</native-maven-plugin.version>
     </properties>
     <dependencyManagement>
         <dependencies>
