@@ -14,10 +14,10 @@ COPY Frameworks/log/pom.xml ./Frameworks/log/pom.xml
 COPY Frameworks/mq/pom.xml ./Frameworks/mq/pom.xml
 COPY Services/pom.xml ./Services/pom.xml
 COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
-RUN mvn dependency:go-offline -B -pl Services/gateway-service -am || true
+RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B -pl Services/gateway-service -am || true
 COPY Frameworks ./Frameworks
 COPY Services ./Services
-RUN mvn -Pnative package -pl Services/gateway-service -am -DskipTests -Dmaven.test.skip=true
+RUN --mount=type=cache,target=/root/.m2/repository mvn -Pnative package -pl Services/gateway-service -am -DskipTests -Dmaven.test.skip=true
 
 FROM ubuntu:noble AS runtime
 RUN apt-get update && \

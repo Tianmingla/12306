@@ -2,6 +2,8 @@ server:
   port: 8084
 
 spring:
+  aot:
+    enabled: false
   application:
     name: user-service
   datasource:
@@ -23,6 +25,8 @@ spring:
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+    bootstrap:
+      enabled: false
 
   data:
     redis:

@@ -19,12 +19,12 @@ COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
 COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
 COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
 COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
-RUN mvn dependency:go-offline -B -pl Services/ticket-service -am || true
+RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B -pl Services/ticket-service -am || true
 
 # Copy source and build
 COPY Frameworks ./Frameworks
 COPY Services ./Services
-RUN mvn -Pnative package -pl Services/ticket-service -am -DskipTests -Dmaven.test.skip=true
+RUN --mount=type=cache,target=/root/.m2/repository mvn -Pnative package -pl Services/ticket-service -am -DskipTests -Dmaven.test.skip=true
 
 # Minimal Ubuntu 24.04 runtime
 FROM ubuntu:noble AS runtime

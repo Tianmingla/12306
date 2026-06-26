@@ -2,9 +2,10 @@ server:
   port: 8080
 
 spring:
+  aot:
+    enabled: false
   application:
     name: gateway-service
-  cloud:
     gateway:
       routes:
         - id: user-service
@@ -27,6 +28,8 @@ spring:
           uri: lb://admin-service
           predicates:
             - Path=/api/admin/**
+    bootstrap:
+      enabled: false
   data:
     redis:
       host: localhost

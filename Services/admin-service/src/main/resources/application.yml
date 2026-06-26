@@ -1,4 +1,6 @@
 spring:
+  aot:
+    enabled: false
   application:
     name: admin-service
   datasource:
@@ -21,12 +23,14 @@ spring:
       port: 6379
       database: 0
       timeout: 2000ms
-  cloud:
     nacos:
       discovery:
         server-addr: 127.0.0.1:8848
       password: ""
       username: ""
+  cloud:
+    bootstrap:
+      enabled: false
 
 server:
   port: 8085

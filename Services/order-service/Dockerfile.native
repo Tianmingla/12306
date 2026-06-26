@@ -17,10 +17,10 @@ COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
 COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
 COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
 COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
-RUN mvn dependency:go-offline -B -pl Services/order-service -am || true
+RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B -pl Services/order-service -am || true
 COPY Frameworks ./Frameworks
 COPY Services ./Services
-RUN mvn -Pnative package -pl Services/order-service -am -DskipTests -Dmaven.test.skip=true
+RUN --mount=type=cache,target=/root/.m2/repository mvn -Pnative package -pl Services/order-service -am -DskipTests -Dmaven.test.skip=true
 
 FROM ubuntu:noble AS runtime
 RUN apt-get update && \

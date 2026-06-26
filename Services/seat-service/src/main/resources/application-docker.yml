@@ -2,6 +2,8 @@ server:
   port: 8082
 
 spring:
+  aot:
+    enabled: false
   application:
     name: seat-service
   datasource:
@@ -25,6 +27,8 @@ spring:
       database: 0
       timeout: 2000ms
   cloud:
+    bootstrap:
+      enabled: false
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}

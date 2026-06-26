@@ -2,9 +2,13 @@ server:
   port: 8080
 
 spring:
+  aot:
+    enabled: false
   application:
     name: gateway-service
   cloud:
+    bootstrap:
+      enabled: false
     gateway:
       routes:
         - id: user-service

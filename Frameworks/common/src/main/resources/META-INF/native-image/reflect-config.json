@@ -53,6 +53,101 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "org.springframework.cloud.bootstrap.RefreshBootstrapRegistryInitializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.TextEncryptorConfigBootstrapper",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.BootstrapApplicationListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.LoggingSystemShutdownListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.BootstrapConfigFileApplicationListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.encrypt.DecryptEnvironmentPostProcessor",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.util.random.CachedRandomPropertySourceEnvironmentPostProcessor",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.context.restart.RestartListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.autoconfigure.ConfigurationPropertiesRebinderAutoConfiguration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.encrypt.EncryptionBootstrapConfiguration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.BootstrapImportSelectorConfiguration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.config.PropertySourceBootstrapConfiguration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.config.PropertySourceLocator",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.marker.Marker",
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "org.springframework.cloud.bootstrap.encrypt.RsaProperties",
+    "allDeclaredConstructors": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "org.springframework.cloud.context.scope.refresh.RefreshScope",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.context.environment.EnvironmentChangeEvent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.context.restart.RestartEndpoint",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "org.springframework.cloud.context.properties.ConfigurationPropertiesBeans",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.alibaba.nacos.client.naming.NacosNamingService",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true
