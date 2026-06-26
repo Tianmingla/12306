@@ -1,0 +1,46 @@
+# ================================================================
+# Native Image Agent 元数据收集 Dockerfile
+# 构建 JAR 并用 tracing agent 运行，自动生成 GraalVM 反射配置
+#
+# 构建时通过 --build-arg SERVICE_NAME=user-service 指定服务
+# ================================================================
+
+# Stage 1: Build JAR
+FROM maven:3.9-eclipse-temurin-17 AS builder
+ARG SERVICE_NAME
+WORKDIR /build
+
+COPY pom.xml .
+COPY Frameworks/pom.xml ./Frameworks/pom.xml
+COPY Frameworks/cache/pom.xml ./Frameworks/cache/pom.xml
+COPY Frameworks/common/pom.xml ./Frameworks/common/pom.xml
+COPY Frameworks/database/pom.xml ./Frameworks/database/pom.xml
+COPY Frameworks/Idempotent/pom.xml ./Frameworks/Idempotent/pom.xml
+COPY Frameworks/log/pom.xml ./Frameworks/log/pom.xml
+COPY Frameworks/mq/pom.xml ./Frameworks/mq/pom.xml
+COPY Services/pom.xml ./Services/pom.xml
+COPY Services/order-service/pom.xml ./Services/order-service/pom.xml
+COPY Services/ticket-service/pom.xml ./Services/ticket-service/pom.xml
+COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
+COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
+COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
+COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
+
+RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B -pl Services/${SERVICE_NAME} -am || true
+
+COPY Frameworks ./Frameworks
+COPY Services ./Services
+
+RUN --mount=type=cache,target=/root/.m2/repository mvn clean package -pl Services/${SERVICE_NAME} -am -DskipTests
+
+# Stage 2: Run with native-image-agent
+FROM ghcr.io/graalvm/jdk-community:17
+ARG SERVICE_NAME
+WORKDIR /app
+
+# Copy JAR
+COPY --from=builder /build/Services/${SERVICE_NAME}/target/${SERVICE_NAME}*.jar app.jar
+
+# /native-image will be mounted from host:
+#   Services/<service>/src/main/resources/META-INF/native-image
+ENTRYPOINT ["sh", "-c", "java -agentlib:native-image-agent=config-merge-dir=/native-image -jar app.jar"]

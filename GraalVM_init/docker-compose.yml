@@ -1,0 +1,290 @@
+# ================================================================
+# GraalVM Native Image Agent 元数据收集
+#
+# 使用方式:
+#   cd GraalVM_init
+#   docker compose build          # 构建所有服务的 JAR
+#   docker compose up -d          # 启动基础设施
+#   docker compose up <service>   # 启动单个服务收集元数据
+#
+# 启动后手动调用 API，元数据自动生成到各服务的
+#   Services/<service>/src/main/resources/META-INF/native-image/
+# ================================================================
+
+version: '3.8'
+
+services:
+  # ==================== Infrastructure ====================
+  mysql:
+    image: mysql:8.0
+    container_name: graalvm-init-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: my12306
+    ports:
+      - "3306:3306"
+    volumes:
+      - ../createTable.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ../initNacos.sql:/docker-entrypoint-initdb.d/02-init-nacos.sql:ro
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - agent-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: graalvm-init-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-net
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: graalvm-init-nacos
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=mysql
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=123456
+      - MYSQL_SERVICE_DB_PARAM=characterEncoding=utf8&connectTimeout=10000&socketTimeout=30000&autoReconnect=true&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - JVM_XMS=128m
+      - JVM_XMX=256m
+    ports:
+      - "8848:8848"
+      - "9848:9849"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8848/nacos/v1/console/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    networks:
+      - agent-net
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: graalvm-init-rmq-namesrv
+    ports:
+      - "9876:9876"
+    environment:
+      - JAVA_OPT_EXT=-server -Xms128m -Xmx256m
+    command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9876; echo $$?; exec 3>&-"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-net
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: graalvm-init-rmq-broker
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    environment:
+      - JAVA_OPT_EXT=-server -Xms256m -Xmx512m
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+    command: sh mqbroker -n rocketmq-namesrv:9876
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+    networks:
+      - agent-net
+
+  # ==================== Application Services ====================
+  user-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: user-service
+    container_name: graalvm-init-user
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../Services/user-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - agent-net
+
+  ticket-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: ticket-service
+    container_name: graalvm-init-ticket
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
+    volumes:
+      - ../Services/ticket-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - agent-net
+
+  seat-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: seat-service
+    container_name: graalvm-init-seat
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
+    volumes:
+      - ../Services/seat-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - agent-net
+
+  order-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: order-service
+    container_name: graalvm-init-order
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ROCKETMQ_NAMESRV=rocketmq-namesrv:9876
+    volumes:
+      - ../Services/order-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - agent-net
+
+  admin-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: admin-service
+    container_name: graalvm-init-admin
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../Services/admin-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    networks:
+      - agent-net
+
+  gateway-service:
+    build:
+      context: ..
+      dockerfile: GraalVM_init/Dockerfile.agent
+      args:
+        SERVICE_NAME: gateway-service
+    container_name: graalvm-init-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - NACOS_SERVER_ADDR=nacos:8848
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../Services/gateway-service/src/main/resources/META-INF/native-image:/native-image
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - agent-net
+
+networks:
+  agent-net:
+    driver: bridge
