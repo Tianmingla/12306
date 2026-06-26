@@ -20,12 +20,12 @@ COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
 COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
 
 #Download dependencies
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B
 # Copy files 
 COPY Services ./Services
 COPY Frameworks ./Frameworks
 # Build with dependencies
-RUN mvn clean package -pl Services/user-service -am -DskipTests
+RUN --mount=type=cache,target=/root/.m2/repository mvn clean package -pl Services/user-service -am -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
