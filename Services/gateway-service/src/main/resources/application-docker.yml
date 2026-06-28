@@ -38,7 +38,9 @@ spring:
 # 流量监控配置
 traffic:
   peak-threshold: 100
-  monitor-interval: 1s
+  peak-last: 60000 #高峰持续时间
+  monitor-interval: 60000
+  sync-interval: 2000
 
 # Actuator endpoints for monitoring
 management:
