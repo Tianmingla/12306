@@ -163,7 +163,7 @@ public class TransferSearchServiceImpl implements TransferSearchService {
                 request.getFrom(), request.getTo(), graph.nodeCount(), graph.edgeCount());
 
         // 2.1 惩罚法：从同一出发时间搜索多条路径
-        TransitAStar aStar = new TransitAStar(graph);
+        TransitAStar aStar = new TransitAStar(graph,request.getMaxTransfer(), request.getMaxDuration(),request.getMinTransferWait(),request.getMaxTransferWait());
         loadHeuristicCache(aStar, graph, request.getTo());
 
         List<TransitAStar.AStarResult> penaltyResults = aStar.aStarMulti(
@@ -184,7 +184,7 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             if (altDepartTime.toLocalDate().isAfter(date)) break;
 
             // 每个出发时间创建新的 A* 实例，避免状态污染
-            TransitAStar altAStar = new TransitAStar(graph);
+            TransitAStar altAStar = new TransitAStar(graph,request.getMaxTransfer(), request.getMaxDuration(),request.getMinTransferWait(),request.getMaxTransferWait());
             loadHeuristicCache(altAStar, graph, request.getTo());
 
             List<TransitAStar.AStarResult> altResults = altAStar.aStarMulti(

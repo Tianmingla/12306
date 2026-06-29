@@ -73,33 +73,13 @@ public class LocalGraphBuilder {
                                         int maxTransfer, int maxDuration) {
         TransitGraph graph = new TransitGraph();
 
-        // Step 1: 收集所有相关车次
+        //收集所有相关车次
         Set<String> relevantTrainNumbers = new HashSet<>();
         Map<String, TrainDO> trainMap = new HashMap<>();
 
-//        // 1.1 从出发站的列车
-//        List<TrainStationDO> depTrains = trainStationMapper.selectList(
-//                new LambdaQueryWrapper<TrainStationDO>()
-//                        .eq(TrainStationDO::getStationName, from)
-//                        .eq(TrainStationDO::getRunDate, date)
-//        );
-//
-//        for (TrainStationDO ts : depTrains) {
-//            relevantTrainNumbers.add(ts.getTrainNumber());
-//        }
-//
-//        // 1.2 到达目的站的列车
-//        List<TrainStationDO> arrTrains = trainStationMapper.selectList(
-//                new LambdaQueryWrapper<TrainStationDO>()
-//                        .eq(TrainStationDO::getStationName, to)
-//                        .eq(TrainStationDO::getRunDate, date)
-//        );
-//
-//        for (TrainStationDO ts : arrTrains) {
-//            relevantTrainNumbers.add(ts.getTrainNumber());
-//        }
-
-        // 1.3 路过出发站和目的站的所有列车（模糊匹配站名，如 "成都" 匹配 "成都东"）
+        // 1.路过出发站和目的站的所有列车（模糊匹配站名，如 "成都" 匹配 "成都东"）TODO 这里有问题  创建车次站台表居然忘记添加这个站台是哪个区域的了
+        //更精准的话只能联表查询了 项目已经比较庞大 不好在改了
+        //目前先用like顶替
         List<TrainStationDO> viaTrains = trainStationMapper.selectList(
                 new LambdaQueryWrapper<TrainStationDO>()
                         .and(w -> w.like(TrainStationDO::getStationName, from)
@@ -118,7 +98,7 @@ public class LocalGraphBuilder {
 
         log.info("收集到 {} 个相关车次", relevantTrainNumbers.size());
 
-        // Step 2: 加载列车详情
+        // 2.加载列车详情
         List<TrainDO> trains = trainMapper.selectList(
                 new LambdaQueryWrapper<TrainDO>()
                         .in(TrainDO::getTrainNumber, relevantTrainNumbers)
@@ -128,7 +108,7 @@ public class LocalGraphBuilder {
             trainMap.put(train.getTrainNumber(), train);
         }
 
-        // Step 3: 加载列车经停站信息（构建完整的节点）
+        // 3.加载列车经停站信息（构建完整的节点）
         List<TrainStationDO> allStations = trainStationMapper.selectList(
                 new LambdaQueryWrapper<TrainStationDO>()
                         .in(TrainStationDO::getTrainNumber, relevantTrainNumbers)
@@ -173,11 +153,13 @@ public class LocalGraphBuilder {
 
                 List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
                 // 计算出发和到达时间（含日期偏移）
-                LocalDateTime departureDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
-                LocalDateTime arrivalDateTime = buildDateTime(date, toStation.getArrivalTime(),toStation.getArriveDayDiff());
-
+                LocalDateTime fromArrivalDateTime = buildDateTime(date, fromStation.getArrivalTime(), 0);
+                LocalDateTime fromDepartureDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
+                LocalDateTime toArrivalDateTime = buildDateTime(date, toStation.getArrivalTime(),toStation.getArriveDayDiff());
+                LocalDateTime toDepartureDateTime = buildDateTime(date, toStation.getDepartureTime(), 0);
                 // 跳过跨天超过限制的情况
-                if (java.time.Duration.between(departureDateTime, arrivalDateTime).toMinutes() > maxDuration) {
+                if(fromDepartureDateTime==null||toArrivalDateTime==null) break; //脏数据 没做清晰 TODO
+                if (java.time.Duration.between(fromDepartureDateTime,toArrivalDateTime).toMinutes() > maxDuration) {
                     continue;
                 }
 
@@ -187,9 +169,11 @@ public class LocalGraphBuilder {
                         trainNumber,
                         train.getTrainType(),
                         fromStation.getStationName(),
-                        departureDateTime,
+                        fromArrivalDateTime,
+                        fromDepartureDateTime,
                         toStation.getStationName(),
-                        arrivalDateTime,
+                        toArrivalDateTime,
+                        toDepartureDateTime,
                         distance,
                         seatTypes,
                         seatPrices,
@@ -197,11 +181,7 @@ public class LocalGraphBuilder {
                 );
             }
         }
-
-        // Step 5: 添加换乘等待边
-        for (String station : graph.getAllStations()) {
-            graph.addTransferWaitEdges(station);
-        }
+        //换乘等待边去掉 没必要存 算法直接搜索就行
 
         log.info("构建局部图完成: nodes={}, edges={}, stations={}", graph.nodeCount(), graph.edgeCount(),
                 graph.getAllStations().size());
@@ -275,19 +255,22 @@ public class LocalGraphBuilder {
 
                 List<TrainEdge.SeatRemaining> seatRemainings = getSeatRemainings(train, stations);
 
-                LocalDateTime departureDateTime = buildDateTime(date, fromStation.getDepartureTime(),
-                        0);
-                LocalDateTime arrivalDateTime = buildDateTime(date, toStation.getArrivalTime(),
-                        toStation.getArriveDayDiff());
+                // 计算出发和到达时间（含日期偏移）
+                LocalDateTime fromArrivalDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
+                LocalDateTime fromDepartureDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
+                LocalDateTime toArrivalDateTime = buildDateTime(date, toStation.getArrivalTime(),toStation.getArriveDayDiff());
+                LocalDateTime toDepartureDateTime = buildDateTime(date, fromStation.getDepartureTime(), 0);
 
                 graph.addTrainEdge(
                         trainId,
                         trainNumber,
                         train.getTrainType(),
                         fromStation.getStationName(),
-                        departureDateTime,
+                        fromArrivalDateTime,
+                        fromDepartureDateTime,
                         toStation.getStationName(),
-                        arrivalDateTime,
+                        toArrivalDateTime,
+                        toDepartureDateTime,
                         distance,
                         seatTypes,
                         seatPrices,
@@ -309,7 +292,7 @@ public class LocalGraphBuilder {
      * 构建日期时间（含日期偏移）
      */
     private LocalDateTime buildDateTime(LocalDate baseDate, LocalTime time, int dayOffset) {
-        return baseDate.plusDays(dayOffset).atTime(time!=null? time :LocalTime.now());
+        return time==null?null:baseDate.plusDays(dayOffset).atTime(time);
     }
 
 

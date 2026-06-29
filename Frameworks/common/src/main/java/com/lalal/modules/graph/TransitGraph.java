@@ -30,6 +30,8 @@ public class TransitGraph implements Serializable {
      */
     private final Map<String, StationTimeNode> nodes = new HashMap<>();
 
+    private final Set<StationTimeNode> nodesSet = new TreeSet<>();
+
     /**
      * 边集合：fromKey -> List<TransitEdge>
      */
@@ -54,6 +56,7 @@ public class TransitGraph implements Serializable {
      */
     public void addNode(StationTimeNode node) {
         nodes.putIfAbsent(node.getKey(), node);
+        nodesSet.add(node);
     }
 
     /**
@@ -100,17 +103,19 @@ public class TransitGraph implements Serializable {
                              String trainNumber,
                              int trainType,
                              String departureStation,
-                             LocalDateTime departureTime,
+                             LocalDateTime fromArrivalDateTime,
+                             LocalDateTime fromDepartureDateTime,
                              String arrivalStation,
-                             LocalDateTime arrivalTime,
+                             LocalDateTime toArrivalDateTime,
+                             LocalDateTime toDepartureDateTime,
                              Integer distance,
                              List<Integer> seatTypes,
                              List<TrainEdge.SeatPrice> seatPrices,
                              List<TrainEdge.SeatRemaining> seatRemainings) {
 
         // 创建出发节点和到达节点
-        StationTimeNode departNode = new StationTimeNode(departureStation, departureTime, true);
-        StationTimeNode arriveNode = new StationTimeNode(arrivalStation, arrivalTime, false);
+        StationTimeNode departNode = new StationTimeNode(departureStation, fromDepartureDateTime, true);
+        StationTimeNode arriveNode = new StationTimeNode(arrivalStation, toArrivalDateTime, false);
 
         addNode(departNode);
         addNode(arriveNode);
@@ -121,13 +126,24 @@ public class TransitGraph implements Serializable {
                 trainId,
                 trainNumber, trainType,
                 departureStation, arrivalStation,
-                departureTime, arrivalTime,distance,
+                fromDepartureDateTime, toArrivalDateTime,distance,
                 seatTypes, seatPrices, seatRemainings
         );
         addEdge(trainEdge);
 
         // 创建等待边（同站：到达 → 下一班出发）
-        // 注意：这个方法会在后续添加同站等待边时调用
+        if(toDepartureDateTime==null) return;
+        StationTimeNode wDepartNode = new StationTimeNode(arrivalStation, toArrivalDateTime, false);
+        StationTimeNode wArriveNode = new StationTimeNode(arrivalStation, toDepartureDateTime, true);
+
+        addNode(wArriveNode);
+
+        WaitEdge waitEdge=new WaitEdge(
+                wDepartNode,
+                wArriveNode,
+                arrivalStation
+        );
+        addEdge(waitEdge);
     }
 
     /**
@@ -136,7 +152,6 @@ public class TransitGraph implements Serializable {
     public void addWaitEdge(StationTimeNode arrivalNode, StationTimeNode departureNode) {
         if (arrivalNode == null || departureNode == null) return;
         if (!arrivalNode.getStation().equals(departureNode.getStation())) return;
-        if (arrivalNode.isDeparture() || !departureNode.isDeparture()) return;
 
         WaitEdge waitEdge = new WaitEdge(arrivalNode, departureNode, arrivalNode.getStation());
         addEdge(waitEdge);
@@ -146,6 +161,7 @@ public class TransitGraph implements Serializable {
      * 批量添加同一车站的等待边
      * 遍历该车站的所有"到达"节点和"出发"节点，配对生成等待边
      */
+    @Deprecated
     public void addTransferWaitEdges(String station) {
         // 找出该车站的所有到达节点和出发节点
         List<StationTimeNode> arrivals = nodes.values().stream()

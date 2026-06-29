@@ -43,7 +43,7 @@ public class TransferSearchRequest implements Serializable {
      * 最大换乘次数（默认3）
      */
     @Builder.Default
-    private int maxTransfer = 20;
+    private int maxTransfer = 2;
 
     /**
      * 最大历时（分钟，默认480=8小时）

@@ -30,24 +30,22 @@ public class TransitAStar {
     private final TransitGraph graph;
 
     /**
-     * g(n)：实际成本表
-     */
-    private final Map<String, Double> gScore;
-
-    /**
-     * f(n)：评估成本表
-     */
-    private final Map<String, Double> fScore;
-
-    /**
      * 前驱表
      */
     private final Map<String, String> cameFrom;
 
+//    /**
+//     * 已关闭节点
+//     */
+//    private final Set<String> closed;
     /**
-     * 已关闭节点
+     * 改用dist维护状态 来解带限制的最短路径问题
+     * 我们甚至可以把时间也加到这里来 但实际上 时间这个限制 我们把他和站点合在一起看作新的节点更优
+     * 因为我们的等待边需要预先根据排序来做到o(nlog n) 否则全遍历占用10s以上
+     * dist[i][j][k]表示 到节点索引i 中转次数为j 总等待时间为k的最短距离
+     *  这里只用了i j 只约束了换乘次数 我们实际用的索引是String来表示 所以用map+数组来表示
      */
-    private final Set<String> closed;
+    private final Map<String,float[]> dist;
 
     /**
      * 启发函数：station -> 到各终点的预估时间（分钟）
@@ -65,13 +63,28 @@ public class TransitAStar {
      */
     private static final int MAX_EXPLORED = 100_000;
 
-    public TransitAStar(TransitGraph graph) {
+    private final int maxTransfer;
+
+    private final int maxTransferWait;
+
+    private final int maxDuration;
+    private final int minTransferWait;
+    public TransitAStar(TransitGraph graph,int maxTransfer,int maxDuration,int minTransferWait,int maxTransferWait) {
         this.graph = graph;
-        this.gScore = new HashMap<>();
-        this.fScore = new HashMap<>();
         this.cameFrom = new HashMap<>();
-        this.closed = new HashSet<>();
         this.heuristicCache = new HashMap<>();
+
+        this.dist=new HashMap<>();
+        for(String nodeKey: graph.getAllNodeKeys()){
+            float[] distances = new float[maxTransfer + 1];
+            Arrays.fill(distances, Float.MAX_VALUE);
+            dist.put(nodeKey,distances);
+        }
+
+        this.maxTransfer=maxTransfer;
+        this.maxTransferWait=maxTransferWait;
+        this.minTransferWait=minTransferWait;
+        this.maxDuration=maxDuration;
     }
 
     /**
@@ -105,15 +118,14 @@ public class TransitAStar {
         LocalDateTime actualStartTime = graph.getNode(startKey).getTime();
         log.debug("[A*] 起始节点: key={}, actualTime={}, 终点站={}", startKey, actualStartTime, endStation);
 
-        gScore.put(startKey, 0.0);
+        Arrays.fill(dist.get(startKey), Float.NaN);
         double hStart = estimateHeuristic(startStation, endStation);
-        fScore.put(startKey, hStart);
 
         // 优先队列：按 f(n) 排序
         PriorityQueue<AStarState> open = new PriorityQueue<>(
                 Comparator.comparingDouble(AStarState::getF)
         );
-        open.offer(new AStarState(startKey, 0.0, hStart, 0, actualStartTime));
+        open.offer(new AStarState(startKey, 0.0, hStart, 0));
 
         // 2. 主循环
         int explored = 0;
@@ -129,8 +141,7 @@ public class TransitAStar {
             String currentKey = current.nodeKey;
 
             // 已访问跳过
-            if (closed.contains(currentKey)) continue;
-            closed.add(currentKey);
+            if(dist.get(currentKey)[current.totalTransfers]+1e-6<current.g) continue;
 
             StationTimeNode currentNode = graph.getNode(currentKey);
 
@@ -150,42 +161,70 @@ public class TransitAStar {
             for (TransitEdge edge : graph.getEdges(currentKey)) {
                 String neighborKey = edge.getToKey();
 
-                if (closed.contains(neighborKey)) continue;
-
                 // 时间约束检查：跳过已开走的列车（出发时间 < 当前时间）
-                if (edge.isTrainEdge()) {
-                    TrainEdge trainEdge = (TrainEdge) edge;
-                    if (trainEdge.getDepartureTime().isBefore(current.time)) continue;
-                }
+//                if (edge.isTrainEdge()) {
+//                    TrainEdge trainEdge = (TrainEdge) edge;
+//                    if (trainEdge.getDepartureTime().isBefore(current.time)) continue;
+//                }
 
                 // g(n) = 实际时间 + 票价折算时间
                 double timeCost = edge.getDurationMinutes()*weightTime;
                 double costTime = edge.getCost() * weightCost;
-                int transferCost = edge.isWaitEdge() ? 1 : 0;
                 double penalizedCost= (penalizedEdges.contains(neighborKey)?1:0)*weightPenalize;
 
-                double tentativeG = current.g + timeCost + costTime + transferCost*weightTransfer+penalizedCost;
+                double tentativeG = current.g + timeCost + costTime +penalizedCost;
 
-                Double existingG = gScore.get(neighborKey);
-                if (existingG == null || tentativeG < existingG) {
+
+                if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers()]) {
                     cameFrom.put(neighborKey, currentKey);
-                    gScore.put(neighborKey, tentativeG);
+                    dist.get(neighborKey)[current.getTotalTransfers()]= (float) tentativeG;
 
                     StationTimeNode neighborNode = graph.getNode(neighborKey);
                     double h = estimateHeuristic(neighborNode.getStation(), endStation);
 
                     // f(n) = g(n) + h(n)
                     double f = tentativeG + h;
-                    fScore.put(neighborKey, f);
-
-                    LocalDateTime neighborTime = edge.isTrainEdge()
-                            ? ((TrainEdge) edge).getArrivalTime()
-                            : edge.getToKey() != null && graph.hasNode(edge.getToKey())
-                                ? graph.getNode(edge.getToKey()).getTime()
-                                : current.time.plusMinutes(edge.getDurationMinutes());
 
                     open.offer(new AStarState(neighborKey, tentativeG, f,
-                            current.totalTransfers + transferCost, neighborTime));
+                            current.totalTransfers));
+                }
+            }
+            //处理换乘等待边
+            if(current.getTotalTransfers()<maxTransfer) {
+                //已经排好序
+                SortedSet<StationTimeNode> nodes = ((TreeSet<StationTimeNode>) graph.getNodesSet()).tailSet(currentNode, false);
+                // 遍历出边
+                for (StationTimeNode node : nodes) {
+                    //TODO 目前是同站换乘 由于设计trainStation漏了区域/城市字段
+
+                    if (!node.getTime().minusMinutes(maxTransferWait).isBefore(currentNode.getTime())) break;
+                    if (!node.getTime().minusMinutes(minTransferWait).isAfter(currentNode.getTime())) continue;
+
+                    if (!node.getStation().equals(currentNode.getStation())) continue;
+                    if(!node.isDeparture()) continue;
+
+
+
+                    String neighborKey = node.getKey();
+
+                    // g(n) = 实际时间 + 票价折算时间
+                    double penalizedCost = (penalizedEdges.contains(neighborKey) ? 1 : 0) * weightPenalize;
+
+                    double tentativeG = current.g + weightTransfer + penalizedCost;
+
+                    if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers() + 1]) {
+                        cameFrom.put(neighborKey, currentKey);
+                        dist.get(neighborKey)[current.getTotalTransfers()+1] = (float) tentativeG;
+
+                        StationTimeNode neighborNode = graph.getNode(neighborKey);
+                        double h = estimateHeuristic(neighborNode.getStation(), endStation);
+
+                        // f(n) = g(n) + h(n)
+                        double f = tentativeG + h;
+
+                        open.offer(new AStarState(neighborKey, tentativeG, f,
+                                current.totalTransfers + 1));
+                    }
                 }
             }
         }
@@ -217,10 +256,13 @@ public class TransitAStar {
        List<AStarResult> results=new ArrayList<>();
        for(int i=0;i<maxResults;i++){
            // 每轮搜索重置状态
-           gScore.clear();
-           fScore.clear();
+           for(String nodeKey: graph.getAllNodeKeys()){
+               float[] distances = new float[maxTransfer + 1];
+               Arrays.fill(distances,Float.MAX_VALUE);
+               dist.put(nodeKey,distances);
+           }
            cameFrom.clear();
-           closed.clear();
+
 
            AStarResult result=aStar(
                    startStation,
@@ -366,14 +408,12 @@ public class TransitAStar {
         private final double g;          // 实际成本
         private final double f;          // 评估成本
         private final int totalTransfers;
-        private final LocalDateTime time;
 
-        AStarState(String nodeKey, double g, double f, int totalTransfers, LocalDateTime time) {
+        AStarState(String nodeKey, double g, double f, int totalTransfers) {
             this.nodeKey = nodeKey;
             this.g = g;
             this.f = f;
             this.totalTransfers = totalTransfers;
-            this.time = time;
         }
     }
 

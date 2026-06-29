@@ -20,7 +20,7 @@ import java.util.Objects;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class StationTimeNode implements Serializable {
+public class StationTimeNode implements Serializable, Comparable<StationTimeNode>  {
 
     private static final long serialVersionUID = 1L;
 
@@ -97,5 +97,19 @@ public class StationTimeNode implements Serializable {
     @Override
     public String toString() {
         return getKey();
+    }
+
+    @Override
+    public int compareTo(StationTimeNode other) {
+        int timeCompare = this.time.compareTo(other.time);
+        if (timeCompare != 0) {
+            return timeCompare;
+        }
+        // 时间相同时，按站点排序
+        int stationCompare = this.station.compareTo(other.station);
+        if (stationCompare != 0) {
+            return stationCompare;
+        }
+        return Boolean.compare(this.isDeparture, other.isDeparture);
     }
 }
