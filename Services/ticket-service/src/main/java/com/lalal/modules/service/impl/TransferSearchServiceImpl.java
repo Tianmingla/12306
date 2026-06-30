@@ -268,13 +268,16 @@ public class TransferSearchServiceImpl implements TransferSearchService {
                             }
                             segment.setPriceMap(priceMap);
 
-                            Map<String,Integer> remainingMap=new HashMap<>();
-                            for(TrainEdge.SeatRemaining pair:trainEdge.getSeatRemainings()){
-                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
-                                remainingMap.put(seatTypeStr, pair.remaining());
-                                if(pair.remaining()==0) hasAvailableSeats=false;
+                            //TODO 余票没有填在边里面
+                            if(trainEdge.getSeatRemainings()!=null) {
+                                Map<String, Integer> remainingMap = new HashMap<>();
+                                for (TrainEdge.SeatRemaining pair : trainEdge.getSeatRemainings()) {
+                                    String seatTypeStr = SeatType.getDescByCode(pair.seatType());
+                                    remainingMap.put(seatTypeStr, pair.remaining());
+                                    if (pair.remaining() == 0) hasAvailableSeats = false;
+                                }
+                                segment.setRemainingMap(remainingMap);
                             }
-                            segment.setRemainingMap(remainingMap);
 
                             segment.setDurationMinutes((int) trainEdge.getDurationMinutes());
                             flag=false;
@@ -290,11 +293,14 @@ public class TransferSearchServiceImpl implements TransferSearchService {
                                 priceMap.compute(seatTypeStr, (key, oldValue) -> (oldValue == null) ? new BigDecimal(0) : oldValue.add(pair.price()));
                             }
 
-                            Map<String,Integer> remainingMap=segment.getRemainingMap();
-                            for(TrainEdge.SeatRemaining pair:trainEdge.getSeatRemainings()){
-                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
-                                remainingMap.compute(seatTypeStr, (key, oldValue) -> (oldValue == null) ? 0: Math.min(oldValue,pair.remaining()));
-                                if(pair.remaining()==0) hasAvailableSeats=false;
+                            //TODO 余票没有填在边里面
+                            if(trainEdge.getSeatRemainings()!=null) {
+                                Map<String, Integer> remainingMap = segment.getRemainingMap();
+                                for (TrainEdge.SeatRemaining pair : trainEdge.getSeatRemainings()) {
+                                    String seatTypeStr = SeatType.getDescByCode(pair.seatType());
+                                    remainingMap.compute(seatTypeStr, (key, oldValue) -> (oldValue == null) ? 0 : Math.min(oldValue, pair.remaining()));
+                                    if (pair.remaining() == 0) hasAvailableSeats = false;
+                                }
                             }
                         }
                         break;
