@@ -44,7 +44,8 @@ public abstract class TransitEdge implements Serializable, Comparable<TransitEdg
 
     public enum EdgeType {
         TRAIN,   // 乘车边
-        WAIT     // 等候边（换乘等待）
+        WAIT,    // 等候边
+        TRANSFER_WAIT //换乘边
     }
 
     /**

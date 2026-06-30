@@ -3,6 +3,7 @@ package com.lalal.modules.graph;
 import lombok.Getter;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -367,6 +368,12 @@ public class TransitAStar {
             TransitEdge edge = findEdge(prevKey, currentKey);
             if (edge != null) {
                 edges.add(0, edge);
+            }else{
+                //处理换乘等待边
+                StationTimeNode preNode=graph.getNode(prevKey);
+                StationTimeNode currentNode=graph.getNode(currentKey);
+                int duration= (int) Duration.between(preNode.getTime(),currentNode.getTime()).toMinutes();
+                edges.add(0, new TransitEdge(prevKey,currentKey,duration,0, TransitEdge.EdgeType.TRANSFER_WAIT) {});
             }
             currentKey = prevKey;
         }

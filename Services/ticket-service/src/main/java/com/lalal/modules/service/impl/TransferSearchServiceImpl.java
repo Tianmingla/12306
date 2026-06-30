@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -211,26 +212,117 @@ public class TransferSearchServiceImpl implements TransferSearchService {
         String toStation = request.getTo();
 
         // 调试：检查每条路径被哪个 filter 过滤
-        List<TransferRouteResult> converted = rawResults.stream()
-                .peek(r -> {
-                    boolean endMatch = r.getEndStation().equals(fromStation)
-                            || r.getEndStation().contains(fromStation)
-                            || fromStation.contains(r.getEndStation());
-                    boolean durationOk = r.getTotalMinutes() <= request.getMaxDuration();
-                    boolean transferOk = r.getTransferCount() <= request.getMaxTransfer();
-                    if (endMatch || !durationOk || !transferOk) {
-                        log.info("[A*] 过滤掉路径: endStation={}, totalMinutes={}, transfers={}, endMatch={}, durationOk={}, transferOk={}",
-                                r.getEndStation(), r.getTotalMinutes(), r.getTransferCount(), endMatch, durationOk, transferOk);
-                    }
-                })
-                .filter(r -> !r.getEndStation().equals(fromStation) && !r.getEndStation().contains(fromStation) && !fromStation.contains(r.getEndStation()))
-                .filter(r -> r.getTotalMinutes() <= request.getMaxDuration())
-                .filter(r -> r.getTransferCount() <= request.getMaxTransfer())
-                .map(r -> convertToResult(r, request.getTo(), request.getDate()))
-                .sorted(Comparator.comparingDouble(TransferRouteResult::getScore))
-                .limit(request.getLimit())
-                .collect(Collectors.toList());
+//        List<TransferRouteResult> converted = rawResults.stream()
+//                .peek(r -> {
+//                    boolean endMatch = r.getEndStation().equals(fromStation)
+//                            || r.getEndStation().contains(fromStation)
+//                            || fromStation.contains(r.getEndStation());
+//                    boolean durationOk = r.getTotalMinutes() <= request.getMaxDuration();
+//                    boolean transferOk = r.getTransferCount() <= request.getMaxTransfer();
+//                    if (endMatch || !durationOk || !transferOk) {
+//                        log.info("[A*] 过滤掉路径: endStation={}, totalMinutes={}, transfers={}, endMatch={}, durationOk={}, transferOk={}",
+//                                r.getEndStation(), r.getTotalMinutes(), r.getTransferCount(), endMatch, durationOk, transferOk);
+//                    }
+//                })
+//                .filter(r -> !r.getEndStation().equals(fromStation) && !r.getEndStation().contains(fromStation) && !fromStation.contains(r.getEndStation()))
+//                .filter(r -> r.getTotalMinutes() <= request.getMaxDuration())
+//                .filter(r -> r.getTransferCount() <= request.getMaxTransfer())
+//                .map(r -> convertToResult(r, request.getTo(), request.getDate()))
+//                .sorted(Comparator.comparingDouble(TransferRouteResult::getScore))
+//                .limit(request.getLimit())
+//                .collect(Collectors.toList());
+        List<TransferRouteResult> converted = new ArrayList<>();
+        for(TransitAStar.AStarResult result : rawResults){
+            TransferRouteResult routeResult=new TransferRouteResult();
+            routeResult.setSegments(new ArrayList<>());
 
+            //每个线路的结果统计
+            int totalMinutes=0;
+            boolean hasAvailableSeats=true;
+            BigDecimal totalPrice=new BigDecimal(0);
+
+            //每段行程的结果统计
+            Boolean flag=true;
+            TransferSegment segment=new TransferSegment();
+            for(TransitEdge edge:result.getEdges()){
+                switch (edge.getEdgeType()){
+                    case WAIT:
+                        WaitEdge waitEdge=(WaitEdge) edge;
+                        segment.setDurationMinutes((int) (segment.getDurationMinutes()+waitEdge.getDurationMinutes()));
+                        break;
+                    case TRAIN:
+                        TrainEdge trainEdge = (TrainEdge) edge;
+                        if(flag) {
+                            segment.setDepartureStation(trainEdge.getDepartureStation());
+                            segment.setDepartureTime(TIME_FMT.format(trainEdge.getDepartureTime()));
+
+                            segment.setTrainNumber(trainEdge.getTrainNumber());
+                            segment.setTrainType(trainEdge.getTrainType());
+
+                            segment.setSeatTypes(trainEdge.getSeatTypes());
+
+                            Map<String,BigDecimal> priceMap=new HashMap<>();
+                            for(TrainEdge.SeatPrice pair:trainEdge.getSeatPrices()){
+                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
+                                priceMap.put(seatTypeStr,pair.price());
+                            }
+                            segment.setPriceMap(priceMap);
+
+                            Map<String,Integer> remainingMap=new HashMap<>();
+                            for(TrainEdge.SeatRemaining pair:trainEdge.getSeatRemainings()){
+                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
+                                remainingMap.put(seatTypeStr, pair.remaining());
+                                if(pair.remaining()==0) hasAvailableSeats=false;
+                            }
+                            segment.setRemainingMap(remainingMap);
+
+                            segment.setDurationMinutes((int) trainEdge.getDurationMinutes());
+                            flag=false;
+                        }else{
+                            segment.setArrivalStation(trainEdge.getArrivalStation());
+                            segment.setArrivalTime(TIME_FMT.format(trainEdge.getArrivalTime()));
+
+                            segment.setDurationMinutes((int) (segment.getDurationMinutes()+trainEdge.getDurationMinutes()));
+
+                            Map<String,BigDecimal> priceMap=segment.getPriceMap();
+                            for(TrainEdge.SeatPrice pair:trainEdge.getSeatPrices()){
+                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
+                                priceMap.compute(seatTypeStr, (key, oldValue) -> (oldValue == null) ? new BigDecimal(0) : oldValue.add(pair.price()));
+                            }
+
+                            Map<String,Integer> remainingMap=segment.getRemainingMap();
+                            for(TrainEdge.SeatRemaining pair:trainEdge.getSeatRemainings()){
+                                String seatTypeStr=SeatType.getDescByCode(pair.seatType());
+                                remainingMap.compute(seatTypeStr, (key, oldValue) -> (oldValue == null) ? 0: Math.min(oldValue,pair.remaining()));
+                                if(pair.remaining()==0) hasAvailableSeats=false;
+                            }
+                        }
+                        break;
+                    case TRANSFER_WAIT:
+                        routeResult.getSegments().add(segment);
+                        totalMinutes+= (int) (segment.getDurationMinutes()+edge.getDurationMinutes());
+                        //价格最低
+                        BigDecimal price=new BigDecimal(Integer.MAX_VALUE);
+                        for(Map.Entry<String,BigDecimal> entry:segment.getPriceMap().entrySet()){
+                            price=price.min(entry.getValue());
+                        }
+                        totalPrice=totalPrice.add(price);
+
+                        flag=true;
+                        segment=new TransferSegment();
+                        break;
+                }
+            }
+            routeResult.setTransferCount(routeResult.getSegments().size());
+            routeResult.setFromStation(routeResult.getSegments().get(0).getDepartureStation());
+            routeResult.setDepartureTime(routeResult.getSegments().get(0).getDepartureTime());
+            routeResult.setToStation(routeResult.getSegments().get(routeResult.getSegments().size()-1).getArrivalStation());
+            routeResult.setArrivalTime(routeResult.getSegments().get(routeResult.getSegments().size()-1).getArrivalTime());
+            routeResult.setTotalMinutes(totalMinutes);
+            routeResult.setHasAvailableSeats(hasAvailableSeats);
+            routeResult.setTotalPrice(totalPrice);
+            converted.add(routeResult);
+        }
         log.info("[A*] 过滤后剩余 {} 条路径", converted.size());
         return converted;
     }
