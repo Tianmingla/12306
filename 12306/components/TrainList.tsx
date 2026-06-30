@@ -295,14 +295,29 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
             </div>
 
             <div className="flex flex-col items-center justify-center min-w-[100px]">
-              {/* Train Number Button */}
-              <span
-                onClick={(e) => handleTrainNumberClick(e, ticket.trainNumber)}
-                className="text-xs text-blue-600 font-medium border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50 transition-colors mb-1"
-                title="查看经停信息"
-              >
-                {ticket.trainNumber}
-              </span>
+              {/* Train Number Buttons */}
+              <div className="flex flex-wrap items-center justify-center gap-1 mb-1">
+                {isTransfer && ticket.segments ? ticket.segments.map((seg, idx) => (
+                  <React.Fragment key={`tn-${seg.trainNumber}-${idx}`}>
+                    {idx > 0 && <span className="text-gray-400 text-xs">→</span>}
+                    <span
+                      onClick={(e) => handleTrainNumberClick(e, seg.trainNumber)}
+                      className="text-xs text-blue-600 font-medium border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50 transition-colors"
+                      title={`${seg.trainNumber} 经停信息`}
+                    >
+                      {seg.trainNumber}
+                    </span>
+                  </React.Fragment>
+                )) : (
+                  <span
+                    onClick={(e) => handleTrainNumberClick(e, ticket.trainNumber)}
+                    className="text-xs text-blue-600 font-medium border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50 transition-colors mb-1"
+                    title="查看经停信息"
+                  >
+                    {ticket.trainNumber}
+                  </span>
+                )}
+              </div>
               {isTransfer && (
                 <span className="text-xs text-orange-500 font-medium mt-1">中转</span>
               )}

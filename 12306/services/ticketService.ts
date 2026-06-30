@@ -47,8 +47,8 @@ const adaptRouteToTicket = (route: ApiRoute, routeIndex: number): TrainTicket | 
   const firstSegment = route.segments[0];
   if (!firstSegment) return null;
 
-  const seatsArray = route.remainingTicketNumMap || [];
-  const pricesArray = route.priceMap || [];
+  const seatsArray = (route.remainingTicketNumMap || []).map(s => s || {});
+  const pricesArray = (route.priceMap || []).map(p => p || {});
   const isTransfer = route.segments.length > 1;
 
   // Build segment details - keep backend Chinese keys as-is
@@ -95,7 +95,7 @@ const adaptRouteToTicket = (route: ApiRoute, routeIndex: number): TrainTicket | 
   return {
     id: route.planId || `${firstSegment.trainId}-${routeIndex}`,
     trainNumber: isTransfer
-      ? `${firstSegment.trainNumber} → ${lastSegment.trainNumber}`
+      ? route.segments.map(s => s.trainNumber).join(' → ')
       : firstSegment.trainNumber,
     fromStation: firstSegment.departureStation,
     toStation: lastSegment.arrivalStation,
