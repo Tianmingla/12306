@@ -97,8 +97,8 @@ public class CacheConstant {
      * @param stationName     站台名
      * @return 缓存Key字符串
      */
-    public static String trainStationDetail(String stationName){
-        return String.format(TRAIN_STATION_DETAIL_KEY_TEMPLATE,stationName);
+    public static String stationDetail(String stationName){
+        return String.format(STATION_DETAIL_KEY_TEMPLATE,stationName);
     }
     /**
      * 构建火车车次到详情映射的缓存Key
@@ -137,7 +137,7 @@ public class CacheConstant {
      * 构建关于站台的火车站台的详情列表数key
      */
     public static String trainStationDetailList(Long stationId){
-        return String.format(TRAIN_STATION_DETAIL,stationId);
+        return String.format(TRAIN_STATION_DETAIL_LIST_BY_STATION,stationId);
     }
 
     //------------------------用户------------------------------------------------------
@@ -201,12 +201,13 @@ public class CacheConstant {
     public static final String TRAIN_ROUTE_KEY_TEMPLATE="TRAIN::ROUTE::%s::%s";
     public static final String TRAIN_SEAT_TYPE="TRAIN::SEAT_TYPE::%s";
     public static final String TRAIN_STATION_KEY_TEMPLATE="TRAIN::STATION::%s";
-    public static final String TRAIN_STATION_DETAIL_KEY_TEMPLATE="TRAIN::STATION::DETAIL::%s";
+    public static final String TRAIN_STATION_DETAIL_KEY_TEMPLATE="TRAIN::STATION::DETAIL::0::%s";
     public static final String TRAIN_CARRIAGE_KEY_TEMPLATE="TRAIN::CARRIAGE::%s";
     public static final String  TRAIN_CODE_TO_DETAIL_TEMPLATE = "TRAIN::CODE::%s";
     public static final String  TRAIN_CARRIAGE_COUNT = "TRAIN::CARRIAGE::%s::%s";
     public static final String  TRAIN_SEAT_COUNT = "TRAIN::CARRIAGE::%s::%s";
-    public static final String  TRAIN_STATION_DETAIL = "TRAIN::STATION::%s";
+    public static final String  TRAIN_STATION_DETAIL_LIST_BY_STATION = "TRAIN::STATION::DETAIL::LIST::1::%s";
+    public static final String  STATION_DETAIL_KEY_TEMPLATE="STATION::DETAIL::%s";
 
     /* ==================== 票价相关缓存Key ==================== */
 

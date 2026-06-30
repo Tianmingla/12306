@@ -86,7 +86,7 @@ public class StationScreenServiceImpl extends ServiceImpl<StationMapper, com.lal
         stationWrapper.eq(com.lalal.modules.entity.StationDO::getName, stationName);
 
         com.lalal.modules.entity.StationDO stationDO =safeCacheTemplate.safeGet(
-                CacheConstant.trainStationDetail(stationName),
+                CacheConstant.stationDetail(stationName),
                 () -> this.getOne(stationWrapper),
                 new TypeReference<StationDO>() {},
                 3,
