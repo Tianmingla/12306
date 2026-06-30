@@ -244,7 +244,20 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             //每段行程的结果统计
             Boolean flag=true;
             TransferSegment segment=new TransferSegment();
-            for(TransitEdge edge:result.getEdges()){
+            for(int i=0;i<result.getEdges().size()+1;i++){
+                if(i==result.getEdges().size() || result.getEdges().get(i).getEdgeType()== TransitEdge.EdgeType.TRANSFER_WAIT){
+                    routeResult.getSegments().add(segment);
+                    totalMinutes+= (int) (segment.getDurationMinutes());
+                    //价格最低
+                    BigDecimal price=new BigDecimal(Integer.MAX_VALUE);
+                    for(Map.Entry<String,BigDecimal> entry:segment.getPriceMap().entrySet()){
+                        price=price.min(entry.getValue());
+                    }
+                    totalPrice=totalPrice.add(price);
+                    if(i==result.getEdges().size()) break;
+                }
+
+                TransitEdge edge=result.getEdges().get(i);
                 switch (edge.getEdgeType()){
                     case WAIT:
                         WaitEdge waitEdge=(WaitEdge) edge;
@@ -255,6 +268,8 @@ public class TransferSearchServiceImpl implements TransferSearchService {
                         if(flag) {
                             segment.setDepartureStation(trainEdge.getDepartureStation());
                             segment.setDepartureTime(TIME_FMT.format(trainEdge.getDepartureTime()));
+                            segment.setArrivalStation(trainEdge.getArrivalStation());
+                            segment.setArrivalTime(TIME_FMT.format(trainEdge.getArrivalTime()));
 
                             segment.setTrainNumber(trainEdge.getTrainNumber());
                             segment.setTrainType(trainEdge.getTrainType());
@@ -305,15 +320,7 @@ public class TransferSearchServiceImpl implements TransferSearchService {
                         }
                         break;
                     case TRANSFER_WAIT:
-                        routeResult.getSegments().add(segment);
-                        totalMinutes+= (int) (segment.getDurationMinutes()+edge.getDurationMinutes());
-                        //价格最低
-                        BigDecimal price=new BigDecimal(Integer.MAX_VALUE);
-                        for(Map.Entry<String,BigDecimal> entry:segment.getPriceMap().entrySet()){
-                            price=price.min(entry.getValue());
-                        }
-                        totalPrice=totalPrice.add(price);
-
+                        totalMinutes+= (int) (edge.getDurationMinutes());
                         flag=true;
                         segment=new TransferSegment();
                         break;
