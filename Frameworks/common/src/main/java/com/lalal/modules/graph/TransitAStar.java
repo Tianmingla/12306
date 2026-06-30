@@ -126,7 +126,7 @@ public class TransitAStar {
         PriorityQueue<AStarState> open = new PriorityQueue<>(
                 Comparator.comparingDouble(AStarState::getF)
         );
-        open.offer(new AStarState(startKey, 0.0, hStart, 0));
+        open.offer(new AStarState(startKey, 0.0, hStart, 0,false));
 
         // 2. 主循环
         int explored = 0;
@@ -187,11 +187,11 @@ public class TransitAStar {
                     double f = tentativeG + h;
 
                     open.offer(new AStarState(neighborKey, tentativeG, f,
-                            current.totalTransfers));
+                            current.totalTransfers,false));
                 }
             }
             //处理换乘等待边
-            if(current.getTotalTransfers()<maxTransfer) {
+            if(current.getTotalTransfers()<maxTransfer&&!current.fromTransfer) {
                 //已经排好序
                 SortedSet<StationTimeNode> nodes = ((TreeSet<StationTimeNode>) graph.getNodesSet()).tailSet(currentNode, false);
                 // 遍历出边
@@ -224,7 +224,7 @@ public class TransitAStar {
                         double f = tentativeG + h;
 
                         open.offer(new AStarState(neighborKey, tentativeG, f,
-                                current.totalTransfers + 1));
+                                current.totalTransfers + 1,true));
                     }
                 }
             }
@@ -415,12 +415,14 @@ public class TransitAStar {
         private final double g;          // 实际成本
         private final double f;          // 评估成本
         private final int totalTransfers;
+        private final boolean fromTransfer; //是否为换乘边达到的节点 用来约束连续换乘
 
-        AStarState(String nodeKey, double g, double f, int totalTransfers) {
+        AStarState(String nodeKey, double g, double f, int totalTransfers,boolean fromTransfer) {
             this.nodeKey = nodeKey;
             this.g = g;
             this.f = f;
             this.totalTransfers = totalTransfers;
+            this.fromTransfer=fromTransfer;
         }
     }
 
