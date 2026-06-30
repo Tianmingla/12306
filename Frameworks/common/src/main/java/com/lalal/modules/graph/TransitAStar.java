@@ -33,7 +33,8 @@ public class TransitAStar {
     /**
      * 前驱表
      */
-    private final Map<String, String> cameFrom;
+    // 前驱表：当前状态 -> 前驱状态
+    private final Map<StateKey, StateKey> cameFrom;
 
 //    /**
 //     * 已关闭节点
@@ -70,6 +71,10 @@ public class TransitAStar {
 
     private final int maxDuration;
     private final int minTransferWait;
+
+    // 内部类表示状态键
+    private record StateKey(String nodeKey, int transfers) {}
+
     public TransitAStar(TransitGraph graph,int maxTransfer,int maxDuration,int minTransferWait,int maxTransferWait) {
         this.graph = graph;
         this.cameFrom = new HashMap<>();
@@ -142,7 +147,7 @@ public class TransitAStar {
             String currentKey = current.nodeKey;
 
             // 已访问跳过
-            if(dist.get(currentKey)[current.totalTransfers]+1e-6<current.g) continue;
+            if(dist.get(currentKey)[current.totalTransfers]+1e-4<current.g) continue;
 
             StationTimeNode currentNode = graph.getNode(currentKey);
 
@@ -150,10 +155,11 @@ public class TransitAStar {
             if (currentNode.getStation().equals(endStation)
                     || currentNode.getStation().contains(endStation)
                     || endStation.contains(currentNode.getStation())) {
-                String prevKey=currentKey;
-                while(prevKey!=null){
-                    penalizedEdges.add(prevKey);
-                    prevKey=cameFrom.getOrDefault(prevKey,null);
+                StateKey prev=new StateKey(currentKey,current.totalTransfers);
+                int t=current.totalTransfers;
+                while(prev!=null){
+                    penalizedEdges.add(prev.nodeKey);
+                    prev=cameFrom.getOrDefault(prev,null);
                 }
                 return buildResult(startKey, currentKey, current.g, current.totalTransfers);
             }
@@ -177,7 +183,10 @@ public class TransitAStar {
 
 
                 if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers()]) {
-                    cameFrom.put(neighborKey, currentKey);
+                    cameFrom.put(
+                            new StateKey(neighborKey, current.totalTransfers),     // 普通边
+                            new StateKey(currentKey, current.totalTransfers)
+                    );
                     dist.get(neighborKey)[current.getTotalTransfers()]= (float) tentativeG;
 
                     StationTimeNode neighborNode = graph.getNode(neighborKey);
@@ -214,7 +223,10 @@ public class TransitAStar {
                     double tentativeG = current.g + weightTransfer + penalizedCost;
 
                     if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers() + 1]) {
-                        cameFrom.put(neighborKey, currentKey);
+                        cameFrom.put(
+                                new StateKey(neighborKey, current.totalTransfers + 1), // 换乘等待边
+                                new StateKey(currentKey, current.totalTransfers)
+                        );
                         dist.get(neighborKey)[current.getTotalTransfers()+1] = (float) tentativeG;
 
                         StationTimeNode neighborNode = graph.getNode(neighborKey);
@@ -222,7 +234,6 @@ public class TransitAStar {
 
                         // f(n) = g(n) + h(n)
                         double f = tentativeG + h;
-
                         open.offer(new AStarState(neighborKey, tentativeG, f,
                                 current.totalTransfers + 1,true));
                     }
@@ -359,23 +370,21 @@ public class TransitAStar {
      */
     private AStarResult buildResult(String startKey, String endKey, double totalG, int transfers) {
         List<TransitEdge> edges = new ArrayList<>();
-        String currentKey = endKey;
-
-        while (currentKey != null && !currentKey.equals(startKey)) {
-            String prevKey = cameFrom.get(currentKey);
-            if (prevKey == null) break;
-
-            TransitEdge edge = findEdge(prevKey, currentKey);
+        StateKey cur = new StateKey(endKey, transfers);
+        while (!cur.nodeKey().equals(startKey)) {
+            StateKey prev = cameFrom.get(cur);
+            if (prev == null) break;
+            TransitEdge edge = findEdge(prev.nodeKey(), cur.nodeKey());
             if (edge != null) {
                 edges.add(0, edge);
-            }else{
-                //处理换乘等待边
-                StationTimeNode preNode=graph.getNode(prevKey);
-                StationTimeNode currentNode=graph.getNode(currentKey);
-                int duration= (int) Duration.between(preNode.getTime(),currentNode.getTime()).toMinutes();
-                edges.add(0, new TransitEdge(prevKey,currentKey,duration,0, TransitEdge.EdgeType.TRANSFER_WAIT) {});
+            } else {
+                // 换乘等待边重建
+                StationTimeNode preNode = graph.getNode(prev.nodeKey());
+                StationTimeNode curNode = graph.getNode(cur.nodeKey());
+                int duration = (int) Duration.between(preNode.getTime(), curNode.getTime()).toMinutes();
+                edges.add(0, new TransitEdge(prev.nodeKey(), cur.nodeKey(), duration, 0, TransitEdge.EdgeType.TRANSFER_WAIT){});
             }
-            currentKey = prevKey;
+            cur = prev;
         }
 
         StationTimeNode startNode = graph.getNode(startKey);
