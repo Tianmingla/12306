@@ -43,12 +43,28 @@ const getTrainType = (trainNumber: string): 'G' | 'D' | 'K' | 'Z' => {
 /**
  * Adapts backend route data to frontend TrainTicket model
  */
+// 固定的座位类型列表（用于当 API 返回 null 时仍显示所有座位）
+const SEAT_TYPES = ['二等座', '一等座', '商务座', '软卧', '硬卧', '硬座'];
+
 const adaptRouteToTicket = (route: ApiRoute, routeIndex: number): TrainTicket | null => {
   const firstSegment = route.segments[0];
   if (!firstSegment) return null;
 
-  const seatsArray = (route.remainingTicketNumMap || []).map(s => s || {});
-  const pricesArray = (route.priceMap || []).map(p => p || {});
+  // 处理座位数据：如果为 null 或空对象，填充所有座位类型为 0
+  const seatsArray = (route.remainingTicketNumMap || []).map((s) => {
+    if (s && Object.keys(s).length > 0) return s;
+    const result: Record<string, number> = {};
+    SEAT_TYPES.forEach(type => { result[type] = 0; });
+    return result;
+  });
+
+  // 处理价格数据：如果为 null 或空对象，填充所有座位类型价格为 0
+  const pricesArray = (route.priceMap || []).map((p) => {
+    if (p && Object.keys(p).length > 0) return p;
+    const result: Record<string, number> = {};
+    SEAT_TYPES.forEach(type => { result[type] = 0; });
+    return result;
+  });
   const isTransfer = route.segments.length > 1;
 
   // Build segment details - keep backend Chinese keys as-is

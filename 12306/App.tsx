@@ -119,6 +119,9 @@ const App: React.FC = () => {
               setOrderDetailOrderSn(orderSn);
               setCurrentView(AppView.ORDER_DETAIL);
             }}
+            onDateChange={(date) => {
+              handleSearch({ ...searchParams, date });
+            }}
           />
         </div>
       )}

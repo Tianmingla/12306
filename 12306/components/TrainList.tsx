@@ -4,12 +4,14 @@ import { Clock, ChevronDown, ChevronUp, Filter, AlertCircle, RefreshCw, MapPin, 
 import { TrainTicket, SearchParams, FilterOptions, TicketSegment } from '../types';
 import { searchTickets, getTrainRouteDetails } from '../services/ticketService';
 import BookingModal from './BookingModal';
+import QuickBookModal from './QuickBookModal';
 import FilterPanel from './FilterPanel';
 
 interface TrainListProps {
   searchParams: SearchParams;
   onBack: () => void;
   onPurchaseSuccess?: (orderSn: string) => void;
+  onDateChange?: (date: string) => void;
 }
 
 // --- Mock Data & Types for Stopovers ---
@@ -118,7 +120,7 @@ const StopoverModal: React.FC<{
   );
 };
 
-const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseSuccess }) => {
+const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseSuccess, onDateChange }) => {
   const [tickets, setTickets] = useState<TrainTicket[]>([]);
   const [returnTickets, setReturnTickets] = useState<TrainTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +132,8 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   const [isWaitlistBooking, setIsWaitlistBooking] = useState(false);
   const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [stopoverInfo, setStopoverInfo] = useState<{isOpen: boolean, trainNumber: string} | null>(null);
+  const [selectedSegment, setSelectedSegment] = useState<TicketSegment | null>(null);
+  const [quickBookModalOpen, setQuickBookModalOpen] = useState(false);
 
   // Filter State
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -207,6 +211,26 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
     setIsWaitlistBooking(isWaitlist);
   };
 
+  const handleSegmentBook = (
+    e: React.MouseEvent,
+    ticket: TrainTicket,
+    segment: TicketSegment,
+    seatType: string,
+    isWaitlist: boolean
+  ) => {
+    e.stopPropagation();
+    setSelectedTicketForBooking(ticket);
+    setSelectedSeatType(seatType);
+    setIsWaitlistBooking(isWaitlist);
+    setSelectedSegment(segment);
+  };
+
+  const handleQuickBook = (e: React.MouseEvent, ticket: TrainTicket) => {
+    e.stopPropagation();
+    setSelectedTicketForBooking(ticket);
+    setQuickBookModalOpen(true);
+  };
+
   // Get the minimum price from ticket's prices
   const getMinPrice = (ticket: TrainTicket): number => {
     if (ticket.prices) {
@@ -226,7 +250,7 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
   };
 
   // Render segment detail for transfer ticket
-  const renderSegmentDetail = (segment: TicketSegment, idx: number, totalSegments: number) => (
+  const renderSegmentDetail = (segment: TicketSegment, idx: number, totalSegments: number, ticket: TrainTicket) => (
     <div key={`seg-${idx}`} className="bg-white rounded-lg border border-gray-200 p-4 mb-3">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-blue-600 font-medium">第{idx + 1}程</span>
@@ -255,19 +279,32 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
 
       {/* Seat availability & prices for this segment */}
       <div className="space-y-2">
-        {Object.entries(segment.seatsAvailable).map(([type, count]) => (
-          <div key={type} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-            <span className="text-gray-700">{type}</span>
-            <div className="flex items-center gap-4">
-              <span className={`font-medium ${Number(count) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                {Number(count) > 0 ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
-              </span>
-              <span className="font-bold text-orange-500 w-16 text-right">
-                ¥{segment.prices[type] ?? 0}
-              </span>
+        {Object.entries(segment.seatsAvailable).map(([type, count]) => {
+          const hasTicket = count != null && Number(count) > 0;
+          return (
+            <div key={type} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
+              <span className="text-gray-700">{type}</span>
+              <div className="flex items-center gap-4">
+                <span className={`font-medium ${hasTicket ? 'text-green-600' : 'text-gray-400'}`}>
+                  {hasTicket ? (Number(count) > 20 ? '有票' : `${count}张`) : '无票'}
+                </span>
+                <span className="font-bold text-orange-500 w-16 text-right">
+                  ¥{segment.prices[type] ?? 0}
+                </span>
+                <button
+                  onClick={(e) => handleSegmentBook(e, ticket, segment, type, !hasTicket)}
+                  className={`px-3 py-1 rounded text-xs font-medium ${
+                    hasTicket
+                      ? 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {hasTicket ? '预订' : '候补'}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -362,12 +399,19 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
             {isTransfer ? (
               /* Transfer: Show each segment with details */
               <div>
-                {ticket.segments!.map((seg, idx) => renderSegmentDetail(seg, idx, ticket.segments!.length))}
+                {ticket.segments!.map((seg, idx) => renderSegmentDetail(seg, idx, ticket.segments!.length, ticket))}
                 {/* Total price summary */}
                 <div className="flex justify-between items-center mt-2 pt-3 border-t border-gray-200">
                   <span className="text-sm text-gray-600">全程总价</span>
                   <span className="text-lg font-bold text-orange-500">¥{minPrice} 起</span>
                 </div>
+                {/* 一键购票按钮 */}
+                <button
+                  onClick={(e) => handleQuickBook(e, ticket)}
+                  className="w-full mt-4 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                >
+                  一键选座购票
+                </button>
               </div>
             ) : (
               /* Direct: Show seat types */
@@ -486,23 +530,37 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
       {/* Date Tabs - only show for one-way */}
       {!isRoundTrip && (
         <div className="flex space-x-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          {[-1, 0, 1, 2, 3].map(offset => {
-            const d = new Date(searchParams.date);
-            d.setDate(d.getDate() + offset);
+          {[0, 1, 2, 3, 4].map(offset => {
+            // Generate date based on offset from searchParams.date
+            const baseDate = new Date(searchParams.date);
+            baseDate.setDate(baseDate.getDate() + offset);
+
+            // Get today's date (normalized to midnight)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            // Skip past dates
+            if (baseDate < today) return null;
+
             const isSelected = offset === 0;
+            const dateStr = baseDate.toISOString().split('T')[0];
+
             return (
               <button
                 key={offset}
+                onClick={() => {
+                  onDateChange?.(dateStr);
+                }}
                 className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
                 }`}
               >
-                {d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
+                {baseDate.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}
               </button>
             );
-          })}
+          }).filter(Boolean)}
         </div>
       )}
 
@@ -544,13 +602,22 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
 
       <BookingModal
         ticket={selectedTicketForBooking}
-        onClose={() => { setSelectedTicketForBooking(null); setIsWaitlistBooking(false); }}
+        onClose={() => { setSelectedTicketForBooking(null); setIsWaitlistBooking(false); setSelectedSegment(null); }}
         travelDate={searchParams.date}
         seatType={selectedSeatType}
         isWaitlist={isWaitlistBooking}
         onPurchaseSuccess={onPurchaseSuccess}
       />
-      
+
+      {quickBookModalOpen && selectedTicketForBooking && (
+        <QuickBookModal
+          ticket={selectedTicketForBooking}
+          travelDate={searchParams.date}
+          onClose={() => { setQuickBookModalOpen(false); setSelectedTicketForBooking(null); setSelectedSegment(null); }}
+          onPurchaseSuccess={(orderSn) => { setQuickBookModalOpen(false); onPurchaseSuccess?.(orderSn); }}
+        />
+      )}
+
       {stopoverInfo && (
         <StopoverModal 
           isOpen={stopoverInfo.isOpen}
