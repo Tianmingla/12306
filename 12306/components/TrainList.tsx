@@ -394,8 +394,8 @@ const TrainList: React.FC<TrainListProps> = ({ searchParams, onBack, onPurchaseS
         </div>
 
         {/* Expanded Details */}
-        <div className={`bg-gray-50 border-t border-gray-100 transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <div className="p-4">
+        <div className={`bg-gray-50 border-t border-gray-100 transition-all duration-300 ease-in-out overflow-y-auto ${isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="p-4 pb-2">
             {isTransfer ? (
               /* Transfer: Show each segment with details */
               <div>
