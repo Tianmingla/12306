@@ -212,6 +212,8 @@ services:
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    volumes:
+      - ./Services/user-service/target/log:/log
     depends_on:
       mysql:
         condition: service_healthy

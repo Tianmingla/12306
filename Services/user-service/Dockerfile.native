@@ -35,7 +35,8 @@ COPY Frameworks ./Frameworks
 COPY Services ./Services
 
 # Build native image (package phase triggers compile-no-fork via native profile)
-RUN --mount=type=cache,target=/root/.m2/repository mvn -Pnative package -pl Services/user-service -am -DskipTests -Dmaven.test.skip=true
+RUN mkdir -p /log
+RUN --mount=type=cache,target=/root/.m2/repository mvn -Pnative package -pl Services/user-service -am -DskipTests -Dmaven.test.skip=true > /log/log.txt
 
 # ================================================================
 # Stage 2: Minimal Ubuntu 24.04 runtime

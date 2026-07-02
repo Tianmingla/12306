@@ -119,6 +119,7 @@
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                                 <buildArg>-J-Xmx4g</buildArg>
+                                <buildArg>-J-XX:-UseGCOverheadLimit</buildArg>
                                 <buildArg>--enable-url-protocols=http,https</buildArg>
                                 <buildArg>-H:+AddAllCharsets</buildArg>
                                 <buildArg>-H:IncludeLocales=en,zh</buildArg>
