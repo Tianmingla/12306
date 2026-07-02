@@ -246,6 +246,9 @@ public class TransferSearchServiceImpl implements TransferSearchService {
             TransferSegment segment=new TransferSegment();
             for(int i=0;i<result.getEdges().size()+1;i++){
                 if(i==result.getEdges().size() || result.getEdges().get(i).getEdgeType()== TransitEdge.EdgeType.TRANSFER_WAIT){
+                    if(flag){ //处理第一站就等待的情况
+                        continue;
+                    }
                     routeResult.getSegments().add(segment);
                     totalMinutes+= (int) (segment.getDurationMinutes());
                     //价格最低

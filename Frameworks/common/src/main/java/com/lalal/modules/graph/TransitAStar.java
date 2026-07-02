@@ -36,10 +36,10 @@ public class TransitAStar {
     // 前驱表：当前状态 -> 前驱状态
     private final Map<StateKey, StateKey> cameFrom;
 
-//    /**
-//     * 已关闭节点
-//     */
-//    private final Set<String> closed;
+    /**
+     * 已关闭节点
+     */
+    private final Set<StateKey> closed;
     /**
      * 改用dist维护状态 来解带限制的最短路径问题
      * 我们甚至可以把时间也加到这里来 但实际上 时间这个限制 我们把他和站点合在一起看作新的节点更优
@@ -78,6 +78,7 @@ public class TransitAStar {
     public TransitAStar(TransitGraph graph,int maxTransfer,int maxDuration,int minTransferWait,int maxTransferWait) {
         this.graph = graph;
         this.cameFrom = new HashMap<>();
+        this.closed=new HashSet<>();
         this.heuristicCache = new HashMap<>();
 
         this.dist=new HashMap<>();
@@ -145,9 +146,9 @@ public class TransitAStar {
 
             AStarState current = open.poll();
             String currentKey = current.nodeKey;
-
+            StateKey  currentStateKey=new StateKey(currentKey, current.totalTransfers);
             // 已访问跳过
-            if(dist.get(currentKey)[current.totalTransfers]+1e-4<current.g) continue;
+            if(closed.contains(currentStateKey)) continue;
 
             StationTimeNode currentNode = graph.getNode(currentKey);
 
@@ -155,7 +156,7 @@ public class TransitAStar {
             if (currentNode.getStation().equals(endStation)
                     || currentNode.getStation().contains(endStation)
                     || endStation.contains(currentNode.getStation())) {
-                StateKey prev=new StateKey(currentKey,current.totalTransfers);
+                StateKey prev=currentStateKey;
                 int t=current.totalTransfers;
                 while(prev!=null){
                     penalizedEdges.add(prev.nodeKey);
@@ -167,7 +168,8 @@ public class TransitAStar {
             // 遍历出边
             for (TransitEdge edge : graph.getEdges(currentKey)) {
                 String neighborKey = edge.getToKey();
-
+                StateKey neighborStateKey= new StateKey(neighborKey, current.totalTransfers);
+                if(closed.contains(neighborStateKey)) continue;
                 // 时间约束检查：跳过已开走的列车（出发时间 < 当前时间）
 //                if (edge.isTrainEdge()) {
 //                    TrainEdge trainEdge = (TrainEdge) edge;
@@ -184,8 +186,8 @@ public class TransitAStar {
 
                 if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers()]) {
                     cameFrom.put(
-                            new StateKey(neighborKey, current.totalTransfers),     // 普通边
-                            new StateKey(currentKey, current.totalTransfers)
+                            neighborStateKey,     // 普通边
+                            currentStateKey
                     );
                     dist.get(neighborKey)[current.getTotalTransfers()]= (float) tentativeG;
 
@@ -217,6 +219,9 @@ public class TransitAStar {
 
                     String neighborKey = node.getKey();
 
+                    StateKey neighborStateKey= new StateKey(neighborKey, current.totalTransfers+1);
+                    if(closed.contains(neighborStateKey)) continue;
+
                     // g(n) = 实际时间 + 票价折算时间
                     double penalizedCost = (penalizedEdges.contains(neighborKey) ? 1 : 0) * weightPenalize;
 
@@ -224,8 +229,8 @@ public class TransitAStar {
 
                     if (tentativeG < dist.get(neighborKey)[current.getTotalTransfers() + 1]) {
                         cameFrom.put(
-                                new StateKey(neighborKey, current.totalTransfers + 1), // 换乘等待边
-                                new StateKey(currentKey, current.totalTransfers)
+                                neighborStateKey, // 换乘等待边
+                                currentStateKey
                         );
                         dist.get(neighborKey)[current.getTotalTransfers()+1] = (float) tentativeG;
 
@@ -269,11 +274,11 @@ public class TransitAStar {
        for(int i=0;i<maxResults;i++){
            // 每轮搜索重置状态
            for(String nodeKey: graph.getAllNodeKeys()){
-               float[] distances = new float[maxTransfer + 1];
+               float[] distances = dist.get(nodeKey);
                Arrays.fill(distances,Float.MAX_VALUE);
-               dist.put(nodeKey,distances);
            }
            cameFrom.clear();
+           closed.clear();
 
 
            AStarResult result=aStar(
