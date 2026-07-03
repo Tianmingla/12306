@@ -142,6 +142,26 @@ services:
     networks:
       - 12306-network
 
+  # ==================== Data Importer ====================
+  data-importer:
+    build:
+      context: .
+      dockerfile: DataScript/Dockerfile
+    container_name: 12306-data-importer
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=123456
+      - MYSQL_DATABASE=my12306
+    volumes:
+      - ./DataScript/import.yml:/app/import.yml:ro
+    networks:
+      - 12306-network
+
   # ==================== Monitoring ====================
   prometheus:
     image: prom/prometheus:v2.47.0

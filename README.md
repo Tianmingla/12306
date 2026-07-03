@@ -423,6 +423,7 @@ graph TB
 | 12306-admin-frontend | 5174:80 | 管理端 Vue3 |
 | 12306-prometheus | 9090:9090 | Prometheus 监控 |
 | 12306-grafana | 3000:3000 | Grafana 可视化 |
+| 12306-data-importer | — | 数据导入（一次性执行） |
 
 
 #### 数据初始化
@@ -432,6 +433,55 @@ graph TB
 - MySQL：自动创建 `my12306` 数据库并导入表结构
 - Nacos：自动导入配置数据
 - RocketMQ：自动创建所需 Topic
+
+#### 数据导入
+
+项目提供了 `data-importer` 容器，可一键导入全部测试数据：
+
+```bash
+# 执行全量数据导入（按顺序执行 1-9 脚本）
+docker compose run --rm data-importer
+
+# 仅查看执行计划（不实际运行）
+docker compose run --rm data-importer python run_all.py --dry-run
+
+# 使用自定义配置
+docker compose run --rm data-importer python run_all.py --config /app/import.custom.yml
+```
+
+**配置文件**（`DataScript/import.yml`）：
+
+```yaml
+db:
+  host: mysql          # 数据库地址
+  port: 3306
+  user: root
+  password: "123456"
+  database: my12306
+
+scripts:
+  1_import_stations:
+    enabled: true       # 设为 false 可跳过此脚本
+  5_generate_users:
+    enabled: true
+    count: 100000       # 自定义生成数量
+  7_generate_orders:
+    enabled: false      # 跳过订单生成
+```
+
+执行顺序：
+
+| 序号 | 脚本 | 说明 | 可配置参数 |
+|------|------|------|-----------|
+| 1 | `1_import_stations` | 导入车站数据 | — |
+| 2 | `2_import_trains` | 导入车次数据 | — |
+| 3 | `3_import_train_stations` | 导入经停站数据 | — |
+| 4 | `4_5_generate_seats_and_carriages` | 生成座位和车厢数据 | — |
+| 5 | `5_generate_users` | 生成用户数据 | `count` |
+| 6 | `6_generate_passengers` | 生成乘车人数据 | — |
+| 7 | `7_generate_orders` | 生成订单数据 | `count` |
+| 8 | `8_generate_station_distances` | 生成站间距离数据 | — |
+| 9 | `9_generate_train_fare_configs` | 生成票价配置数据 | — |
 
 #### 环境变量说明
 

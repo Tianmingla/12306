@@ -1,0 +1,31 @@
+# 12306 数据导入配置文件
+# Docker 环境默认配置
+
+db:
+  host: mysql
+  port: 3306
+  user: root
+  password: "123456"
+  database: my12306
+
+scripts:
+  1_import_stations:
+    enabled: true
+  2_import_trains:
+    enabled: true
+  3_import_train_stations:
+    enabled: true
+  4_5_generate_seats_and_carriages:
+    enabled: true
+  5_generate_users:
+    enabled: true
+    count: 10000
+  6_generate_passengers:
+    enabled: true
+  7_generate_orders:
+    enabled: true
+    count: 10000
+  8_generate_station_distances:
+    enabled: true
+  9_generate_train_fare_configs:
+    enabled: true
