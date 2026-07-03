@@ -158,7 +158,7 @@ services:
       - MYSQL_PASSWORD=123456
       - MYSQL_DATABASE=my12306
     volumes:
-      - ./DataScript/import.yml:/app/import.yml:ro
+      - ./DataScript/import.json:/app/import.json:ro
     networks:
       - 12306-network
 

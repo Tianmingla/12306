@@ -1,0 +1,78 @@
+{
+  "database": {
+    "host": "mysql",
+    "port": 3306,
+    "user": "root",
+    "password": "123456",
+    "database": "my12306"
+  },
+  "scripts": [
+    {
+      "name": "import_stations",
+      "path": "1_import_stations.py",
+      "description": "导入车站数据 (t_station)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "import_trains",
+      "path": "2_import_trains.py",
+      "description": "导入车次数据 (t_train)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "import_train_stations",
+      "path": "3_import_train_stations.py",
+      "description": "导入车次经停站数据 (t_train_station)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "generate_seats_and_carriages",
+      "path": "4_5generate_seats_and_carriages.py",
+      "description": "生成座位和车厢数据 (t_seat, t_carriage)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "generate_users",
+      "path": "5_generate_users.py",
+      "description": "生成用户数据 (t_user)",
+      "enabled": true,
+      "params": {
+        "count": 5000
+      }
+    },
+    {
+      "name": "generate_passengers",
+      "path": "6_generate_passengers.py",
+      "description": "生成乘车人数据 (t_passenger)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "generate_orders",
+      "path": "7_generate_orders.py",
+      "description": "生成订单数据 (t_order, t_order_item)",
+      "enabled": true,
+      "params": {
+        "count": 10000
+      }
+    },
+    {
+      "name": "generate_station_distances",
+      "path": "8_generate_station_distances.py",
+      "description": "生成站间距离数据 (t_station_distance)",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "name": "generate_train_fare_configs",
+      "path": "9_generate_train_fare_configs.py",
+      "description": "生成票价配置数据 (t_train_fare_config)",
+      "enabled": true,
+      "params": {}
+    }
+  ]
+}

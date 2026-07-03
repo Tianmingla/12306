@@ -23,6 +23,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 import pymysql
 from pymysql.cursors import DictCursor
+import os
 
 # =============================================================================
 # 配置区域
@@ -30,11 +31,11 @@ from pymysql.cursors import DictCursor
 
 # 数据库配置
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': 'my12306',
+    'host': os.environ.get('DB_HOST', 'localhost'),
+    'port': int(os.environ.get('DB_PORT', 3306)),
+    'user': os.environ.get('DB_USER', 'root'),
+    'password': os.environ.get('DB_PASSWORD', '123456'),
+    'database': os.environ.get('DB_NAME', 'my12306'),
     'charset': 'utf8mb4',
     'cursorclass': DictCursor
 }

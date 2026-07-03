@@ -20,4 +20,4 @@ ENV MYSQL_HOST=mysql \
     MYSQL_PASSWORD=123456 \
     MYSQL_DATABASE=my12306
 
-ENTRYPOINT ["python", "run_all.py", "--config", "import.yml"]
+ENTRYPOINT ["python", "run_all.py", "--config", "import.json"]
