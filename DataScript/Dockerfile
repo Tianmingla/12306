@@ -5,12 +5,15 @@ WORKDIR /app
 # 安装依赖
 RUN pip install --no-cache-dir pymysql pyyaml
 
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 # 复制所有脚本和数据文件
 COPY DataScript/ /app/
 
 # 构建时解压 data.zip（如果 data/ 目录不存在）
 RUN if [ ! -d /app/data ] && [ -f /app/data.zip ]; then \
-      cd /app && unzip -q data.zip && rm data.zip; \
+      cd /app && unzip data.zip -d ./data && rm data.zip; \
     fi
 
 # 默认环境变量（可通过 docker-compose 环境变量覆盖）
