@@ -11,7 +11,8 @@ services:
         CF_Token: ""
         CF_Zone_ID: ""
       ports:
-        - "80:80" 
+        - "80:80"
+        - "443:443"
       depends_on:
         - frontend
         - admin-frontend
