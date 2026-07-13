@@ -7,6 +7,9 @@ services:
         context: .
         dockerfile: ./nginx/Dockerfile
       container_name: 12306-nginx-gateway
+      environment:
+        CF_Token: ""
+        CF_Zone_ID: ""
       ports:
         - "80:80" 
       depends_on:
