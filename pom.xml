@@ -14,36 +14,54 @@
     </modules>
 
     <properties>
-        <maven.compiler.source>22</maven.compiler.source>
-        <maven.compiler.target>22</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- ===== Java 版本统一为 17（Spring Boot 3.2 原生支持，避免未知兼容问题）===== -->
         <java.version>17</java.version>
-        <spring-boot.version>3.0.7</spring-boot.version>
-        <spring-cloud.version>2022.0.3</spring-cloud.version>
-        <spring-cloud-alibaba.version>2022.0.0.0-RC2</spring-cloud-alibaba.version>
-        <mybatis-spring-boot-starter.version>3.0.2</mybatis-spring-boot-starter.version>
-        <shardingsphere.version>5.3.2</shardingsphere.version>
-        <jjwt.version>0.9.1</jjwt.version>
-        <jjwt-api.version>0.11.5</jjwt-api.version>
-        <fastjson2.version>2.0.36</fastjson2.version>
-        <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
-        <jdbc.version>8.0.19</jdbc.version>
-        <dozer-core.version>6.5.2</dozer-core.version>
-        <hutool-all.version>5.8.27</hutool-all.version>
-        <redisson.version>3.21.3</redisson.version>
-        <guava.version>30.0-jre</guava.version>
-        <xxl-job.version>2.3.1</xxl-job.version>
-        <alipay-sdk-java.version>4.38.10.ALL</alipay-sdk-java.version>
-        <rocketmq-spring-boot-starter.version>2.2.3</rocketmq-spring-boot-starter.version>
-        <transmittable-thread-local.version>2.14.2</transmittable-thread-local.version>
-        <hippo4j-threadpool-config-mode.version>1.5.0</hippo4j-threadpool-config-mode.version>
-        <micrometer-registry-prometheus.version>1.10.6</micrometer-registry-prometheus.version>
-        <springdoc-openapi>2.6.0</springdoc-openapi>
-        <spring-ai.version>1.0.0</spring-ai.version>
-        <kryo.version>5.6.0</kryo.version>
-        <postgresql.version>42.7.3</postgresql.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-        <spring-boot-maven-plugin>2.7.18</spring-boot-maven-plugin>
+        <!-- ===== 核心框架升级 ===== -->
+        <spring-boot.version>3.2.7</spring-boot.version>              <!-- 3.2 最新稳定版 -->
+        <spring-cloud.version>2023.0.3</spring-cloud.version>         <!-- 对应 Boot 3.2.x -->
+        <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version> <!-- 适配 Spring Cloud 2023.0.x -->
+
+        <!-- ===== Spring AI 里程碑版本（核心）===== -->
+        <spring-ai.version>1.0.0-M5</spring-ai.version>              <!-- 要求 Boot ≥ 3.2.0 -->
+        <spring-ai-advisors-vector-store.version>1.1.0-M1-PLATFORM-2</spring-ai-advisors-vector-store.version>
+
+        <!-- ===== 数据库 & 驱动 ===== -->
+        <mybatis-spring-boot-starter.version>3.0.3</mybatis-spring-boot-starter.version> <!-- 最低兼容 3.2.x -->
+        <mybatis-plus.version>3.5.6</mybatis-plus.version>           <!-- 新版修复了 Boot 3.2 问题 -->
+        <jdbc.version>8.0.33</jdbc.version>                          <!-- 升级一下更安全 -->
+        <postgresql.version>42.7.3</postgresql.version>              <!-- 原版本 OK，保留 -->
+
+        <!-- ===== 微服务组件 ===== -->
+        <shardingsphere.version>5.4.1</shardingsphere.version>       <!-- 5.3.2 对 Boot 3.2 支持不好，升级 -->
+        <rocketmq-spring-boot-starter.version>2.3.0</rocketmq-spring-boot-starter.version> <!-- 适配 Boot 3.x -->
+        <redisson.version>3.27.2</redisson.version>                  <!-- 建议升级，老版本可能有兼容问题 -->
+        <xxl-job.version>2.4.1</xxl-job.version>                     <!-- 2.3.1 适配未知，升级到最新 -->
+
+        <!-- ===== 工具库 ===== -->
+        <jjwt.version>0.9.1</jjwt.version>                           <!-- 这个版本太老（基于 javax），若报错建议换成 jjwt-api 0.12.5 -->
+        <jjwt-api.version>0.12.5</jjwt-api.version>                  <!-- 增加新版 jwt 备选 -->
+        <fastjson2.version>2.0.49</fastjson2.version>                <!-- 小版本升级 -->
+        <hutool-all.version>5.8.29</hutool-all.version>
+        <guava.version>33.2.1-jre</guava.version>                    <!-- 30.0 太老，可能缺方法 -->
+        <transmittable-thread-local.version>2.14.4</transmittable-thread-local.version>
+
+        <!-- ===== 监控 & 文档 ===== -->
+        <micrometer-registry-prometheus.version>1.12.7</micrometer-registry-prometheus.version> <!-- 与 Boot 3.2 捆绑版本一致 -->
+        <springdoc-openapi>2.6.0</springdoc-openapi>                 <!-- OK -->
+
+        <!-- ===== 其他 ===== -->
+        <dozer-core.version>6.5.2</dozer-core.version>
+        <alipay-sdk-java.version>4.38.10.ALL</alipay-sdk-java.version> <!-- 不强制动，但注意依赖冲突 -->
+        <hippo4j-threadpool-config-mode.version>1.5.0</hippo4j-threadpool-config-mode.version>
+        <kryo.version>5.6.0</kryo.version>
+
+        <!-- ===== 插件版本：强烈建议删除，让 spring-boot-starter-parent 自动管理 ===== -->
+        <!-- 如果非要指定，必须与 spring-boot.version 一致 -->
+         <spring-boot-maven-plugin>3.2.7</spring-boot-maven-plugin>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -207,6 +225,33 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Spring AI - OpenAI 兼容 (SSNAI等OpenAI格式API) -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+
+            <!-- Spring AI - Ollama 本地模型 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+
+            <!-- Spring AI - PGVector Store -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-pgvector-store-spring-boot-starter</artifactId>
+                <version>${spring-ai.version}</version>
+            </dependency>
+
+            <!-- Spring AI - RAG -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-advisors-vector-store</artifactId>
+                <version>${spring-ai-advisors-vector-store.version}</version>
+            </dependency>
 
             <!-- Spring AI Alibaba (已替换为OpenAI兼容模式，保留备用) -->
             <!--
@@ -233,6 +278,21 @@
 
         </dependencies>
     </dependencyManagement>
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <!-- 如果用的是 SNAPSHOT 版本还需要这个 -->
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases><enabled>false</enabled></releases>
+        </repository>
+    </repositories>
     <build>
         <pluginManagement>
             <plugins>
