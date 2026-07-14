@@ -5,7 +5,7 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 
 /**
  * 订单服务 Feign 客户端
@@ -17,23 +17,32 @@ public interface OrderFeignClient {
      * 查询订单详情
      */
     @GetMapping("/api/order/detail/{orderSn}")
-    FeignResult getOrderDetail(@PathVariable("orderSn") String orderSn);
+    FeignResult getOrderDetail(@PathVariable("orderSn") String orderSn,
+                               @RequestHeader("X-User-Name") String userName);
 
     /**
      * 查询订单列表
      */
     @GetMapping("/api/order/list")
-    FeignResult getOrderList();
+    FeignResult getOrderList(@RequestHeader("X-User-Name") String userName);
 
     /**
      * 退票
      */
     @PostMapping("/api/order/refund/{orderSn}")
-    FeignResult refundOrder(@PathVariable("orderSn") String orderSn);
+    FeignResult refundOrder(@PathVariable("orderSn") String orderSn,
+                            @RequestHeader("X-User-Name") String userName);
 
     /**
      * 取消订单
      */
     @PostMapping("/api/order/cancel/{orderSn}")
-    FeignResult cancelOrder(@PathVariable("orderSn") String orderSn);
+    FeignResult cancelOrder(@PathVariable("orderSn") String orderSn,
+                            @RequestHeader("X-User-Name") String userName);
+
+    /**
+     * 候补列表
+     */
+    @GetMapping("/api/order/waitlist/list")
+    FeignResult getWaitlistList(@RequestHeader("X-User-Name") String userName);
 }

@@ -1,5 +1,6 @@
 package com.lalal.modules.config;
 
+import com.lalal.modules.tool.ToolRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
@@ -9,24 +10,25 @@ import org.springframework.context.annotation.Primary;
 
 /**
  * AI 模型配置
- * 双模型架构：
+ * 双模型架构 + @Tool 工具注册：
  * 1. SSNAI OpenAI兼容API — 主力模型，处理复杂推理和工具调用
  * 2. Ollama本地模型(qwen2.5:3b) — 处理简单问答，降本60%
  *
- * 注意：ChatMemory Advisor 不在这里配置 defaultAdvisors，
- * 而是在 AgentServiceImpl 调用时显式传入，因为每次请求的 conversationId 不同
+ * 注意：
+ * - ChatMemory Advisor 在 AgentServiceImpl 调用时显式传入（因为每次 conversationId 不同）
+ * - 工具通过 ToolRegistry 集中注册，仅 complexChatClient 需要工具能力
  */
 @Configuration
 public class AiModelConfig {
 
     /**
      * 主力 ChatClient — SSNAI OpenAI兼容API
-     * 处理复杂推理、工具调用、RAG增强问答
-     * 标记为 @Primary，默认注入此模型
+     * 注册所有业务工具，具备工具调用能力
      */
     @Bean
     @Primary
-    public ChatClient complexChatClient(OpenAiChatModel openAiChatModel) {
+    public ChatClient complexChatClient(OpenAiChatModel openAiChatModel,
+                                        ToolRegistry toolRegistry) {
         return ChatClient.builder(openAiChatModel)
                 .defaultSystem("""
                     你是12306铁路客服智能助手"智行"，专门帮助用户处理铁路购票相关问题。
@@ -38,20 +40,24 @@ public class AiModelConfig {
                     4. 换乘推荐：推荐最优换乘方案
                     5. 候补下单：帮助用户候补购票
                     6. 政策解答：退改签政策、购票规则、乘车须知
+                    7. 乘车人管理：查询用户的乘车人信息
 
                     ## 行为规范
                     - 回答使用中文，态度友好专业
                     - 需要执行具体操作时，调用相应工具，不要编造数据
                     - 涉及购票、退票、改签等敏感操作，必须先向用户确认
-                    - 如果用户信息不完整，主动询问补充
+                    - 如果用户信息不完整，主动询问补充（如缺少乘车日期、出发地等）
                     - 不确定的信息，明确告知用户，不要猜测
+                    - 退票手续费规则：开车前8天以上免手续费，48小时至8天收5%，24小时至48小时收10%，不足24小时收20%
                     """)
+
+                .defaultTools(toolRegistry.getAllToolCallbacks())
                 .build();
     }
 
     /**
      * 轻量 ChatClient — Ollama本地模型
-     * 处理简单问答：购票规则、退改签政策、乘车须知等常识问题
+     * 不注册工具，仅处理简单常识问答
      */
     @Bean("simpleChatClient")
     public ChatClient simpleChatClient(OllamaChatModel ollamaChatModel) {

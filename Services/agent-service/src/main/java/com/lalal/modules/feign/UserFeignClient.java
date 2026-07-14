@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 public interface UserFeignClient {
 
     /**
-     * 查询乘车人列表
+     * 查询当前用户的乘车人列表
      */
     @GetMapping("/api/user/passengers")
     FeignResult getPassengers(@RequestHeader("X-User-Id") String userId);

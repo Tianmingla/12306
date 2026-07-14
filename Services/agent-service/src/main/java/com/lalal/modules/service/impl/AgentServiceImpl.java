@@ -5,11 +5,16 @@ import com.lalal.modules.dto.ChatRequest;
 import com.lalal.modules.dto.ChatResponse;
 import com.lalal.modules.service.AgentService;
 import com.lalal.modules.service.ModelRouterService;
+import com.lalal.modules.tool.ToolContextHelper;
+import com.lalal.modules.tool.ToolRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.tool.resolution.ToolCallbackResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -22,9 +27,9 @@ import java.util.concurrent.CompletableFuture;
  * 已完成：
  * - Step 2: 多模型路由(简单→Ollama, 复杂→SSNAI) + 基础对话
  * - Step 3: ChatMemory记忆持久化(MySQL+Redis+Kryo) + Advisor链
+ * - Step 4: @Tool工具调用 + ToolContext身份传递
  *
  * 后续步骤逐步完善：
- * - Step 4: @Tool 工具调用
  * - Step 5: RAG 知识库
  * - Step 6: SSE 流式输出完善
  * - Step 7: 分层智能体
@@ -37,7 +42,9 @@ public class AgentServiceImpl implements AgentService {
     private final ChatClient complexChatClient;
     private final ModelRouterService modelRouterService;
     private final AgentProperties agentProperties;
-    private final MessageChatMemoryAdvisor memoryAdvisor;
+    private final ChatMemory chatMemory;
+    private final ToolRegistry toolRegistry;
+
 
     @Override
     public SseEmitter streamChat(ChatRequest request, String userId) {
@@ -51,14 +58,16 @@ public class AgentServiceImpl implements AgentService {
                 // 模型路由
                 ChatClient chatClient = modelRouterService.route(request.getMessage());
                 boolean isComplex = modelRouterService.isComplex(request.getMessage());
+                MessageChatMemoryAdvisor memoryAdvisor = (MessageChatMemoryAdvisor) MessageChatMemoryAdvisor.builder(chatMemory)
+                        .conversationId(conversationId)
+                        .build();
 
                 // TODO: Step 6 - 完善SSE流式输出，使用ChatClient.stream()实时推送
-                // 关键：advisors()必须同时传入memoryAdvisor和conversationId参数
-                // 不能只传参数不传advisor，否则defaultAdvisors会被覆盖
                 String response = chatClient.prompt()
                         .user(request.getMessage())
                         .advisors(memoryAdvisor)
-                        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                        .toolContext(ToolContextHelper.buildToolContext(userId, null).getContext())
+                        .tools(toolRegistry.getAllToolCallbacks()) //TODO if工具越来越多上下文不够 需传多agent架构
                         .call()
                         .content();
 
@@ -102,25 +111,26 @@ public class AgentServiceImpl implements AgentService {
         ChatClient chatClient = modelRouterService.route(request.getMessage());
         boolean isComplex = modelRouterService.isComplex(request.getMessage());
 
-        // TODO: Step 4 - 加入工具调用
-        // TODO: Step 5 - 加入RAG知识库检索
-
-        // 调用ChatClient，必须同时传入memoryAdvisor和conversationId
-        // .advisors(memoryAdvisor) — 显式传入记忆Advisor
-        // .advisors(a -> a.param(...)) — 传入会话ID参数
-        // 两者缺一不可：缺advisor则记忆不生效，缺conversationId则无法区分会话
+        // 调用ChatClient：
+        // 1. memoryAdvisor — 多轮对话记忆
+        // 2. conversationId — 会话隔离
+        // 3. toolContext — 传递用户身份给@Tool方法
+        MessageChatMemoryAdvisor memoryAdvisor = (MessageChatMemoryAdvisor) MessageChatMemoryAdvisor.builder(chatMemory)
+                .conversationId(conversationId)
+                .build();
         String response = chatClient.prompt()
                 .user(request.getMessage())
                 .advisors(memoryAdvisor)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .toolContext(ToolContextHelper.buildToolContext(userId, null).getContext())
+                .tools(toolRegistry.getAllToolCallbacks()) //TODO if工具越来越多上下文不够 需传多agent架构
                 .call()
                 .content();
 
         ChatResponse chatResponse = ChatResponse.text(response, conversationId);
-        log.info("Chat completed: conversationId={}, model={}, isComplex={}",
+        log.info("Chat completed: conversationId={}, model={}, isComplex={}, userId={}",
                 conversationId,
                 isComplex ? agentProperties.getModel().getComplex() : agentProperties.getModel().getSimple(),
-                isComplex);
+                isComplex, userId);
         return chatResponse;
     }
 
@@ -134,9 +144,6 @@ public class AgentServiceImpl implements AgentService {
         }
     }
 
-    /**
-     * 解析会话ID，如果未提供则生成新的
-     */
     private String resolveConversationId(ChatRequest request) {
         String conversationId = request.getConversationId();
         if (conversationId == null || conversationId.isBlank()) {
@@ -145,9 +152,6 @@ public class AgentServiceImpl implements AgentService {
         return conversationId;
     }
 
-    /**
-     * 转义JSON字符串中的特殊字符
-     */
     private String escapeJson(String text) {
         if (text == null) return "";
         return text

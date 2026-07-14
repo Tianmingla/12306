@@ -6,6 +6,7 @@ import com.esotericsoftware.kryo.io.Output;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.messages.AssistantMessage.ToolCall;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
+import org.springframework.ai.model.Media;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -107,13 +108,13 @@ public class KryoMessageSerializer {
         // 写入消息类型标识
         output.writeString(message.getMessageType().getValue());
         // text
-        output.writeString(message.getContent()!= null ?message.getContent(): "");
+        output.writeString(message.getText()!= null ?message.getText(): "");
 
         switch (message.getMessageType()) {
             case USER -> writeUserMessage(kryo, output, (UserMessage) message);
             case ASSISTANT -> writeAssistantMessage(kryo, output, (AssistantMessage) message);
             case SYSTEM -> writeSystemMessage(kryo, output, (SystemMessage) message);
-            case FUNCTION -> writeToolResponseMessage(kryo, output, (ToolResponseMessage) message);
+            case TOOL -> writeToolResponseMessage(kryo, output, (ToolResponseMessage) message);
         }
     }
 
@@ -138,7 +139,7 @@ public class KryoMessageSerializer {
      * AssistantMessage: text + metadata
      */
     private static void writeAssistantMessage(Kryo kryo, Output output, AssistantMessage msg) {
-        Map<String,Object> metadata=msg.getProperties();
+        Map<String,Object> metadata=msg.getMetadata();
         if (metadata != null && !metadata.isEmpty()) {
             output.writeInt(metadata.size());
             for (Map.Entry<String, Object> entry : metadata.entrySet()) {
@@ -189,7 +190,7 @@ public class KryoMessageSerializer {
             case USER    -> readUserMessage(kryo, input, text);
             case ASSISTANT -> readAssistantMessage(kryo, input, text);
             case SYSTEM  -> readSystemMessage(kryo, input, text);
-            case FUNCTION    -> readToolResponseMessage(kryo, input, text);
+            case TOOL    -> readToolResponseMessage(kryo, input, text);
         };
     }
 

@@ -5,8 +5,6 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-import java.util.Map;
-
 /**
  * 车票服务 Feign 客户端
  */
@@ -14,7 +12,7 @@ import java.util.Map;
 public interface TicketFeignClient {
 
     /**
-     * 搜索车次
+     * 搜索车次（直达）
      */
     @GetMapping("/api/ticket/search")
     FeignResult searchTrains(@RequestParam("from") String from,

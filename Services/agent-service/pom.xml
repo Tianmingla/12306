@@ -24,6 +24,11 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-core</artifactId>
+        </dependency>
+
         <!-- Spring AI - OpenAI 兼容 (SSNAI等OpenAI格式API) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -122,21 +127,6 @@
             <artifactId>fastjson2</artifactId>
         </dependency>
     </dependencies>
-    <repositories>
-        <repository>
-            <id>spring-milestones</id>
-            <name>Spring Milestones</name>
-            <url>https://repo.spring.io/milestone</url>
-            <snapshots><enabled>false</enabled></snapshots>
-        </repository>
-        <!-- 如果用的是 SNAPSHOT 版本还需要这个 -->
-        <repository>
-            <id>spring-snapshots</id>
-            <name>Spring Snapshots</name>
-            <url>https://repo.spring.io/snapshot</url>
-            <releases><enabled>false</enabled></releases>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
