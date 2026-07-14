@@ -8,6 +8,8 @@ import com.lalal.modules.service.ModelRouterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -17,11 +19,11 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * AI Agent 智能客服服务实现
- * 当前完成：
+ * 已完成：
  * - Step 2: 多模型路由(简单→Ollama, 复杂→SSNAI) + 基础对话
+ * - Step 3: ChatMemory记忆持久化(MySQL+Redis+Kryo) + Advisor链
  *
  * 后续步骤逐步完善：
- * - Step 3: 记忆持久化
  * - Step 4: @Tool 工具调用
  * - Step 5: RAG 知识库
  * - Step 6: SSE 流式输出完善
@@ -35,6 +37,7 @@ public class AgentServiceImpl implements AgentService {
     private final ChatClient complexChatClient;
     private final ModelRouterService modelRouterService;
     private final AgentProperties agentProperties;
+    private final MessageChatMemoryAdvisor memoryAdvisor;
 
     @Override
     public SseEmitter streamChat(ChatRequest request, String userId) {
@@ -50,8 +53,12 @@ public class AgentServiceImpl implements AgentService {
                 boolean isComplex = modelRouterService.isComplex(request.getMessage());
 
                 // TODO: Step 6 - 完善SSE流式输出，使用ChatClient.stream()实时推送
+                // 关键：advisors()必须同时传入memoryAdvisor和conversationId参数
+                // 不能只传参数不传advisor，否则defaultAdvisors会被覆盖
                 String response = chatClient.prompt()
                         .user(request.getMessage())
+                        .advisors(memoryAdvisor)
+                        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                         .call()
                         .content();
 
@@ -95,12 +102,17 @@ public class AgentServiceImpl implements AgentService {
         ChatClient chatClient = modelRouterService.route(request.getMessage());
         boolean isComplex = modelRouterService.isComplex(request.getMessage());
 
-        // TODO: Step 3 - 加入记忆持久化
         // TODO: Step 4 - 加入工具调用
         // TODO: Step 5 - 加入RAG知识库检索
 
+        // 调用ChatClient，必须同时传入memoryAdvisor和conversationId
+        // .advisors(memoryAdvisor) — 显式传入记忆Advisor
+        // .advisors(a -> a.param(...)) — 传入会话ID参数
+        // 两者缺一不可：缺advisor则记忆不生效，缺conversationId则无法区分会话
         String response = chatClient.prompt()
                 .user(request.getMessage())
+                .advisors(memoryAdvisor)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call()
                 .content();
 

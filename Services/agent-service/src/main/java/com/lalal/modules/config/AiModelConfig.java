@@ -1,10 +1,8 @@
 package com.lalal.modules.config;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -14,6 +12,9 @@ import org.springframework.context.annotation.Primary;
  * 双模型架构：
  * 1. SSNAI OpenAI兼容API — 主力模型，处理复杂推理和工具调用
  * 2. Ollama本地模型(qwen2.5:3b) — 处理简单问答，降本60%
+ *
+ * 注意：ChatMemory Advisor 不在这里配置 defaultAdvisors，
+ * 而是在 AgentServiceImpl 调用时显式传入，因为每次请求的 conversationId 不同
  */
 @Configuration
 public class AiModelConfig {
