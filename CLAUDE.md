@@ -86,6 +86,7 @@ Default login: `admin / 123456`
 | order-service | 8083 |
 | user-service | 8084 |
 | admin-service | 8085 |
+| agent-service | 8086 |
 
 ## Infrastructure Dependencies
 
@@ -104,8 +105,55 @@ Services/
 ├── seat-service/       # Seat selection and management
 ├── order-service/      # Order creation, payment (Alipay sandbox integration)
 ├── user-service/       # User auth (JWT), passenger management, SMS login
-└── admin-service/      # Admin backend management (CRUD, statistics)
+├── admin-service/      # Admin backend management (CRUD, statistics)
+└── agent-service/      # AI Agent智能客服 (Spring AI + RAG + 工具调用 + ReAct)
 ```
+
+### Agent Service Architecture
+
+agent-service 是基于 Spring AI 的智能客服微服务，支持多轮对话、RAG知识库检索、工具调用和人工确认。
+
+**核心设计**：
+- **双模型路由**: 通义千问(DashScope)处理复杂推理+工具调用，Ollama本地模型处理简单问答(降本60%)
+- **记忆持久化**: MySQL + Redis + Kryo高性能序列化，服务重启后对话上下文恢复
+- **RAG知识库**: PGvector向量存储，退改签政策/购票规则/常见问题等文档检索
+- **@Tool工具调用**: 8种业务工具(车次搜索/购票/订单查询/退改签等)，通过Feign调用其他服务
+- **SSE流式输出**: SseEmitter + CompletableFuture，实时输出思考过程和工具调用结果
+- **Human-in-the-Loop**: 购票/退票/改签等敏感操作需用户确认后执行
+- **ReAct模式**: 自主思考并调用工具完成复杂任务，步骤限制+死循环检测
+
+**包结构**：
+```
+agent-service/src/main/java/com/lalal/modules/
+├── config/        # 配置类(AI模型配置、Web配置)
+├── controller/    # AgentController(SSE流式+同步接口)
+├── service/       # AgentService接口及实现
+├── tool/          # @Tool注解的业务工具类
+├── memory/        # 记忆持久化(MySQL+Redis+Kryo)
+├── rag/           # RAG知识库(ETL+检索+重写)
+├── agent/         # 分层智能体(Planner+Executor)
+├── feign/         # Feign客户端(调用其他微服务)
+├── dto/           # DTO类(ChatRequest/ChatResponse等)
+├── entity/        # 实体类(AgentMemoryDO/AgentPendingActionDO)
+├── mapper/        # MyBatis-Plus Mapper
+└── sse/           # SSE流式封装
+```
+
+**API 端点**：
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/agent/chat/stream` | POST | SSE流式对话（实时输出思考过程） |
+| `/api/agent/chat` | POST | 同步对话（简单问答） |
+| `/api/agent/confirm/{confirmId}` | POST | 人工确认操作 |
+| `/api/agent/health` | GET | 健康检查 |
+
+**数据表**：
+- `t_agent_memory`: 对话记忆（conversation_id, user_id, role, content[Kryo], message_type）
+- `t_agent_pending_action`: 待确认操作（confirm_id, action_type, action_params[JSON], status）
+
+**网关路由**：
+- `/api/agent/**` -> agent-service
+- `/api/agent/health` 路径跳过JWT认证
 
 ### Admin Service Architecture
 

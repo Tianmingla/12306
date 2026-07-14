@@ -18,6 +18,7 @@
         <module>gateway-service</module>
         <module>user-service</module>
         <module>admin-service</module>
+        <module>agent-service</module>
     </modules>
 
     <properties>

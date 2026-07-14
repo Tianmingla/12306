@@ -32,13 +32,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
-        // Skip authentication for login / 短信验证码 / 支付宝回调 / Admin登录
+        // Skip authentication for login / 短信验证码 / 支付宝回调 / Admin登录 / Agent健康检查
         if (path.contains("/api/user/login")
                 || path.contains("/api/user/register")
                 || path.contains("/api/user/sms/send")
                 || path.contains("/api/order/pay/notify")
                 || path.contains("/api/order/pay/return")
-                || path.contains("/api/admin/auth/login")) {
+                || path.contains("/api/admin/auth/login")
+                || path.contains("/api/agent/health")) {
             return chain.filter(exchange);
         }
 

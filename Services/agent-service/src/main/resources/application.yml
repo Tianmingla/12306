@@ -1,0 +1,128 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: agent-service
+
+  # ============ 数据源配置 ============
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 10
+      minimum-idle: 2
+      auto-commit: true
+      connection-test-query: SELECT 1
+
+  # ============ Redis 配置 ============
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 2000ms
+
+  # ============ AI 模型配置 ============
+  ai:
+    # OpenAI 兼容 API (SSNAI) - 主力模型，处理复杂推理和工具调用
+    # Spring AI 会自动拼接 /v1，所以 base-url 不要加 /v1
+    openai:
+      base-url: https://api.ssnaiyun.com
+      api-key: ${SSNAI_API_KEY:sk-your-api-key-here}
+      chat:
+        options:
+          # 模型名以SSNAI模型广场显示为准，用户自行替换
+          model: ${SSNAI_MODEL:qwen-plus}
+          temperature: 0.7
+          top-p: 0.8
+
+    # Ollama 本地模型 - 处理简单问答，降本
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen2.5:3b
+          temperature: 0.7
+
+    # PGVector 向量存储 - RAG知识库
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        initialize-schema: true
+
+  # ============ Nacos 服务发现 ============
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+      password: ""
+      username: ""
+
+# ============ MyBatis-Plus 配置 ============
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ============ Agent 自定义配置 ============
+agent:
+  # 模型路由：简单问答走Ollama，复杂推理走SSNAI云端API
+  model:
+    simple: ollama              # 简单问答模型 (qwen2.5:3b 本地)
+    complex: openai             # 复杂推理+工具调用模型 (SSNAI OpenAI兼容)
+  # 问题复杂度判断关键词
+  complexity:
+    # 包含以下关键词的问题路由到复杂模型
+    complex-keywords: 查询,搜索,购买,购票,退票,改签,订单,换乘,推荐,帮我,我要,请帮我,查一下,搜索一下
+    # 纯问答类关键词路由到简单模型
+    simple-keywords: 什么是,怎么,如何,规则,政策,规定,须知,能不能,可以吗,区别,说明
+  # 记忆持久化配置
+  memory:
+    max-messages: 50            # 单次对话最大消息数
+    redis-ttl: 86400            # Redis记忆过期时间(秒)，24小时
+    mysql-enabled: true         # 是否启用MySQL持久化
+  # RAG 配置
+  rag:
+    top-k: 5                    # 检索Top-K文档
+    similarity-threshold: 0.5   # 相似度阈值
+  # 智能体配置
+  agent:
+    max-steps: 10               # ReAct最大步骤数
+    step-timeout: 30000         # 单步超时(ms)
+    human-in-the-loop: true     # 是否启用人工确认
+    confirm-actions:            # 需要人工确认的操作
+      - purchase_ticket
+      - refund_ticket
+      - cancel_order
+      - change_ticket
+  # SSE 配置
+  sse:
+    timeout: 300000             # SSE连接超时(ms)，5分钟
+
+# ============ 监控配置 ============
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.lalal.modules: DEBUG
+    org.springframework.ai: DEBUG
