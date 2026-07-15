@@ -67,7 +67,7 @@ services:
       - 12306-network
 
   nacos:
-    image: nacos/nacos-server:v2.2.3
+    image: nacos/nacos-server:v2.3.0
     container_name: 12306-nacos
     environment:
       - MODE=standalone
@@ -116,6 +116,7 @@ services:
   rocketmq-broker:
     image: apache/rocketmq:5.1.4
     container_name: 12306-rocketmq-broker
+    user: "0:0"
     ports:
       - "10911:10911"
       - "10909:10909"
@@ -435,15 +436,17 @@ services:
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - OLLAMA_HOST=ollama
+      - OLLAMA_HOST=host.docker.internal
       - OLLAMA_PORT=11434
       - PGVECTOR_HOST=pgvector
       - PGVECTOR_PORT=5432
       - PGVECTOR_DB=rag12306
       - PGVECTOR_USERNAME=postgres
       - PGVECTOR_PASSWORD=123456
-      - SSNAI_API_KEY=${SSNAI_API_KEY:-sk-your-api-key-here}
-      - SSNAI_MODEL=${SSNAI_MODEL:-qwen-plus}
+      - SSNAI_API_KEY=
+      - SSNAI_MODEL=glm-5.1
+      - OLLAMA_EMBEDDING_MODEL=bge-m3
+      - OLLAMA_CHAT_MODEL=qwen2.5:3b
       - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:
@@ -454,8 +457,8 @@ services:
         condition: service_healthy
       pgvector:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
+#      ollama:
+#        condition: service_healthy
     networks:
       - 12306-network
 

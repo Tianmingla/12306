@@ -18,6 +18,7 @@ COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
 COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
 COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
 COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
+COPY Services/agent-service/pom.xml ./Services/agent-service/pom.xml
 
 #Download dependencies
 RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B

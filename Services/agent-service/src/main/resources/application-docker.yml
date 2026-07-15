@@ -53,8 +53,6 @@ spring:
       # Embedding 模型
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-        options:
-          dimensions: 768
 
     # PGVector 向量存储 - 参数在 PgVectorDataSourceConfig 中硬编码
     # 连接信息见下方 pgvector.datasource

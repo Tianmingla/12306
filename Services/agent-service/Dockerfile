@@ -13,6 +13,12 @@ COPY Frameworks/log/pom.xml ./Frameworks/log/pom.xml
 COPY Frameworks/mq/pom.xml ./Frameworks/mq/pom.xml
 COPY Services/pom.xml ./Services/pom.xml
 COPY Services/agent-service/pom.xml ./Services/agent-service/pom.xml
+COPY Services/order-service/pom.xml ./Services/order-service/pom.xml
+COPY Services/ticket-service/pom.xml ./Services/ticket-service/pom.xml
+COPY Services/seat-service/pom.xml ./Services/seat-service/pom.xml
+COPY Services/gateway-service/pom.xml ./Services/gateway-service/pom.xml
+COPY Services/user-service/pom.xml ./Services/user-service/pom.xml
+COPY Services/admin-service/pom.xml ./Services/admin-service/pom.xml
 
 # Download dependencies
 RUN --mount=type=cache,target=/root/.m2/repository mvn dependency:go-offline -B

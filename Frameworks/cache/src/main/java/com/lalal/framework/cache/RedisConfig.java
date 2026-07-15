@@ -13,6 +13,7 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalTimeSerializer;
 import com.lalal.framework.cache.RedisSerializer.DefaultValueRedisSerializer;
 import com.lalal.framework.cache.RedisSerializer.ValueRedisSerializer;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -42,7 +43,7 @@ public class RedisConfig {
         return template;
     }
     @Bean
-    public SafeCacheTemplate safeCacheTemplate(RedisTemplate redisTemplate, RedissonClient redissonClient){
+    public SafeCacheTemplate safeCacheTemplate(@Qualifier("redisTemplate") RedisTemplate redisTemplate, RedissonClient redissonClient){
         ObjectMapper mapper = new ObjectMapper();
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);//关闭带类型信息
         JavaTimeModule javaTimeModule = new JavaTimeModule();
