@@ -1,0 +1,131 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: agent-service
+
+  # ============ MySQL 主数据源（Docker） ============
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/my12306?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: 123456
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # ============ Redis（Docker） ============
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
+
+  # ============ AI 模型配置 ============
+  ai:
+    # 禁用 OpenAI Embedding，用 Ollama 本地 Embedding
+    model:
+      embedding: none
+
+    # OpenAI 兼容 API (SSNAI)
+    openai:
+      base-url: ${SSNAI_BASE_URL:https://api.ssnaiyun.com}
+      api-key: ${SSNAI_API_KEY:sk-your-api-key-here}
+      chat:
+        options:
+          model: ${SSNAI_MODEL:qwen-plus}
+          temperature: 0.7
+          top-p: 0.8
+
+    # Ollama 本地模型（Docker 内网）
+    ollama:
+      base-url: http://${OLLAMA_HOST:ollama}:${OLLAMA_PORT:11434}
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:qwen2.5:3b}
+          temperature: 0.7
+      # Embedding 模型
+      embedding:
+        model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+        options:
+          dimensions: 768
+
+    # PGVector 向量存储 - 参数在 PgVectorDataSourceConfig 中硬编码
+    # 连接信息见下方 pgvector.datasource
+
+  # ============ Nacos（Docker） ============
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+      password: ""
+      username: ""
+
+# ============ PGvector 专用 PostgreSQL 数据源（Docker） ============
+pgvector:
+  datasource:
+    url: jdbc:postgresql://${PGVECTOR_HOST:pgvector}:${PGVECTOR_PORT:5432}/${PGVECTOR_DB:rag12306}
+    username: ${PGVECTOR_USERNAME:postgres}
+    password: ${PGVECTOR_PASSWORD:123456}
+
+# ============ MyBatis-Plus ============
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ============ Agent 配置 ============
+agent:
+  model:
+    simple: ollama
+    complex: openai
+  complexity:
+    complex-keywords: 查询,搜索,购买,购票,退票,改签,订单,换乘,推荐,帮我,我要,请帮我,查一下,搜索一下
+    simple-keywords: 什么是,怎么,如何,规则,政策,规定,须知,能不能,可以吗,区别,说明
+  memory:
+    max-messages: 50
+    redis-ttl: 86400
+    mysql-enabled: true
+  rag:
+    top-k: 5
+    similarity-threshold: 0.5
+    auto-load: false
+  agent:
+    max-steps: 10
+    step-timeout: 30000
+    human-in-the-loop: true
+    confirm-actions:
+      - purchase_ticket
+      - refund_ticket
+      - cancel_order
+      - change_ticket
+  sse:
+    timeout: 300000
+    retry-interval: 3000
+    send-keep-alive: true
+    keep-alive-interval: 30000
+
+# ============ 监控 ============
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.lalal.modules: INFO
+    org.springframework.ai: WARN
