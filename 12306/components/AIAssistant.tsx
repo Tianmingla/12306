@@ -1,8 +1,21 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Sparkles, Loader2 } from 'lucide-react';
-import { sendMessageToGemini } from '../services/geminiService';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MessageSquare, X, Send, Sparkles, Loader2, Wrench, Brain, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { sendMessageToAgent, confirmAction } from '../services/agentService';
 import { ChatMessage } from '../types';
+
+/** 工具名 → 中文标签映射 */
+const TOOL_LABELS: Record<string, string> = {
+  searchDirectTrains: '搜索车次',
+  searchTransferTrains: '搜索换乘',
+  getTrainStationDetails: '查询经停站',
+  queryOrderDetail: '查询订单',
+  queryMyOrders: '查询订单列表',
+  refundTicket: '退票',
+  cancelOrder: '取消订单',
+  queryWaitlistOrders: '查询候补',
+  queryMyPassengers: '查询乘车人',
+};
 
 const AIAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,12 +24,16 @@ const AIAssistant: React.FC = () => {
     {
       id: '1',
       role: 'model',
-      text: '您好！我是您的智能出行助手。请问有什么可以帮您？查询车票、了解政策还是规划行程？',
-      timestamp: new Date()
+      text: '您好！我是智行客服助手 🚄 请问有什么可以帮您？查询车票、了解退改签政策还是规划行程？',
+      timestamp: new Date(),
+      type: 'text',
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamingMsgIdRef = useRef<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -26,6 +43,37 @@ const AIAssistant: React.FC = () => {
     scrollToBottom();
   }, [messages, isOpen]);
 
+  /** 获取或创建流式消息的 ID */
+  const getOrCreateStreamingMsgId = useCallback(() => {
+    if (streamingMsgIdRef.current) return streamingMsgIdRef.current;
+    const id = Date.now().toString();
+    streamingMsgIdRef.current = id;
+    return id;
+  }, []);
+
+  /** 追加 token 到正在流式输出的消息 */
+  const appendToken = useCallback((token: string, convId: string) => {
+    const msgId = getOrCreateStreamingMsgId();
+    setMessages(prev => {
+      const existing = prev.find(m => m.id === msgId);
+      if (existing) {
+        return prev.map(m =>
+          m.id === msgId ? { ...m, text: m.text + token } : m
+        );
+      }
+      // 创建新的流式消息
+      return [...prev, {
+        id: msgId,
+        role: 'model' as const,
+        text: token,
+        timestamp: new Date(),
+        type: 'text' as const,
+        conversationId: convId,
+        isStreaming: true,
+      }];
+    });
+  }, [getOrCreateStreamingMsgId]);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -33,28 +81,212 @@ const AIAssistant: React.FC = () => {
       id: Date.now().toString(),
       role: 'user',
       text: input,
-      timestamp: new Date()
+      timestamp: new Date(),
+      type: 'text',
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    streamingMsgIdRef.current = null;
 
-    const responseText = await sendMessageToGemini(userMsg.text);
+    const controller = sendMessageToAgent(input, conversationId, {
+      onStart: (convId, model) => {
+        setConversationId(convId);
+      },
+      onToken: (content, convId) => {
+        appendToken(content, convId);
+      },
+      onToolCall: (toolName, _args, convId) => {
+        const label = TOOL_LABELS[toolName] || toolName;
+        const msg: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'model',
+          text: `🔧 ${label}...`,
+          timestamp: new Date(),
+          type: 'tool_call',
+          toolName,
+          conversationId: convId,
+        };
+        setMessages(prev => [...prev, msg]);
+        streamingMsgIdRef.current = null; // 下一个 token 创建新消息
+      },
+      onToolResult: (toolName, result, convId) => {
+        const label = TOOL_LABELS[toolName] || toolName;
+        const msg: ChatMessage = {
+          id: (Date.now() + 2).toString(),
+          role: 'model',
+          text: `✅ ${label}完成`,
+          timestamp: new Date(),
+          type: 'tool_result',
+          toolName,
+          conversationId: convId,
+        };
+        setMessages(prev => [...prev, msg]);
+        streamingMsgIdRef.current = null;
+      },
+      onThinking: (content, _convId) => {
+        const msg: ChatMessage = {
+          id: (Date.now() + 3).toString(),
+          role: 'model',
+          text: content,
+          timestamp: new Date(),
+          type: 'thinking',
+        };
+        setMessages(prev => [...prev, msg]);
+        streamingMsgIdRef.current = null;
+      },
+      onConfirm: (content, confirmId, convId) => {
+        const msg: ChatMessage = {
+          id: (Date.now() + 4).toString(),
+          role: 'model',
+          text: content,
+          timestamp: new Date(),
+          type: 'confirm',
+          needConfirm: true,
+          confirmId,
+          conversationId: convId,
+        };
+        setMessages(prev => [...prev, msg]);
+        streamingMsgIdRef.current = null;
+      },
+      onError: (content, _convId) => {
+        const msg: ChatMessage = {
+          id: (Date.now() + 5).toString(),
+          role: 'model',
+          text: `⚠️ ${content}`,
+          timestamp: new Date(),
+          type: 'text',
+        };
+        setMessages(prev => [...prev, msg]);
+        streamingMsgIdRef.current = null;
+      },
+      onDone: (_convId) => {
+        // 标记流式消息完成
+        if (streamingMsgIdRef.current) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false } : m
+            )
+          );
+        }
+        setIsLoading(false);
+        streamingMsgIdRef.current = null;
+      },
+    });
 
-    const botMsg: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      text: responseText,
-      timestamp: new Date()
-    };
+    abortRef.current = controller;
+  };
 
-    setMessages(prev => [...prev, botMsg]);
-    setIsLoading(false);
+  const handleConfirm = async (confirmId: string, approved: boolean) => {
+    // 更新消息状态
+    setMessages(prev =>
+      prev.map(m =>
+        m.confirmId === confirmId
+          ? { ...m, needConfirm: false, text: approved ? '✅ 已确认，正在执行...' : '❌ 已取消操作' }
+          : m
+      )
+    );
+
+    const result = await confirmAction(confirmId, approved);
+    if (!result.success) {
+      setMessages(prev =>
+        prev.map(m =>
+          m.confirmId === confirmId ? { ...m, text: `⚠️ ${result.content}` } : m
+        )
+      );
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSend();
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  /** 渲染单条消息 */
+  const renderMessage = (msg: ChatMessage) => {
+    // 确认消息
+    if (msg.type === 'confirm' && msg.needConfirm) {
+      return (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm max-w-[85%]">
+          <div className="flex items-start space-x-2 mb-2">
+            <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+            <span className="text-sm text-amber-800">{msg.text}</span>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => handleConfirm(msg.confirmId!, true)}
+              className="flex-1 px-3 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center space-x-1"
+            >
+              <CheckCircle className="h-3 w-3" />
+              <span>确认</span>
+            </button>
+            <button
+              onClick={() => handleConfirm(msg.confirmId!, false)}
+              className="flex-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center space-x-1"
+            >
+              <XCircle className="h-3 w-3" />
+              <span>取消</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // 工具调用消息
+    if (msg.type === 'tool_call') {
+      return (
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl rounded-tl-none px-4 py-2 shadow-sm max-w-[80%]">
+          <div className="flex items-center space-x-2">
+            <Wrench className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
+            <span className="text-xs text-blue-600 font-medium">{msg.text}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // 工具结果消息
+    if (msg.type === 'tool_result') {
+      return (
+        <div className="bg-green-50 border border-green-100 rounded-2xl rounded-tl-none px-4 py-2 shadow-sm max-w-[80%]">
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+            <span className="text-xs text-green-600">{msg.text}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // 思考消息
+    if (msg.type === 'thinking') {
+      return (
+        <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-none px-4 py-2 shadow-sm max-w-[80%]">
+          <div className="flex items-center space-x-2">
+            <Brain className="h-3.5 w-3.5 text-purple-400" />
+            <span className="text-xs text-purple-500 italic">{msg.text}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // 普通文本消息
+    if (msg.role === 'user') {
+      return (
+        <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-blue-600 text-white rounded-tr-none">
+          {msg.text}
+        </div>
+      );
+    }
+
+    // 模型文本消息
+    return (
+      <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-white text-gray-800 border border-gray-100 rounded-tl-none whitespace-pre-wrap">
+        {msg.text}
+        {msg.isStreaming && <span className="inline-block w-1.5 h-4 bg-blue-500 animate-pulse ml-0.5 align-text-bottom" />}
+      </div>
+    );
   };
 
   return (
@@ -68,21 +300,21 @@ const AIAssistant: React.FC = () => {
       </button>
 
       {/* Chat Window */}
-      <div 
+      <div
         className={`fixed bottom-8 right-8 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 transition-all duration-300 transform origin-bottom-right flex flex-col overflow-hidden ${
           isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 translate-y-12 pointer-events-none'
         }`}
         style={{ height: '600px', maxHeight: '80vh' }}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center text-white flex-shrink-0">
           <div className="flex items-center space-x-2">
             <div className="bg-white/20 p-1.5 rounded-lg">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm">智能客服</h3>
-              <p className="text-xs text-blue-100">Gemini AI 驱动</p>
+              <h3 className="font-bold text-sm">智行客服</h3>
+              <p className="text-xs text-blue-100">AI Agent 驱动</p>
             </div>
           </div>
           <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors">
@@ -91,24 +323,16 @@ const AIAssistant: React.FC = () => {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
           {messages.map((msg) => (
-            <div 
-              key={msg.id} 
+            <div
+              key={msg.id}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div 
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-tr-none' 
-                    : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'
-                }`}
-              >
-                {msg.text}
-              </div>
+              {renderMessage(msg)}
             </div>
           ))}
-          {isLoading && (
+          {isLoading && !streamingMsgIdRef.current && (
             <div className="flex justify-start">
               <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm flex items-center space-x-2">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
@@ -120,7 +344,7 @@ const AIAssistant: React.FC = () => {
         </div>
 
         {/* Input */}
-        <div className="p-4 bg-white border-t border-gray-100">
+        <div className="p-4 bg-white border-t border-gray-100 flex-shrink-0">
           <div className="flex items-center space-x-2">
             <input
               type="text"
@@ -131,7 +355,7 @@ const AIAssistant: React.FC = () => {
               className="flex-1 px-4 py-2 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 text-sm"
               disabled={isLoading}
             />
-            <button 
+            <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading}
               className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

@@ -36,6 +36,18 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
   isThinking?: boolean;
+  /** 消息类型：text/tool_call/tool_result/thinking/confirm */
+  type?: 'text' | 'tool_call' | 'tool_result' | 'thinking' | 'confirm';
+  /** 会话ID */
+  conversationId?: string;
+  /** 工具名称（type=tool_call/tool_result时） */
+  toolName?: string;
+  /** 是否正在流式输出中 */
+  isStreaming?: boolean;
+  /** 是否需要人工确认 */
+  needConfirm?: boolean;
+  /** 确认操作ID */
+  confirmId?: string;
 }
 
 export interface Station {
