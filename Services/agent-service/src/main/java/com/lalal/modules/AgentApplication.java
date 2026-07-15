@@ -12,7 +12,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * 因为主数据源是MySQL，PGvector使用独立的PostgreSQL数据源（PgVectorDataSourceConfig 手动构建）
  */
 @SpringBootApplication(exclude = {
-        org.springframework.ai.vectorstore.pgvector.PgVectorStoreAutoConfiguration.class
+        org.springframework.ai.autoconfigure.vectorstore.pgvector.PgVectorStoreAutoConfiguration.class
 })
 @EnableFeignClients
 public class AgentApplication {

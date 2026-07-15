@@ -1,7 +1,6 @@
 package com.lalal.modules.sse;
 
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONWriter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -166,7 +165,7 @@ public class SseEmitterHelper {
      */
     public void safeSend(SseEmitter emitter, String eventName, Object data) {
         try {
-            String jsonData = JSON.toJSONString(data, JSONWriter.Feature.IgnoreNoneValue);
+            String jsonData = JSON.toJSONString(data);
             emitter.send(SseEmitter.event()
                     .name(eventName)
                     .data(jsonData));

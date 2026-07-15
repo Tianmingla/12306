@@ -40,9 +40,7 @@ public class RagConfig {
      */
     @Bean
     public KeywordMetadataEnricher keywordMetadataEnricher(OllamaChatModel ollamaChatModel) {
-        return KeywordMetadataEnricher.builder(ollamaChatModel)
-                .keywordCount(5)
-                .build();
+        return new KeywordMetadataEnricher(ollamaChatModel, 5);
     }
 
     /**
