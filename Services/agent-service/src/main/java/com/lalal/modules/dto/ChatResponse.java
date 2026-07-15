@@ -45,6 +45,15 @@ public class ChatResponse {
         return resp;
     }
 
+    public static ChatResponse toolResult(String toolName, String result, String conversationId) {
+        ChatResponse resp = new ChatResponse();
+        resp.setContent(result);
+        resp.setConversationId(conversationId);
+        resp.setType("tool_result");
+        resp.setToolName(toolName);
+        return resp;
+    }
+
     public static ChatResponse confirm(String content, String confirmId, String conversationId) {
         ChatResponse resp = new ChatResponse();
         resp.setContent(content);

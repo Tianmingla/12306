@@ -2,6 +2,7 @@ package com.lalal.modules.config;
 
 import com.lalal.modules.tool.ToolRegistry;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.context.annotation.Bean;
@@ -28,7 +29,8 @@ public class AiModelConfig {
     @Bean
     @Primary
     public ChatClient complexChatClient(OpenAiChatModel openAiChatModel,
-                                        ToolRegistry toolRegistry) {
+                                        ToolRegistry toolRegistry,
+                                        QuestionAnswerAdvisor questionAnswerAdvisor) {
         return ChatClient.builder(openAiChatModel)
                 .defaultSystem("""
                     你是12306铁路客服智能助手"智行"，专门帮助用户处理铁路购票相关问题。
@@ -51,6 +53,7 @@ public class AiModelConfig {
                     - 退票手续费规则：开车前8天以上免手续费，48小时至8天收5%，24小时至48小时收10%，不足24小时收20%
                     """)
 
+                .defaultAdvisors(questionAnswerAdvisor)
                 .defaultTools(toolRegistry.getAllToolCallbacks())
                 .build();
     }

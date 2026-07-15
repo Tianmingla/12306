@@ -1,5 +1,6 @@
 package com.lalal.modules.dto;
 
+import lombok.Builder;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -9,11 +10,23 @@ import java.io.Serializable;
  * 与其他微服务的 Result<T> 结构对齐
  */
 @Data
-public class FeignResult implements Serializable {
+@Builder
+public class FeignResult<T> implements Serializable {
     private Integer code;
     private String message;
-    private Object data;
+    private T data;
     private String requestId;
+
+    public static <T> FeignResult success(String s) {
+        return FeignResult.builder()
+                .message(s)
+                .build();
+    }
+    public static <T> FeignResult success(T data) {
+        return FeignResult.builder()
+                .data(data)
+                .build();
+    }
 
     public boolean isSuccess() {
         return code != null && code == 200;

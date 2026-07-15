@@ -80,5 +80,11 @@ public class AgentProperties {
     public static class SseConfig {
         /** SSE连接超时(ms) */
         private long timeout = 300000;
+        /** SSE重连间隔(ms)，客户端重连时使用 */
+        private int retryInterval = 3000;
+        /** 是否发送心跳保活 */
+        private boolean sendKeepAlive = true;
+        /** 心跳间隔(ms) */
+        private long keepAliveInterval = 30000;
     }
 }
