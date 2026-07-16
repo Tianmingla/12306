@@ -28,7 +28,7 @@ public class RagController {
     /**
      * 手动触发文档加载
      */
-    @PostMapping("/reload")
+    @GetMapping("/reload")
     public FeignResult reloadDocuments() {
         log.info("Manual RAG document reload triggered");
         int count = documentEtlService.loadKnowledgeDocuments();

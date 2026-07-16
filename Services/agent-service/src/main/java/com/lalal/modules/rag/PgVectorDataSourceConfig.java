@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,6 +45,8 @@ public class PgVectorDataSourceConfig {
 
     @Value("${pgvector.datasource.password:your-password-here}")
     private String pgPassword;
+    @Value("${spring.ai.ollama.embedding.dimensions}")
+    private Integer dimensions;
 
     /**
      * 创建 PGvector 专用的 PostgreSQL 数据源（不注册为 Spring Bean）
@@ -82,11 +85,11 @@ public class PgVectorDataSourceConfig {
      *   nomic-embed-text = 768维, all-minilm-l6-v2 = 384维
      */
     @Bean
-    public VectorStore vectorStore(JdbcTemplate pgvectorJdbcTemplate,
+    public VectorStore vectorStore(@Qualifier("pgvectorJdbcTemplate")JdbcTemplate pgvectorJdbcTemplate,
                                    OllamaEmbeddingModel embeddingModel) {
         log.info("Building PgVectorStore with dedicated PostgreSQL datasource and Ollama EmbeddingModel");
         return PgVectorStore.builder(pgvectorJdbcTemplate, embeddingModel)
-                .dimensions(768)
+                .dimensions(dimensions)
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
                 .indexType(PgVectorStore.PgIndexType.HNSW)
                 .initializeSchema(true)

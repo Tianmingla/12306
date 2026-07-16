@@ -59,6 +59,7 @@ spring:
       # 备选：all-minilm(l6-v2-f32, 384维, 更小更快)
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
+        dimensions: ${OLLAMA_EMBEDDING_DIMENSIONS:1024}
 
     # PGVector 向量存储 - RAG知识库
     # 注意：因主数据源是MySQL，PGvector使用独立的PostgreSQL数据源

@@ -443,10 +443,12 @@ services:
       - PGVECTOR_DB=rag12306
       - PGVECTOR_USERNAME=postgres
       - PGVECTOR_PASSWORD=123456
-      - SSNAI_API_KEY=
-      - SSNAI_MODEL=glm-5.1
+      - OPENAI_BASE_URL=
+      - OPENAI_API_KEY=
+      - OPENAI_MODEL=glm-5.1
       - OLLAMA_EMBEDDING_MODEL=bge-m3
       - OLLAMA_CHAT_MODEL=qwen2.5:3b
+      - OLLAMA_EMBEDDING_DIMENSIONS=1024
       - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
     depends_on:
       mysql:

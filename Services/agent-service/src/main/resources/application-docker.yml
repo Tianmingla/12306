@@ -34,11 +34,11 @@ spring:
 
     # OpenAI 兼容 API (SSNAI)
     openai:
-      base-url: ${SSNAI_BASE_URL:https://api.ssnaiyun.com}
-      api-key: ${SSNAI_API_KEY:sk-your-api-key-here}
+      base-url: ${OPENAI_BASE_URL:https://api.ssnaiyun.com}
+      api-key: ${OPENAI_API_KEY:sk-your-api-key-here}
       chat:
         options:
-          model: ${SSNAI_MODEL:qwen-plus}
+          model: ${OPENAI_MODEL:qwen-plus}
           temperature: 0.7
           top-p: 0.8
 
@@ -52,6 +52,7 @@ spring:
       # Embedding 模型
       embedding:
         model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+        dimensions: ${OLLAMA_EMBEDDING_DIMENSIONS:1024}
 
     # PGVector 向量存储 - 参数在 PgVectorDataSourceConfig 中硬编码
     # 连接信息见下方 pgvector.datasource
