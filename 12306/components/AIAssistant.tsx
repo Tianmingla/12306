@@ -1,6 +1,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { MessageSquare, X, Send, Sparkles, Loader2, Wrench, Brain, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { MessageSquare, X, Send, Sparkles, Loader2, Wrench, Brain, CheckCircle, XCircle, AlertCircle, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github.css';
 import { sendMessageToAgent, confirmAction } from '../services/agentService';
 import { ChatMessage } from '../types';
 
@@ -15,6 +19,42 @@ const TOOL_LABELS: Record<string, string> = {
   cancelOrder: '取消订单',
   queryWaitlistOrders: '查询候补',
   queryMyPassengers: '查询乘车人',
+};
+
+/** 代码块组件 — 带语言标签 + 复制按钮 */
+const CodeBlock: React.FC<{ className?: string; children: React.ReactNode }> = ({ className, children }) => {
+  const [copied, setCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const language = match ? match[1] : '';
+  const codeText = String(children).replace(/\n$/, '');
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="relative group my-2 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+      {/* 顶栏：语言标签 + 复制按钮 */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-100 border-b border-gray-200 text-xs text-gray-500">
+        <span>{language || 'code'}</span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center space-x-1 hover:text-gray-700 transition-colors"
+        >
+          {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+          <span>{copied ? '已复制' : '复制'}</span>
+        </button>
+      </div>
+      {/* 代码内容 — rehype-highlight 已处理高亮 */}
+      <pre className="!m-0 !p-3 overflow-x-auto text-xs leading-relaxed">
+        <code className={className}>{children}</code>
+      </pre>
+    </div>
+  );
 };
 
 const AIAssistant: React.FC = () => {
@@ -271,19 +311,83 @@ const AIAssistant: React.FC = () => {
       );
     }
 
-    // 普通文本消息
+    // 用户消息 — 纯文本
     if (msg.role === 'user') {
       return (
-        <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-blue-600 text-white rounded-tr-none">
+        <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-blue-600 text-white rounded-tr-none whitespace-pre-wrap">
           {msg.text}
         </div>
       );
     }
 
-    // 模型文本消息
+    // 模型文本消息 — Markdown 渲染
     return (
-      <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-white text-gray-800 border border-gray-100 rounded-tl-none whitespace-pre-wrap">
-        {msg.text}
+      <div className="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm bg-white text-gray-800 border border-gray-100 rounded-tl-none">
+        <div className="markdown-body">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={{
+              // 代码块：有语言标记的用 CodeBlock 组件，行内代码用 <code>
+              code({ className, children, ...props }) {
+                const isBlock = /language-/.test(className || '');
+                if (isBlock) {
+                  return <CodeBlock className={className}>{children}</CodeBlock>;
+                }
+                // 行内代码
+                return (
+                  <code className="bg-gray-100 text-pink-600 px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
+                    {children}
+                  </code>
+                );
+              },
+              // 表格样式
+              table({ children }) {
+                return (
+                  <div className="overflow-x-auto my-2">
+                    <table className="min-w-full text-xs border-collapse border border-gray-200">
+                      {children}
+                    </table>
+                  </div>
+                );
+              },
+              thead({ children }) {
+                return <thead className="bg-gray-50">{children}</thead>;
+              },
+              th({ children }) {
+                return <th className="border border-gray-200 px-2 py-1 text-left font-semibold text-gray-700">{children}</th>;
+              },
+              td({ children }) {
+                return <td className="border border-gray-200 px-2 py-1 text-gray-600">{children}</td>;
+              },
+              // 列表样式
+              ul({ children }) {
+                return <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>;
+              },
+              ol({ children }) {
+                return <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>;
+              },
+              // 标题样式
+              h1({ children }) { return <h1 className="text-base font-bold mt-3 mb-1">{children}</h1>; },
+              h2({ children }) { return <h2 className="text-sm font-bold mt-2 mb-1">{children}</h2>; },
+              h3({ children }) { return <h3 className="text-sm font-semibold mt-2 mb-0.5">{children}</h3>; },
+              // 段落
+              p({ children }) { return <p className="my-1">{children}</p>; },
+              // 链接
+              a({ href, children }) {
+                return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">{children}</a>;
+              },
+              // 引用块
+              blockquote({ children }) {
+                return <blockquote className="border-l-3 border-gray-300 pl-3 my-2 text-gray-600 italic">{children}</blockquote>;
+              },
+              // 分割线
+              hr() { return <hr className="my-2 border-gray-200" />; },
+            }}
+          >
+            {msg.text}
+          </ReactMarkdown>
+        </div>
         {msg.isStreaming && <span className="inline-block w-1.5 h-4 bg-blue-500 animate-pulse ml-0.5 align-text-bottom" />}
       </div>
     );
