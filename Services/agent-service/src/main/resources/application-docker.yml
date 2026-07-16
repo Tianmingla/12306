@@ -29,9 +29,8 @@ spring:
 
   # ============ AI 模型配置 ============
   ai:
-    # 禁用 OpenAI Embedding，用 Ollama 本地 Embedding
-    model:
-      embedding: none
+    # 不禁用 embedding，Ollama embedding 用于 RAG 向量化
+    # OpenAI embedding 不配置 api-key 即不会创建
 
     # OpenAI 兼容 API (SSNAI)
     openai:

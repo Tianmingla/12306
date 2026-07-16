@@ -31,21 +31,18 @@ spring:
 
   # ============ AI 模型配置 ============
   ai:
-    # 禁用 OpenAI Embedding 自动配置，使用 Ollama 本地 Embedding 模型
-    # SSNAI 是 OpenAI 兼容 API，不确定是否支持 embedding 端点
-    # Ollama 本地 embedding 不消耗云端 API 额度，速度更快
-    model:
-      embedding: none
+    # 不禁用 embedding，Ollama embedding 用于 RAG 向量化
+    # OpenAI embedding 不配置 api-key 即不会创建
 
     # OpenAI 兼容 API (SSNAI) - 主力模型，处理复杂推理和工具调用
     # Spring AI 会自动拼接 /v1，所以 base-url 不要加 /v1
     openai:
       base-url: https://api.ssnaiyun.com
-      api-key: ${SSNAI_API_KEY:sk-your-api-key-here}
+      api-key: ${SSNAI_API_KEY:}
       chat:
         options:
           # 模型名以SSNAI模型广场显示为准，用户自行替换
-          model: ${SSNAI_MODEL:qwen-plus}
+          model: ${SSNAI_MODEL:glm-5.1}
           temperature: 0.7
           top-p: 0.8
 
@@ -61,9 +58,7 @@ spring:
       # nomic-embed-text: 273MB, 768维, 中英文效果好
       # 备选：all-minilm(l6-v2-f32, 384维, 更小更快)
       embedding:
-        model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
-        options:
-          dimensions: 768
+        model: ${OLLAMA_EMBEDDING_MODEL:bge-m3}
 
     # PGVector 向量存储 - RAG知识库
     # 注意：因主数据源是MySQL，PGvector使用独立的PostgreSQL数据源

@@ -6,7 +6,7 @@ import com.esotericsoftware.kryo.io.Output;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.messages.AssistantMessage.ToolCall;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
-import org.springframework.ai.model.Media;
+import org.springframework.ai.content.Media;
 
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
@@ -105,8 +105,8 @@ public class KryoMessageSerializer {
      * 格式: [typeValue(String)] [具体消息字段...]
      */
     private static void writeMessage(Kryo kryo, Output output, Message message) {
-        // 写入消息类型标识
-        output.writeString(message.getMessageType().getValue());
+        // 写入消息类型标识（用 name() 而非 getValue()，因为 2.0.0 中 MessageType 是枚举）
+        output.writeString(message.getMessageType().name());
         // text
         output.writeString(message.getText()!= null ?message.getText(): "");
 
@@ -183,7 +183,7 @@ public class KryoMessageSerializer {
      */
     private static Message readMessage(Kryo kryo, Input input) {
         String typeValue = input.readString();
-        MessageType messageType = MessageType.fromValue(typeValue);
+        MessageType messageType = MessageType.valueOf(typeValue);
         String text = input.readString();          // 公共 text 只在这里读一次
 
         return switch (messageType) {
@@ -195,52 +195,54 @@ public class KryoMessageSerializer {
     }
 
     // ---------- 反序列化 UserMessage ----------
-    // 序列化顺序：type, text, mediaList (size + Media 对象)
     private static UserMessage readUserMessage(Kryo kryo, Input input, String text) {
         int mediaSize = input.readInt();
         List<Media> mediaList = new ArrayList<>(mediaSize);
         for (int i = 0; i < mediaSize; i++) {
-            mediaList.add(kryo.readObject(input, Media.class));   // 对应 writeObject
+            mediaList.add(kryo.readObject(input, Media.class));
         }
-        // 序列化时没有写 metadata，这里用空 Map
-        return new UserMessage(text, mediaList);
+        // Spring AI 2.0.0: 构造器变 private，需用 Builder
+        return UserMessage.builder()
+                .text(text)
+                .media(mediaList)
+                .build();
     }
 
     // ---------- 反序列化 AssistantMessage ----------
-    // 序列化顺序：type, text, metadata (size + 每个 entry: key, valueClass, value)
     private static AssistantMessage readAssistantMessage(Kryo kryo, Input input, String text) {
         int metaSize = input.readInt();
         Map<String, Object> metadata = new HashMap<>(metaSize);
         for (int i = 0; i < metaSize; i++) {
-            String key = kryo.readObject(input, String.class);   // key 写了 class 吗？看你用 writeObject，默认写 class
-            // 你写的时候是 kryo.writeClass(output, entry.getValue().getClass());
-            // 然后 kryo.writeObject(output, entry.getValue());
-            // 所以读的时候需要先读 class，再读对象
+            String key = kryo.readObject(input, String.class);
             Class<?> valueClass = kryo.readClass(input).getType();
             Object value = kryo.readObject(input, valueClass);
             metadata.put(key, value);
         }
-        // 序列化时没有写 toolCalls 和 media，传空列表
-        return new AssistantMessage(text, metadata);
+        // Spring AI 2.0.0: 构造器变 protected，需用 Builder
+        return AssistantMessage.builder()
+                .content(text)
+                .properties(metadata)
+                .build();
     }
 
     // ---------- 反序列化 SystemMessage ----------
-    // 序列化顺序：type, text（无额外字段）
     private static SystemMessage readSystemMessage(Kryo kryo, Input input, String text) {
-        // 没有 metadata，直接用单参数构造
-        return new SystemMessage(text);
+        return SystemMessage.builder()
+                .text(text)
+                .build();
     }
 
     // ---------- 反序列化 ToolResponseMessage ----------
-    // 序列化顺序：type, text, responses (size + ToolResponse 对象)
+    // Spring AI 2.0.0: 构造器变 protected，需用 Builder
     private static ToolResponseMessage readToolResponseMessage(Kryo kryo, Input input, String text) {
         int respSize = input.readInt();
         List<ToolResponse> responses = new ArrayList<>(respSize);
         for (int i = 0; i < respSize; i++) {
             responses.add(kryo.readObject(input, ToolResponse.class));
         }
-        // 序列化时没有写 metadata，用空 Map
-        return new ToolResponseMessage(responses, Map.of());
+        return ToolResponseMessage.builder()
+                .responses(responses)
+                .build();
     }
 
     // ==================== 通用: metadata 读写 ====================

@@ -35,7 +35,7 @@ public class MemoryController {
     @GetMapping("/{conversationId}/count")
     public Result<Integer> getMessageCount(@PathVariable String conversationId,
                                             @RequestHeader("X-User-Id") String userId) {
-        int count = chatMemory.get(conversationId, Integer.MAX_VALUE).size();
+        int count = chatMemory.get(conversationId).size();
         return Result.success(count);
     }
 }

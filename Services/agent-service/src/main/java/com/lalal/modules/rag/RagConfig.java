@@ -3,9 +3,10 @@ package com.lalal.modules.rag;
 import com.lalal.modules.config.AgentProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.model.transformer.KeywordMetadataEnricher;
 import org.springframework.ai.ollama.OllamaChatModel;
-import org.springframework.ai.transformer.KeywordMetadataEnricher;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -67,14 +68,14 @@ public class RagConfig {
 
         return QuestionAnswerAdvisor.builder(vectorStore)
                 .searchRequest(searchRequest)
-                .userTextAdvise("""
+                .promptTemplate(new PromptTemplate("""
                     以下是来自12306铁路知识库的参考信息，请基于这些信息回答用户的问题。
                     如果参考信息不足以回答问题，请明确告知用户，不要编造信息。
                     回答时请引用参考信息的来源。
 
                     参考信息：
                     {question_answer_context}
-                    """)
+                    """))
                 .build();
     }
 }

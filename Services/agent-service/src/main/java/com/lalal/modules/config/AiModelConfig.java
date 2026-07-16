@@ -2,7 +2,9 @@ package com.lalal.modules.config;
 
 import com.lalal.modules.tool.ToolRegistry;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +18,7 @@ import org.springframework.context.annotation.Primary;
  * 2. Ollama本地模型(qwen2.5:3b) — 处理简单问答，降本60%
  *
  * 注意：
- * - ChatMemory Advisor 在 AgentServiceImpl 调用时显式传入（因为每次 conversationId 不同）
+ * - ChatMemory Advisor 注册为 defaultAdvisor，conversationId 在调用时通过 advisors param 传入
  * - 工具通过 ToolRegistry 集中注册，仅 complexChatClient 需要工具能力
  */
 @Configuration
@@ -30,7 +32,8 @@ public class AiModelConfig {
     @Primary
     public ChatClient complexChatClient(OpenAiChatModel openAiChatModel,
                                         ToolRegistry toolRegistry,
-                                        QuestionAnswerAdvisor questionAnswerAdvisor) {
+                                        QuestionAnswerAdvisor questionAnswerAdvisor,
+                                        ChatMemory chatMemory) {
         return ChatClient.builder(openAiChatModel)
                 .defaultSystem("""
                     你是12306铁路客服智能助手"智行"，专门帮助用户处理铁路购票相关问题。
@@ -60,8 +63,11 @@ public class AiModelConfig {
                     - 如果工具调用失败，不要反复重试，而是告知用户并建议替代方案
                     """)
 
-                .defaultAdvisors(questionAnswerAdvisor)
-                .defaultTools(toolRegistry.getAllToolCallbacks())
+                .defaultAdvisors(
+                        MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                        questionAnswerAdvisor
+                )
+                .defaultToolCallbacks(toolRegistry.getToolCallbackProvider())
                 .build();
     }
 
@@ -70,7 +76,8 @@ public class AiModelConfig {
      * 不注册工具，仅处理简单常识问答
      */
     @Bean("simpleChatClient")
-    public ChatClient simpleChatClient(OllamaChatModel ollamaChatModel) {
+    public ChatClient simpleChatClient(OllamaChatModel ollamaChatModel,
+                                       ChatMemory chatMemory) {
         return ChatClient.builder(ollamaChatModel)
                 .defaultSystem("""
                     你是12306铁路客服智能助手"智行"的轻量版本，负责回答简单的铁路常识问题。
@@ -86,6 +93,7 @@ public class AiModelConfig {
                     - 如果问题涉及实时数据查询或需要执行操作，请告知用户需要转接高级模式
                     - 不确定的信息，明确告知用户
                     """)
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .build();
     }
 }

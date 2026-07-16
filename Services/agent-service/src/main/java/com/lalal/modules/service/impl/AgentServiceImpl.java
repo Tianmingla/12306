@@ -14,9 +14,8 @@ import com.lalal.modules.tool.ToolRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.Disposable;
@@ -72,14 +71,9 @@ public class AgentServiceImpl implements AgentService {
         // 发送 start 事件
         sseEmitterHelper.sendStart(emitter, conversationId, modelName);
 
-        // 构建记忆 Advisor
-        MessageChatMemoryAdvisor memoryAdvisor = (MessageChatMemoryAdvisor) MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(conversationId)
-                .build();
-
         // 构建工具上下文
         Map<String, Object> toolContextMap = ToolContextHelper.buildToolContext(userId, null).getContext();
-        ToolCallback[] toolCallbacks = isComplex ? toolRegistry.getAllToolCallbacks() : new ToolCallback[0];
+        ToolCallbackProvider toolCallbackProvider = isComplex ? toolRegistry.getToolCallbackProvider() : null;
 
         // 用于跟踪工具调用状态
         Set<String> emittedToolCalls = new HashSet<>();
@@ -94,9 +88,9 @@ public class AgentServiceImpl implements AgentService {
         try {
             Flux<org.springframework.ai.chat.model.ChatResponse> responseFlux = chatClient.prompt()
                     .user(userMessage)
-                    .advisors(memoryAdvisor)
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                     .toolContext(toolContextMap)
-                    .tools(toolCallbacks)
+                    .toolCallbacks(toolCallbackProvider)
                     .stream()
                     .chatResponse();
 
@@ -139,9 +133,9 @@ public class AgentServiceImpl implements AgentService {
                 try {
                     String response = chatClient.prompt()
                             .user(userMessage)
-                            .advisors(memoryAdvisor)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                             .toolContext(toolContextMap)
-                            .tools(toolCallbacks)
+                            .toolCallbacks(toolCallbackProvider)
                             .call()
                             .content();
                     if (response != null) {
@@ -283,17 +277,13 @@ public class AgentServiceImpl implements AgentService {
         ChatClient chatClient = modelRouterService.route(request.getMessage());
         boolean isComplex = modelRouterService.isComplex(request.getMessage());
 
-        MessageChatMemoryAdvisor memoryAdvisor = (MessageChatMemoryAdvisor) MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(conversationId)
-                .build();
-
-        ToolCallback[] toolCallbacks = isComplex ? toolRegistry.getAllToolCallbacks() : new ToolCallback[0];
+        ToolCallbackProvider toolCallbackProvider = isComplex ? toolRegistry.getToolCallbackProvider() : null;
 
         String response = chatClient.prompt()
                 .user(request.getMessage())
-                .advisors(memoryAdvisor)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .toolContext(ToolContextHelper.buildToolContext(userId, null).getContext())
-                .tools(toolCallbacks)
+                .toolCallbacks(toolCallbackProvider)
                 .call()
                 .content();
 

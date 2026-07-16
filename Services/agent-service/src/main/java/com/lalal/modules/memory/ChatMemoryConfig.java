@@ -6,14 +6,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * ChatMemory 配置
  * 将自定义 PersistentChatMemoryRepository 注册为 Spring AI 的 ChatMemory 组件
- * 并构建 MessageChatMemoryAdvisor 用于 Advisor 链
+ *
+ * 注意：MessageChatMemoryAdvisor 在 AiModelConfig 中注册为 ChatClient 的 defaultAdvisor，
+ * conversationId 在调用时通过 advisors param 传入（Spring AI 2.0.0 API）
  */
 @Slf4j
 @Configuration
@@ -36,20 +37,6 @@ public class ChatMemoryConfig {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(chatMemoryRepository)
                 .maxMessages(maxMessages)
-                .build();
-    }
-
-    /**
-     * MessageChatMemoryAdvisor
-     * 用于 ChatClient 的 Advisor 链，自动管理对话记忆
-     *
-     * 工作流程：
-     * 1. before: 从 ChatMemory 加载历史消息，注入到 prompt
-     * 2. after: 将本次用户消息和AI响应保存到 ChatMemory
-     */
-    @Bean
-    public MessageChatMemoryAdvisor messageChatMemoryAdvisor(ChatMemory chatMemory) {
-        return MessageChatMemoryAdvisor.builder(chatMemory)
                 .build();
     }
 }

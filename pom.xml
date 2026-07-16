@@ -21,14 +21,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- ===== 核心框架升级 ===== -->
-        <spring-boot.version>3.2.7</spring-boot.version>              <!-- 3.2 最新稳定版 -->
-        <spring-cloud.version>2023.0.3</spring-cloud.version>         <!-- 对应 Boot 3.2.x -->
-        <spring-cloud-alibaba.version>2023.0.1.0</spring-cloud-alibaba.version> <!-- 适配 Spring Cloud 2023.0.x -->
+        <spring-boot.version>3.4.3</spring-boot.version>              <!-- 3.2 最新稳定版 -->
+        <spring-cloud.version>2024.0.1</spring-cloud.version>
+        <spring-cloud-alibaba.version>2023.0.3.2</spring-cloud-alibaba.version>
 
         <!-- ===== Spring AI 里程碑版本（核心）===== -->
-        <spring-ai-bom.version>2.0.0</spring-ai-bom.version>
-        <spring-ai-core.version>1.0.0-M6</spring-ai-core.version>
-        <spring-ai-advisors-vector-store.version>1.1.8</spring-ai-advisors-vector-store.version>
+        <spring-ai-bom.version>1.1.0</spring-ai-bom.version>
 
         <!-- ===== 数据库 & 驱动 ===== -->
         <mybatis-spring-boot-starter.version>3.0.3</mybatis-spring-boot-starter.version> <!-- 最低兼容 3.2.x -->
@@ -218,37 +216,13 @@
                 <version>1.18.34</version>
             </dependency>
 
-            <!-- Spring AI BOM -->
+            <!-- Spring AI BOM — 统一管理所有 spring-ai 依赖版本 -->
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai-bom.version}</version>
                 <type>pom</type>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-core</artifactId>
-                <version>${spring-ai-core.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-                <version>${spring-ai-core.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-ollama-spring-boot-starter</artifactId>
-                <version>${spring-ai-core.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-pgvector-store-spring-boot-starter</artifactId>
-                <version>${spring-ai-core.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-advisors-vector-store</artifactId>
-                <version>${spring-ai-advisors-vector-store.version}</version>
+                <scope>import</scope>
             </dependency>
 
 
