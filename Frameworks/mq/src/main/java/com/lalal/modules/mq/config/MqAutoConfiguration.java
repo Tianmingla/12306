@@ -18,7 +18,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.messaging.converter.CompositeMessageConverter;
 import org.springframework.messaging.converter.MessageConverter;
 import java.util.List;
-
+import org.springframework.context.annotation.Primary;
 /**
  * MQ 模块自动配置类
  * 自动配置 MessageQueueService 和注册消费者
@@ -56,6 +56,7 @@ public class MqAutoConfiguration {
      *
      */
     @Bean
+    @Primary
     public RocketMQMessageConverter rocketMQMessageConverter() {
         RocketMQMessageConverter converter = new RocketMQMessageConverter();
         CompositeMessageConverter compositeMessageConverter = (CompositeMessageConverter) converter.getMessageConverter();
