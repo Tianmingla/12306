@@ -62,6 +62,8 @@ spring:
     nacos:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:nacos:8848}
+        ip: ${NACOS_DISCOVERY_IP:}
+        port: ${NACOS_DISCOVERY_PORT:}
       password: ""
       username: ""
 

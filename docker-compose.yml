@@ -213,6 +213,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8080
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
@@ -234,6 +236,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8084
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
@@ -259,6 +263,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8081
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
@@ -287,6 +293,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8082
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
@@ -313,6 +321,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8083
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
@@ -341,6 +351,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8085
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
@@ -432,6 +444,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - NACOS_SERVER_ADDR=nacos:8848
+      - NACOS_DISCOVERY_IP=${HOST_IP:-}
+      - NACOS_DISCOVERY_PORT=8086
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - REDIS_HOST=redis
