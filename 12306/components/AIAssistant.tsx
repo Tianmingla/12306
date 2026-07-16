@@ -202,14 +202,12 @@ const AIAssistant: React.FC = () => {
         streamingMsgIdRef.current = null;
       },
       onDone: (_convId) => {
-        // 标记流式消息完成
-        if (streamingMsgIdRef.current) {
-          setMessages(prev =>
-            prev.map(m =>
-              m.id === streamingMsgIdRef.current ? { ...m, isStreaming: false } : m
-            )
-          );
-        }
+        // 标记所有流式消息完成（不依赖 ref，因为中间事件可能已清空 ref）
+        setMessages(prev =>
+          prev.map(m =>
+            m.isStreaming ? { ...m, isStreaming: false } : m
+          )
+        );
         setIsLoading(false);
         streamingMsgIdRef.current = null;
       },
